@@ -37,7 +37,6 @@
 
 #include <asm/unaligned.h>
 #include <linux/string.h>	 /* memset, memcpy */
-#include <linux/lz4.h>
 
 #define FORCE_INLINE __always_inline
 
@@ -91,7 +90,8 @@ typedef uintptr_t uptrval;
 #define MB (1 << 20)
 #define GB (1U << 30)
 
-#define MAX_DISTANCE LZ4_DISTANCE_MAX
+#define MAXD_LOG 16
+#define MAX_DISTANCE ((1 << MAXD_LOG) - 1)
 #define STEPSIZE sizeof(size_t)
 
 #define ML_BITS	4
