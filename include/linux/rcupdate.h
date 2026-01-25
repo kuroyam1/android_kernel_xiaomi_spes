@@ -278,7 +278,7 @@ static inline void rcu_lock_acquire(struct lockdep_map *map)
 
 static inline void rcu_lock_release(struct lockdep_map *map)
 {
-	lock_release(map, 1, _THIS_IP_);
+	lock_release(map, _THIS_IP_);
 }
 
 extern struct lockdep_map rcu_lock_map;
@@ -289,6 +289,7 @@ int debug_lockdep_rcu_enabled(void);
 int rcu_read_lock_held(void);
 int rcu_read_lock_bh_held(void);
 int rcu_read_lock_sched_held(void);
+int rcu_read_lock_any_held(void);
 
 #else /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
 
@@ -309,6 +310,12 @@ static inline int rcu_read_lock_sched_held(void)
 {
 	return !preemptible();
 }
+
+static inline int rcu_read_lock_any_held(void)
+{
+	return !preemptible();
+}
+
 #endif /* #else #ifdef CONFIG_DEBUG_LOCK_ALLOC */
 
 #ifdef CONFIG_PROVE_RCU

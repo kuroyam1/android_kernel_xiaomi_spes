@@ -63,10 +63,11 @@
 #include <linux/rcuwait.h>
 #include <linux/compat.h>
 #include <linux/sysfs.h>
+#include <linux/usermode_driver.h>
 
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
-#include <asm/pgtable.h>
+#include <linux/pgtable.h>
 #include <asm/mmu_context.h>
 
 /*
@@ -559,12 +560,12 @@ static void exit_mm(void)
 	 * will increment ->nr_threads for each thread in the
 	 * group with ->mm != NULL.
 	 */
-	down_read(&mm->mmap_sem);
+	mmap_read_lock(mm);
 	core_state = mm->core_state;
 	if (core_state) {
 		struct core_thread self;
 
-		up_read(&mm->mmap_sem);
+		mmap_read_unlock(mm);
 
 		self.task = current;
 		if (self.task->flags & PF_SIGNALED)
@@ -585,14 +586,14 @@ static void exit_mm(void)
 			freezable_schedule();
 		}
 		__set_current_state(TASK_RUNNING);
-		down_read(&mm->mmap_sem);
+		mmap_read_lock(mm);
 	}
 	mmgrab(mm);
 	BUG_ON(mm != current->active_mm);
 	/* more a memory barrier than a real lock */
 	task_lock(current);
 	current->mm = NULL;
-	up_read(&mm->mmap_sem);
+	mmap_read_unlock(mm);
 	enter_lazy_tlb(mm, current);
 	task_unlock(current);
 	mm_update_next_owner(mm);
@@ -951,6 +952,8 @@ void __noreturn do_exit(long code)
 	exit_task_namespaces(tsk);
 	exit_task_work(tsk);
 	exit_thread(tsk);
+	if (group_dead)
+		exit_umh(tsk);
 
 	/*
 	 * Flush inherited counters to the parent - before the parent
