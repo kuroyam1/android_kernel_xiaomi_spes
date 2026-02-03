@@ -1,7 +1,5 @@
-/*
- * Copyright (C) 2022 XiaoMi, Inc.
- */
-#include <linux/kernel.h>
+#define pr_fmt(fmt)	"[wl2866d]: %s: " fmt, __func__
+
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -22,10 +20,9 @@
 #define WL2866D_IO_BUFFER_LIMIT 128
 #define WL2866D_MISC_MAJOR 250
 
-#define CONTROL_GPIO54_ENABLE 1
+#define CONTROL_GPIO54_ENABLE 0
 
 #define WL2866D_PWR_NUMBER 4
-
 static const char* wl2866d_pwr_name[WL2866D_PWR_NUMBER] = {
 	"WL2866D_DVDD1",
 	"WL2866D_DVDD2",
@@ -71,6 +68,9 @@ struct wl2866d_data_t {
 	struct regulator *vin2_regulator;
 	u32 vin2_vol;
 	int en_gpio;
+#if CONTROL_GPIO54_ENABLE
+	int iov_gpio; //gpio54, i2c pull control
+#endif
 	u8 chip_id;
 	u8 id_reg;
 	u8 id_val;
@@ -79,16 +79,18 @@ struct wl2866d_data_t {
 	struct reg_value inits[WL2866D_MAX_CONFIG_NUM];
 	u32 offset;
 	bool on;
+
+	struct gpio_desc *en_gpiod;
+#if CONTROL_GPIO54_ENABLE
+	struct gpio_desc *iov_gpiod;
+#endif
 };
 
 /*!
  * wl2866d_data
  */
 static struct wl2866d_data_t wl2866d_data;
-struct mutex wl2866d_mutex;
-#if CONTROL_GPIO54_ENABLE
-static int iov_gpio; //gpio54, i2c pull control
-#endif
+DEFINE_MUTEX(wl2866d_mutex);
 
 /*!
  * wl2866d write reg function
@@ -102,10 +104,12 @@ static s32 wl2866d_write_reg(u8 reg, u8 val)
 	u8 au8Buf[2] = {0};
 	au8Buf[0] = reg;
 	au8Buf[1] = val;
+
 	if (i2c_master_send(wl2866d_data.i2c_client, au8Buf, 2) < 0) {
-		pr_err("%s: write reg error: reg=%x, val=%x\n", __func__, reg, val);
+		pr_err("write reg error: reg=%x, val=%x\n", reg, val);
 		return -1;
 	}
+
 	return 0;
 }
 
@@ -121,41 +125,72 @@ static int wl2866d_read_reg(u8 reg, u8 *val)
 	u8 au8RegBuf[1] = {0};
 	u8 u8RdVal = 0;
 	au8RegBuf[0] = reg;
+
 	if (1 != i2c_master_send(wl2866d_data.i2c_client, au8RegBuf, 1)) {
-		pr_err("%s: write reg error: reg=%x\n", __func__, reg);
+		pr_err("write reg error: reg=%x\n", reg);
 		return -1;
 	}
+
 	if (1 != i2c_master_recv(wl2866d_data.i2c_client, &u8RdVal, 1)) {
-		pr_err("%s: read reg error: reg=%x, val=%x\n", __func__, reg, u8RdVal);
+		pr_err("read reg error: reg=%x, val=%x\n", reg, u8RdVal);
 		return -1;
 	}
+
 	*val = u8RdVal;
-	printk("wl2866d_read_reg %02x@%02x\n", u8RdVal, reg);
+	pr_info("wl2866d_read_reg %02x@%02x\n", u8RdVal, reg);
 	return 0;
 }
 
 #if CONTROL_GPIO54_ENABLE
-static void enable_i2c_pullup(void)
+/*static void enable_i2c_pullup()
 {
 	int ret = 0;
 
-	printk("try control gpio 54\n");
+	pr_info("try control gpio 54\n");
 	if (!gpio_is_valid(iov_gpio)) {
-		pr_err("no iov pin available--no return");
+		pr_err("no iov pin available--no return\n");
 		//return -EINVAL;
 	} else {
 		ret = devm_gpio_request_one(&wl2866d_data.i2c_client->dev, iov_gpio,
 				GPIOF_OUT_INIT_HIGH, "wl2866d_iov");
 		if (ret < 0) {
-			pr_err("wl2866d_iov request failed %d\n", ret);
+			pr_err("wl2866d_iov request failed (%d)\n", ret);
 			//return ret;
 		} else {
-			pr_debug("%s: iov request ok\n", __func__);
+			pr_debug("iov request ok\n");
 			gpio_direction_output(iov_gpio, 1);
-			printk("wl2866d: iov_gpio set high, free it\n");
+			pr_info("iov_gpio set high, free it.\n");
 			devm_gpio_free(&wl2866d_data.i2c_client->dev, iov_gpio);
 		}
 	}
+}*/
+
+static void iov_one_shot_edge_pulse(int gpio)
+{
+	int ret, val;
+
+	if (!gpio_is_valid(gpio)) {
+		pr_debug("invalid gpio %d\n", gpio);
+		return;
+	}
+
+	pr_info("requesting gpio %d\n", gpio);
+	ret = gpio_request(gpio, "wl2866d_iov_oneshot");
+	if (ret) {
+		pr_err("gpio_request %d failed (%d)\n", gpio, ret);
+		return;
+	}
+
+	gpio_direction_output(gpio, 1);
+	val = gpio_get_value_cansleep(gpio);
+	pr_info("after set HIGH, read=%d\n", val);
+
+	gpio_direction_output(gpio, 0);
+	val = gpio_get_value_cansleep(gpio);
+	pr_info("after set LOW, read=%d\n", val);
+
+	gpio_free(gpio);
+	pr_info("gpio %d freed\n", gpio);
 }
 #endif
 
@@ -165,26 +200,26 @@ static void enable_i2c_pullup(void)
  * @param dev struct device *
  * @return  Error code indicating success or failure
  */
-static int wl2866d_power_on(struct device *dev)
+/*static int wl2866d_power_on(struct device *dev)
 {
 	int ret = 0;
 	wl2866d_data.on = false;
 
-	mutex_init(&wl2866d_mutex);
+	//mutex_init(&wl2866d_mutex);
 	wl2866d_data.en_gpio = of_get_named_gpio(dev->of_node, "en-gpio", 0);
 	if (!gpio_is_valid(wl2866d_data.en_gpio)) {
-		pr_err("no en pin available");
+		pr_err("no en pin available\n");
 		return -EINVAL;
 	}
 
 	ret = devm_gpio_request_one(dev, wl2866d_data.en_gpio,
 			GPIOF_OUT_INIT_LOW, "wl2866d_en");
 	if (ret < 0) {
-		pr_err("wl2866d_en request failed %d\n", ret);
+		pr_err("en_gpio request failed (%d)\n", ret);
 		return ret;
 	} else {
 		gpio_direction_output(wl2866d_data.en_gpio, 0);
-		printk("wl2866d: en_gpio set low\n");
+		pr_info("en_gpio set low\n");
 	}
 
 #if CONTROL_GPIO54_ENABLE
@@ -192,21 +227,53 @@ static int wl2866d_power_on(struct device *dev)
 	enable_i2c_pullup();
 #endif
 	return 0;
+}*/
+
+static int wl2866d_power_on(struct device *dev)
+{
+	wl2866d_data.on = false;
+
+	wl2866d_data.en_gpiod = devm_gpiod_get(dev, "en", GPIOD_OUT_LOW);
+	if (IS_ERR(wl2866d_data.en_gpiod)) {
+		pr_err("failed to get en gpiod: (%ld)\n", PTR_ERR(wl2866d_data.en_gpiod));
+		return PTR_ERR(wl2866d_data.en_gpiod);
+	}
+
+	gpiod_set_value_cansleep(wl2866d_data.en_gpiod, 0);
+	pr_info("en_gpio set LOW\n");
+
+#if CONTROL_GPIO54_ENABLE
+	wl2866d_data.iov_gpio = of_get_named_gpio(dev->of_node, "iov-gpio", 0);
+	if (!gpio_is_valid(wl2866d_data.iov_gpio)) {
+		pr_info("iov gpio not provided or invalid (%d)\n", wl2866d_data.iov_gpio);
+	} else {
+		pr_info("iov gpio %d saved for one-shot\n", wl2866d_data.iov_gpio);
+	}
+#endif
+
+	return 0;
 }
 
 static int wl2866d_init_register(void)
 {
 	int i = 0;
+	int j = 0;
 	int rc = -1;
-	u8 reg[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
-	u8 val[16] = { 0x00, 0x00, 0x8f, 0x64, 0x4b, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	u8 reg[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+	u8 val[16] = {0x00, 0x00, 0x8f, 0x64, 0x4b, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 	for (i = 0; i < 16; i++) {
-		rc = wl2866d_write_reg(reg[i], val[i]);
-		if (rc) {
-			pr_err("%s write 0x%x 0x%x failed\n",
-					__func__, reg[i], val[i]);
-			return -1;
+		for (j = 0; j < 3; j++) {
+			rc = wl2866d_write_reg(reg[i],val[i]);
+			if (rc) {
+				pr_err("write 0x%x 0x%x failed, retry %d\n", reg[i], val[i], j);
+				if (2 == j) {
+					return -1;
+				}
+				usleep_range(3000, 3010);
+			} else {
+				break;
+			}
 		}
 	}
 
@@ -222,6 +289,7 @@ static int wl2866d_init_register(void)
 static int wl2866d_match_id(struct device *dev)
 {
 	int ret = 0;
+	int i = 0;
 
 	ret = of_property_read_u32(dev->of_node, "id_reg",
 			(u32 *) &(wl2866d_data.id_reg));
@@ -244,14 +312,21 @@ static int wl2866d_match_id(struct device *dev)
 		return ret;
 	}
 
-	ret = wl2866d_read_reg(wl2866d_data.id_reg, &(wl2866d_data.chip_id));
-	if (ret < 0 || (wl2866d_data.chip_id != wl2866d_data.id_val &&
-			wl2866d_data.chip_id != wl2866d_data.id_val1)) {
-		pr_err("wl2866d: is not found %d %x\n", ret, wl2866d_data.chip_id);
-		return -ENODEV;
+	for (i = 0; i < 3; i++) {
+		ret = wl2866d_read_reg(wl2866d_data.id_reg, &(wl2866d_data.chip_id));
+		if (ret < 0 ||
+			(wl2866d_data.chip_id != wl2866d_data.id_val && wl2866d_data.chip_id != wl2866d_data.id_val1)) {
+			pr_err("%d -> %x not match, retry %d\n", ret, wl2866d_data.chip_id, i);
+			if (2 == i) {
+				return -ENODEV;
+			}
+			usleep_range(3000, 3010);
+		} else {
+			break;
+		}
 	}
 
-	pr_info("wl2866d: is found %d\n", wl2866d_data.chip_id);
+	pr_info("chip_id: %d\n", wl2866d_data.chip_id);
 	return 0;
 }
 
@@ -283,15 +358,14 @@ static int cam_wl2866_init_module_dev(struct device *dev)
 	for (i = 0; i < wl2866d_data.init_num; i++) {
 		wl2866d_data.inits[i].u8Add = inits[i * 2 + 0];
 		wl2866d_data.inits[i].u8Val = inits[i * 2 + 1];
-		ret = wl2866d_write_reg(wl2866d_data.inits[i].u8Add,
-				wl2866d_data.inits[i].u8Val);
+		ret = wl2866d_write_reg(wl2866d_data.inits[i].u8Add, wl2866d_data.inits[i].u8Val);
 		if (ret < 0 ) {
-			pr_err("wl2866d: update failed %d\n", ret);
+			pr_err("update failed (%d)\n", ret);
 			return ret;
 		}
 	}
 
-	printk("wl2866d: init done\n");
+	pr_info("init done\n");
 	return 0;
 }
 
@@ -302,67 +376,73 @@ int wl2866d_camera_power_control(unsigned int out_iotype, int is_power_on)
 	unsigned char reg_val = 0, reg_read;
 
 	if (!wl2866d_data.on) {
-		pr_err("wl2866d probe fail the function is not available\n");
+		pr_err("function is not available\n");
 		return ret;
 	}
 
 	if (out_iotype > OUT_AVDD2) {
-		pr_err("out_iotype > OUT_AVDD2, para err\n");
+		pr_err("out_iotype > OUT_AVDD2, param err\n");
 		return ret;
 	}
 
 	mutex_lock(&wl2866d_mutex);
 	ret = wl2866d_read_reg(wl2866d_on_config[VOL_ENABLE].reg, &reg_val);
 	if (ret < 0) {
-		pr_err("wl2866d: read power out control reg failed\n");
+		pr_err("read power out control reg failed\n");
 		goto fail_return;
 	}
-	printk("wl2866d pwr_ctrl: %s\n", wl2866d_pwr_name[out_iotype]);
+	pr_info("pwr_ctrl: %s\n", wl2866d_pwr_name[out_iotype]);
 
 	/* Enable DISCHARGE mode to avoid leakage */
-	ret = wl2866d_write_reg(wl2866d_on_config[DISCHARGE_ENABLE].reg,
-			wl2866d_on_config[DISCHARGE_ENABLE].value);
-	if (ret < 0)
-		pr_err("wl2866d set discharge enable failed\n");
-
+	ret = wl2866d_write_reg(wl2866d_on_config[DISCHARGE_ENABLE].reg, wl2866d_on_config[DISCHARGE_ENABLE].value);
+	if (ret < 0) {
+		pr_err("set discharge mode failed\n");
+	}
 
 	if (is_power_on) {
 		if (reg_val == 0) {
 #if CONTROL_GPIO54_ENABLE
-			enable_i2c_pullup();
+			iov_one_shot_edge_pulse(wl2866d_data.iov_gpio);
 #endif
 		}
-		printk("wl2866d pwr_ctrl: power on, set voltage %d\n",
+		pr_info("power on, set voltage %d\n",
 				wl2866d_pwr_value[out_iotype]);
 		ret = wl2866d_read_reg(wl2866d_on_config[out_iotype].reg, &reg_read);
 		if (ret < 0 || reg_read != wl2866d_on_config[out_iotype].value) {
 			ret = wl2866d_write_reg(wl2866d_on_config[out_iotype].reg,
 					wl2866d_on_config[out_iotype].value);
 			if (ret < 0 ) {
-				pr_err("wl2866d: set voltage fail %d\n", out_iotype);
+				pr_err("set voltage fail for %d\n", out_iotype);
 				goto fail_return;
 			}
 		} else {
-			printk("wl2866d: voltage is right, no need write reg\n");
+			pr_info("voltage is right, no need write reg\n");
 		}
-		reg_val |= 1 << out_iotype;
-		printk("wl2866d pwr_ctrl: power on, set reg %02x\n", reg_val);
 
-		if ((1050000 == is_power_on) && (OUT_DVDD1 == out_iotype)) {
+		reg_val |= 1 << out_iotype;
+		pr_info("power on, set reg %02x\n", reg_val);
+
+		if ((1050000 == is_power_on) && (OUT_DVDD2 == out_iotype)) {
 			ret = wl2866d_write_reg(wl2866d_on_config[out_iotype].reg, 0x4B);
 			if (ret < 0)
-				printk("hzk wl2866d pwr_ctrl set DVDD1 voltage failed\n");
+				pr_info("set DVDD2 voltage failed\n");
 			else
-				printk("hzk set DVDD1 to 1.05V\n");
+				pr_info("set DVDD2 to 1.05V\n");
+		} else if ((1200000 == is_power_on) && (OUT_DVDD2 == out_iotype)) {
+			ret = wl2866d_write_reg(wl2866d_on_config[out_iotype].reg, 0x64);
+			if (ret < 0)
+				pr_info("set DVDD2 voltage failed\n");
+			else
+				pr_info("set DVDD2 to 1.2V\n");
 		}
 	} else {
 		reg_val &= ~(1 << out_iotype);
-		printk("wl2866d pwr_ctrl: power off, set reg %02x\n", reg_val);
+		pr_info("power off, set reg %02x\n", reg_val);
 	}
 
 	ret = wl2866d_write_reg(wl2866d_on_config[VOL_ENABLE].reg, reg_val);
 	if (ret < 0) {
-		pr_err("wl2866d set %d enable failed\n", out_iotype);
+		pr_err("enable %d failed\n", out_iotype);
 		goto fail_return;
 	}
 
@@ -384,10 +464,12 @@ static char GetHexCh(u8 value, int shift)
 	u8 data = (value >> shift) & 0x0F;
 	char ch = 0;
 
-	if (data >= 10)
+	if (data >= 10) {
 		ch = data - 10 + 'A';
-	else if (data >= 0)
+	} else if (data >= 0) {
 		ch = data + '0';
+	}
+
 	return ch;
 }
 
@@ -401,30 +483,30 @@ static char GetHexCh(u8 value, int shift)
  * @return  read count
  */
 static ssize_t wl2866d_read(struct file *file, char __user *buf,
-			    size_t count, loff_t *offset)
+		size_t count, loff_t *offset)
 {
 	char *buffer = NULL;
 	int ret = 0, num = 0, i = 0;
 	u8 u8add = wl2866d_data.offset, u8val = 0;
 
-	buffer = kmalloc(WL2866D_IO_BUFFER_LIMIT, GFP_KERNEL);
+	buffer = kzalloc(WL2866D_IO_BUFFER_LIMIT, GFP_KERNEL);
 	if (buffer == NULL) {
-		pr_err("wl2866d: malloc failed %d\n", ret);
+		pr_err("memalloc failed\n");
 		return -ENOMEM;
 	}
 
 	if (count > WL2866D_IO_REG_LIMIT) {
-		pr_err("wl2866d: read count %d > %d\n", count,
-				WL2866D_IO_REG_LIMIT);
+		pr_err("out of range, read count %zu > %d\n", count, WL2866D_IO_REG_LIMIT);
+		kfree(buffer);
 		return -ERANGE;
 	}
 
-	pr_debug("wl2866d: read %d registers from %02X to %02X.\n",
-			count, u8add, (u8add + count - 1));
+	pr_debug("read %zu registers from %02zx to %02zx\n",
+			count, (size_t)u8add, (size_t)(u8add + count - 1));
 	for (i = 0; i < count; i++, u8add++) {
 		ret = wl2866d_read_reg(u8add, &u8val);
 		if (ret < 0) {
-			pr_err("wl2866d: read %X failed %d\n", u8add, ret);
+			pr_err("read %02x failed (%d)\n", (unsigned int)u8add, ret);
 			kfree(buffer);
 			return ret;
 		}
@@ -434,11 +516,11 @@ static ssize_t wl2866d_read(struct file *file, char __user *buf,
 		buffer[num++] = GetHexCh(u8val, 4);
 		buffer[num++] = GetHexCh(u8val, 0);
 		buffer[num++] = ' ';
-		pr_debug("wl2866d: read REG[%02X %02X]\n", u8add, u8val);
+		pr_debug("read REG[%02x@%02x]\n", (unsigned int)u8add, (unsigned int)u8val);
 	}
 
 	if (copy_to_user(buf, buffer, num))
-		pr_err("wl2866d: %s copy_to_user failed\n", __func__);
+		pr_err("copy_to_user failed\n");
 
 	kfree(buffer);
 	return count;
@@ -453,12 +535,15 @@ static ssize_t wl2866d_read(struct file *file, char __user *buf,
 static u8 GetHex(char ch)
 {
 	u8 value = 0;
-	if (ch >= 'a')
+
+	if (ch >= 'a') {
 		value = ch - 'a' + 10;
-	else if (ch >= 'A')
+	} else if (ch >= 'A') {
 		value = ch - 'A' + 10;
-	else if (ch >= '0')
+	} else if (ch >= '0') {
 		value = ch - '0';
+	}
+
 	return value;
 }
 
@@ -472,34 +557,33 @@ static u8 GetHex(char ch)
  * @return  write count
  */
 static ssize_t wl2866d_write(struct file *file, const char __user *buf,
-			     size_t count, loff_t *offset)
+		size_t count, loff_t *offset)
 {
 	int ret = 0, i = 0;
 	char *buffer = NULL;
 
 	if (count > WL2866D_IO_BUFFER_LIMIT) {
-		pr_err("wl2866d: write size %d > %d\n", count,
-				WL2866D_IO_BUFFER_LIMIT);
+		pr_err("out of range, write size %zu > %d\n", count, WL2866D_IO_BUFFER_LIMIT);
 		return -ERANGE;
 	}
 
 	buffer = memdup_user(buf, count);
 	if (IS_ERR(buffer)) {
-		pr_err("wl2866d: can't get user data\n");
+		pr_err("can't get user data\n");
 		return PTR_ERR(buffer);
 	}
 
-	pr_debug("wl2866d: write %d bytes.\n", count);
+	pr_debug("write %zu bytes\n", count);
 	for (i = 0; i < count; i += 6) {
 		u8 u8add = (GetHex(buffer[i + 0]) << 4) | GetHex(buffer[i + 1]);
 		u8 u8val = (GetHex(buffer[i + 3]) << 4) | GetHex(buffer[i + 4]);
 		ret = wl2866d_write_reg(u8add, u8val);
 		if (ret < 0 ) {
-			pr_err("wl2866d: write failed %d\n", ret);
+			pr_err("write failed (%d)\n", ret);
 			kfree(buffer);
 			return -ENODEV;
 		}
-		pr_debug("wl2866d: write REG[%02X %02X]\n", u8add, u8val);
+		pr_debug("write REG[%02x@%02x]\n", (unsigned int)u8add, (unsigned int)u8val);
 	}
 
 	kfree(buffer);
@@ -524,8 +608,9 @@ loff_t wl2866d_llseek(struct file *file, loff_t offset, int whence)
 		wl2866d_data.offset = 0;
 		break;
 	}
-	pr_debug("wl2866d: update read pos to %02X\n", wl2866d_data.offset);
-	return file->f_pos;;
+
+	pr_debug("update read pos to %02x\n", wl2866d_data.offset);
+	return file->f_pos;
 }
 
 /*!
@@ -538,7 +623,7 @@ loff_t wl2866d_llseek(struct file *file, loff_t offset, int whence)
 static int wl2866d_open(struct inode *inode, struct file *file)
 {
 	if (!wl2866d_data.on) {
-		pr_err("wl2866d: open failed\n");
+		pr_err("open failed\n");
 		return -ENODEV;
 	}
 
@@ -573,40 +658,41 @@ static struct miscdevice wl2866d_miscdev = {
  * @param id struct i2c_device_id *
  * @return  Error code indicating success or failure
  */
-static int wl2866d_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
+static int wl2866d_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int ret = 0;
+
+	pr_info("entry\n");
 	memset(&wl2866d_data, 0, sizeof(struct wl2866d_data_t));
 	wl2866d_data.i2c_client = client;
 
 	ret = wl2866d_power_on(&client->dev);
 	if (ret) {
-		pr_err("wl2866d_power_on failed %d\n", ret);
+		pr_err("power_on failed (%d)\n", ret);
 		return ret;
 	}
 
 	ret = wl2866d_init_register();
 	if (ret) {
-		pr_err("wl2866d_init_register failed\n");
+		pr_err("init_register failed (%d)\n", ret);
 		return ret;
 	}
 
 	ret = wl2866d_match_id(&client->dev);
 	if (ret) {
-		pr_err("wl2866d_match_id failed %d\n", ret);
+		pr_err("match_id failed (%d)\n", ret);
 		return ret;
 	}
 
 	ret = cam_wl2866_init_module_dev(&client->dev);
 	if (ret) {
-		pr_err("cam_wl2866_init_module_dev failed %d\n", ret);
+		pr_err("init_module_dev failed (%d)\n", ret);
 		return -ENODEV;
 	}
 
 	ret = misc_register(&wl2866d_miscdev);
 	if (ret < 0) {
-		pr_err("failed to register wl2866d device\n");
+		pr_err("misc_register failed (%d)\n", ret);
 		return ret;
 	}
 
@@ -616,7 +702,7 @@ static int wl2866d_probe(struct i2c_client *client,
 	wl2866d_camera_power_control(OUT_AVDD1, 0);
 	wl2866d_camera_power_control(OUT_AVDD2, 0);
 
-	pr_info("wl2866d_probe successed!\n");
+	pr_info("successed!\n");
 	return 0;
 }
 
@@ -628,16 +714,9 @@ static int wl2866d_probe(struct i2c_client *client,
  */
 static int wl2866d_remove(struct i2c_client *client)
 {
-	int ret = 0;
+	pr_info("entry\n");
 	misc_deregister(&wl2866d_miscdev);
-
-	if (ret < 0) {
-		pr_err("failed to deregister wl2866d device\n");
-		return ret;
-	}
-
 	wl2866d_data.on = false;
-	pr_info("deregister wl2866d device ok\n");
 	return 0;
 }
 
@@ -652,7 +731,7 @@ MODULE_DEVICE_TABLE(i2c, wl2866d_id);
 
 #ifdef CONFIG_OF
 static const struct of_device_id wl2866d_i2c_of_match_table[] = {
-	{.compatible = "ovti,wl2866d-i2c"},
+	{ .compatible = "ovti,wl2866d-i2c" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, wl2866d_i2c_of_match_table);
@@ -664,12 +743,12 @@ MODULE_DEVICE_TABLE(of, wl2866d_i2c_of_match_table);
 static struct i2c_driver wl2866d_i2c_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
-		.name  = "ovti,wl2866d-i2c",
+		.name = "ovti,wl2866d-i2c",
 		.of_match_table = of_match_ptr(wl2866d_i2c_of_match_table),
 		.probe_type = PROBE_FORCE_SYNCHRONOUS,
 	},
-	.probe	= wl2866d_probe,
-	.remove	= wl2866d_remove,
+	.probe = wl2866d_probe,
+	.remove = wl2866d_remove,
 	.id_table = wl2866d_id,
 };
 
@@ -680,29 +759,21 @@ static struct i2c_driver wl2866d_i2c_driver = {
  */
 static int __init cam_wl2866_init_module(void)
 {
-	u8 ret = 0;
+	int ret = 0;
 	int num_retry = 3;
 
-	ret = i2c_add_driver(&wl2866d_i2c_driver);
-	if (ret != 0) {
-		pr_err("%s: add wl2866d driver failed, error=%d\n",
-				__func__, ret);
-		return ret;
-	}
-
 	do {
-		i2c_del_driver(&wl2866d_i2c_driver);
 		ret = i2c_add_driver(&wl2866d_i2c_driver);
-		if (ret != 0) {
-			pr_err("%s: add wl2866d driver failed, error=%d\n",
-					__func__, ret);
+		if (ret == 0) {
+			pr_info("add wl2866d driver success\n");
 			return ret;
+		} else {
+			pr_err("add wl2866d driver failed, error=%d, retry times=%d\n",
+					ret, num_retry);
+			num_retry--;
 		}
-		pr_info("wl2866d driver retry num: %d\n", num_retry);
-		num_retry--;
 	} while ((!wl2866d_data.on) && (num_retry > 0));
 
-	pr_info("%s: add wl2866d driver success\n", __func__);
 	return ret;
 }
 
@@ -712,7 +783,7 @@ static int __init cam_wl2866_init_module(void)
 static void __exit cam_wl2866_exit_module(void)
 {
 	i2c_del_driver(&wl2866d_i2c_driver);
-	pr_info("%s: delete wl2866d driver success\n", __func__);
+	pr_info("delete wl2866d driver success\n");
 }
 
 //allow work as standalone module

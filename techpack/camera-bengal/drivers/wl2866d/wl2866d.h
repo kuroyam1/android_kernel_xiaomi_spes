@@ -1,6 +1,3 @@
-/*
- * Copyright (C) 2022 XiaoMi, Inc.
- */
 #ifndef __WL2866D_H
 #define __WL2866D_H
 
