@@ -228,18 +228,16 @@ static ssize_t modes_show(struct device *device,
 	return written;
 }
 
-#ifdef CONFIG_TARGET_PROJECT_K7T
 extern int drm_get_panel_info(struct drm_bridge *bridge, char *name);
 static ssize_t panel_info_show(struct device *device,
 			       struct device_attribute *attr,
 			       char *buf)
 {
+	int written = 0;
+	char pname[128] = {0};
 	struct drm_connector *connector = NULL;
 	struct drm_encoder *encoder = NULL;
 	struct drm_bridge *bridge = NULL;
-	char pname_temp[128] = {0};
-	char pname[128] = {0};
-	int written = 0;
 
 	connector = to_drm_connector(device);
 	if (!connector)
@@ -254,20 +252,37 @@ static ssize_t panel_info_show(struct device *device,
 		return written;
 
 	written = drm_get_panel_info(bridge, pname);
-	if (written) {
-		strncpy(pname_temp, pname + 10, 32);
-		pname_temp[33] = '\0';
-		return snprintf(buf, PAGE_SIZE, "panel_name=%s_display\n", pname_temp);
-	}
-	return written;
-}
+	if (written <= 0)
+		return written;
+
+	pname[sizeof(pname) - 1] = '\0';
+	written = strnlen(pname, sizeof(pname));
+#if defined(CONFIG_TARGET_PROJECT_K7T)
+	if (written > 10)
+		return snprintf(buf, PAGE_SIZE, "panel_name=%.*s_display\n",
+				(written - 10) > 32 ? 32 : (written - 10),
+				pname + 10);
+#else
+	return snprintf(buf, PAGE_SIZE, "panel_name=%s\n", pname);
 #endif
+
+	return snprintf(buf, PAGE_SIZE, "panel_name=%s\n", pname);
+}
+
+static ssize_t dynamic_fps_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct drm_connector *connector = to_drm_connector(dev);
+
+	return dsi_display_dynamic_fps_read(connector, buf);
+}
 
 static DEVICE_ATTR_RW(status);
 static DEVICE_ATTR_RO(enabled);
 static DEVICE_ATTR_RO(dpms);
 static DEVICE_ATTR_RO(modes);
 static DEVICE_ATTR_RO(panel_info);
+static DEVICE_ATTR_RO(dynamic_fps);
 
 static struct attribute *connector_dev_attrs[] = {
 	&dev_attr_status.attr,
@@ -275,6 +290,7 @@ static struct attribute *connector_dev_attrs[] = {
 	&dev_attr_dpms.attr,
 	&dev_attr_modes.attr,
 	&dev_attr_panel_info.attr,
+	&dev_attr_dynamic_fps.attr,
 	NULL
 };
 

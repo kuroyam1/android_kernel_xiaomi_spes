@@ -23,7 +23,7 @@
 #define CONTROL_GPIO54_ENABLE 0
 
 #define WL2866D_PWR_NUMBER 4
-static const char* wl2866d_pwr_name[WL2866D_PWR_NUMBER] = {
+static const char *wl2866d_pwr_name[WL2866D_PWR_NUMBER] = {
 	"WL2866D_DVDD1",
 	"WL2866D_DVDD2",
 	"WL2866D_AVDD1",
@@ -105,9 +105,10 @@ static s32 wl2866d_write_reg(u8 reg, u8 val)
 	au8Buf[0] = reg;
 	au8Buf[1] = val;
 
-	if (i2c_master_send(wl2866d_data.i2c_client, au8Buf, 2) < 0) {
+	/* i2c_master_send returns number of bytes written or negative error */
+	if (i2c_master_send(wl2866d_data.i2c_client, au8Buf, sizeof(au8Buf)) < 0) {
 		pr_err("write reg error: reg=%x, val=%x\n", reg, val);
-		return -1;
+		return -EINVAL;
 	}
 
 	return 0;
@@ -126,18 +127,20 @@ static int wl2866d_read_reg(u8 reg, u8 *val)
 	u8 u8RdVal = 0;
 	au8RegBuf[0] = reg;
 
-	if (1 != i2c_master_send(wl2866d_data.i2c_client, au8RegBuf, 1)) {
+	/* write register address */
+	if (i2c_master_send(wl2866d_data.i2c_client, au8RegBuf, sizeof(au8RegBuf)) != (int)sizeof(au8RegBuf)) {
 		pr_err("write reg error: reg=%x\n", reg);
-		return -1;
+		return -EINVAL;
 	}
 
-	if (1 != i2c_master_recv(wl2866d_data.i2c_client, &u8RdVal, 1)) {
+	/* read one byte */
+	if (i2c_master_recv(wl2866d_data.i2c_client, &u8RdVal, sizeof(u8RdVal)) != (int)sizeof(u8RdVal)) {
 		pr_err("read reg error: reg=%x, val=%x\n", reg, u8RdVal);
-		return -1;
+		return -EINVAL;
 	}
 
 	*val = u8RdVal;
-	pr_info("wl2866d_read_reg %02x@%02x\n", u8RdVal, reg);
+	pr_debug("wl2866d_read_reg %02x@%02x\n", u8RdVal, reg);
 	return 0;
 }
 
@@ -146,7 +149,7 @@ static int wl2866d_read_reg(u8 reg, u8 *val)
 {
 	int ret = 0;
 
-	pr_info("try control gpio 54\n");
+	pr_debug("try control gpio 54\n");
 	if (!gpio_is_valid(iov_gpio)) {
 		pr_err("no iov pin available--no return\n");
 		//return -EINVAL;
@@ -159,7 +162,7 @@ static int wl2866d_read_reg(u8 reg, u8 *val)
 		} else {
 			pr_debug("iov request ok\n");
 			gpio_direction_output(iov_gpio, 1);
-			pr_info("iov_gpio set high, free it.\n");
+			pr_debug("iov_gpio set high, free it.\n");
 			devm_gpio_free(&wl2866d_data.i2c_client->dev, iov_gpio);
 		}
 	}
@@ -174,7 +177,7 @@ static void iov_one_shot_edge_pulse(int gpio)
 		return;
 	}
 
-	pr_info("requesting gpio %d\n", gpio);
+	pr_debug("requesting gpio %d\n", gpio);
 	ret = gpio_request(gpio, "wl2866d_iov_oneshot");
 	if (ret) {
 		pr_err("gpio_request %d failed (%d)\n", gpio, ret);
@@ -183,14 +186,14 @@ static void iov_one_shot_edge_pulse(int gpio)
 
 	gpio_direction_output(gpio, 1);
 	val = gpio_get_value_cansleep(gpio);
-	pr_info("after set HIGH, read=%d\n", val);
+	pr_debug("after set HIGH, read=%d\n", val);
 
 	gpio_direction_output(gpio, 0);
 	val = gpio_get_value_cansleep(gpio);
-	pr_info("after set LOW, read=%d\n", val);
+	pr_debug("after set LOW, read=%d\n", val);
 
 	gpio_free(gpio);
-	pr_info("gpio %d freed\n", gpio);
+	pr_debug("gpio %d freed\n", gpio);
 }
 #endif
 
@@ -219,7 +222,7 @@ static void iov_one_shot_edge_pulse(int gpio)
 		return ret;
 	} else {
 		gpio_direction_output(wl2866d_data.en_gpio, 0);
-		pr_info("en_gpio set low\n");
+		pr_debug("en_gpio set low\n");
 	}
 
 #if CONTROL_GPIO54_ENABLE
@@ -243,11 +246,11 @@ static int wl2866d_power_on(struct device *dev)
 	pr_info("en_gpio set LOW\n");
 
 #if CONTROL_GPIO54_ENABLE
-	wl2866d_data.iov_gpio = of_get_named_gpio(dev->of_node, "iov-gpio", 0);
+	wl2866d_data.iov_gpio = of_get_named_gpio(dev->of_node, "iov-gpios", 0);
 	if (!gpio_is_valid(wl2866d_data.iov_gpio)) {
-		pr_info("iov gpio not provided or invalid (%d)\n", wl2866d_data.iov_gpio);
+		pr_debug("iov gpio not provided or invalid (%d)\n", wl2866d_data.iov_gpio);
 	} else {
-		pr_info("iov gpio %d saved for one-shot\n", wl2866d_data.iov_gpio);
+		pr_debug("iov gpio %d saved for one-shot\n", wl2866d_data.iov_gpio);
 	}
 #endif
 
@@ -264,11 +267,11 @@ static int wl2866d_init_register(void)
 
 	for (i = 0; i < 16; i++) {
 		for (j = 0; j < 3; j++) {
-			rc = wl2866d_write_reg(reg[i],val[i]);
+			rc = wl2866d_write_reg(reg[i], val[i]);
 			if (rc) {
 				pr_err("write 0x%x 0x%x failed, retry %d\n", reg[i], val[i], j);
 				if (2 == j) {
-					return -1;
+					return -EINVAL;
 				}
 				usleep_range(3000, 3010);
 			} else {
@@ -365,7 +368,7 @@ static int cam_wl2866_init_module_dev(struct device *dev)
 		}
 	}
 
-	pr_info("init done\n");
+	pr_debug("init done\n");
 	return 0;
 }
 
@@ -391,7 +394,7 @@ int wl2866d_camera_power_control(unsigned int out_iotype, int is_power_on)
 		pr_err("read power out control reg failed\n");
 		goto fail_return;
 	}
-	pr_info("pwr_ctrl: %s\n", wl2866d_pwr_name[out_iotype]);
+	pr_debug("pwr_ctrl: %s\n", wl2866d_pwr_name[out_iotype]);
 
 	/* Enable DISCHARGE mode to avoid leakage */
 	ret = wl2866d_write_reg(wl2866d_on_config[DISCHARGE_ENABLE].reg, wl2866d_on_config[DISCHARGE_ENABLE].value);
@@ -405,8 +408,7 @@ int wl2866d_camera_power_control(unsigned int out_iotype, int is_power_on)
 			iov_one_shot_edge_pulse(wl2866d_data.iov_gpio);
 #endif
 		}
-		pr_info("power on, set voltage %d\n",
-				wl2866d_pwr_value[out_iotype]);
+		pr_debug("power on, set voltage %d\n", wl2866d_pwr_value[out_iotype]);
 		ret = wl2866d_read_reg(wl2866d_on_config[out_iotype].reg, &reg_read);
 		if (ret < 0 || reg_read != wl2866d_on_config[out_iotype].value) {
 			ret = wl2866d_write_reg(wl2866d_on_config[out_iotype].reg,
@@ -416,28 +418,28 @@ int wl2866d_camera_power_control(unsigned int out_iotype, int is_power_on)
 				goto fail_return;
 			}
 		} else {
-			pr_info("voltage is right, no need write reg\n");
+			pr_debug("voltage is right, no need write reg\n");
 		}
 
 		reg_val |= 1 << out_iotype;
-		pr_info("power on, set reg %02x\n", reg_val);
+		pr_debug("power on, set reg %02x\n", reg_val);
 
 		if ((1050000 == is_power_on) && (OUT_DVDD2 == out_iotype)) {
 			ret = wl2866d_write_reg(wl2866d_on_config[out_iotype].reg, 0x4B);
 			if (ret < 0)
-				pr_info("set DVDD2 voltage failed\n");
+				pr_err("set DVDD2 voltage failed\n");
 			else
-				pr_info("set DVDD2 to 1.05V\n");
+				pr_debug("set DVDD2 to 1.05V\n");
 		} else if ((1200000 == is_power_on) && (OUT_DVDD2 == out_iotype)) {
 			ret = wl2866d_write_reg(wl2866d_on_config[out_iotype].reg, 0x64);
 			if (ret < 0)
-				pr_info("set DVDD2 voltage failed\n");
+				pr_err("set DVDD2 voltage failed\n");
 			else
-				pr_info("set DVDD2 to 1.2V\n");
+				pr_debug("set DVDD2 to 1.2V\n");
 		}
 	} else {
 		reg_val &= ~(1 << out_iotype);
-		pr_info("power off, set reg %02x\n", reg_val);
+		pr_debug("power off, set reg %02x\n", reg_val);
 	}
 
 	ret = wl2866d_write_reg(wl2866d_on_config[VOL_ENABLE].reg, reg_val);
@@ -510,6 +512,13 @@ static ssize_t wl2866d_read(struct file *file, char __user *buf,
 			kfree(buffer);
 			return ret;
 		}
+
+		if (num + 6 > WL2866D_IO_BUFFER_LIMIT) {
+			pr_err("internal buffer overflow\n");
+			kfree(buffer);
+			return -EINVAL;
+		}
+
 		buffer[num++] = GetHexCh(u8add, 4);
 		buffer[num++] = GetHexCh(u8add, 0);
 		buffer[num++] = ' ';

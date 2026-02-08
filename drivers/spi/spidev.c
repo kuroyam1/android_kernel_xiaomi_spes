@@ -90,7 +90,7 @@ struct spidev_data {
 static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_lock);
 
-static unsigned bufsiz = 4096 * 10;
+static unsigned bufsiz = 35000;
 module_param(bufsiz, uint, S_IRUGO);
 MODULE_PARM_DESC(bufsiz, "data bytes in biggest supported SPI message");
 
@@ -123,9 +123,9 @@ spidev_sync_write(struct spidev_data *spidev, size_t len)
 	struct spi_transfer	t = {
 			.tx_buf		= spidev->tx_buffer,
 			.len		= len,
-			.speed_hz	= 960000, // spidev->speed_hz
-			.delay_usecs = 0,
-			.cs_change   = 0,
+			.speed_hz	= 960000, //spidev->speed_hz
+			.delay_usecs	= 0,
+			.cs_change	= 0,
 		};
 	struct spi_message	m;
 
@@ -165,7 +165,7 @@ spidev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	spidev = filp->private_data;
 
 	mutex_lock(&spidev->buf_lock);
-	/* 2021.08.18 longcheer xugui added for buffer kmalloc size begin */
+/* 2021.08.18 longcheer xugui added for buffer kmalloc size begin */
 	if (!spidev->rx_buffer) {
 		spidev->rx_buffer = kmalloc(bufsiz, GFP_KERNEL);
 		if (!spidev->rx_buffer) {
@@ -174,7 +174,7 @@ spidev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 			goto read_unlock;
 		}
 	}
-	/* 2021.08.18 longcheer xugui added for buffer kmalloc size end */
+/* 2021.08.18 longcheer xugui added for buffer kmalloc size end */
 	status = spidev_sync_read(spidev, count);
 	if (status > 0) {
 		unsigned long	missing;
@@ -206,16 +206,13 @@ spidev_write(struct file *filp, const char __user *buf,
 	unsigned long		missing;
 
 	/* chipselect only toggles at start or end of operation */
-	/* 2021.08.18 longcheer xugui removed for buffer kmalloc size begin */
-	/* if (count > bufsiz)
+	if (count > bufsiz)
 		return -EMSGSIZE;
-	*/
-	/* 2021.08.18 longcheer xugui removed for buffer kmalloc size end */
 
 	spidev = filp->private_data;
 
 	mutex_lock(&spidev->buf_lock);
-	/* 2021.08.18 longcheer xugui added for buffer kmalloc size begin */
+/* 2021.08.18 longcheer xugui added for buffer kmalloc size begin */
 	if (!spidev->tx_buffer) {
 		spidev->tx_buffer = kmalloc(count, GFP_KERNEL);
 		if (!spidev->tx_buffer) {
@@ -224,7 +221,7 @@ spidev_write(struct file *filp, const char __user *buf,
 			goto write_unlock;
 		}
 	}
-	/* 2021.08.18 longcheer xugui added for buffer kmalloc size end */
+/* 2021.08.18 longcheer xugui added for buffer kmalloc size end */
 	missing = copy_from_user(spidev->tx_buffer, buf, count);
 	if (missing == 0)
 		status = spidev_sync_write(spidev, count);
@@ -261,7 +258,7 @@ static int spidev_message(struct spidev_data *spidev,
 	 * We walk the array of user-provided transfers, using each one
 	 * to initialize a kernel version of the same transfer.
 	 */
-	/* 2021.08.18 longcheer xugui added for buffer kmalloc size begin */
+/* 2021.08.18 longcheer xugui added for buffer kmalloc size begin */
 	if (!spidev->rx_buffer) {
 		spidev->rx_buffer = kmalloc(bufsiz, GFP_KERNEL);
 		if (!spidev->rx_buffer) {
@@ -278,7 +275,7 @@ static int spidev_message(struct spidev_data *spidev,
 			goto txbuffer_err;
 		}
 	}
-	/* 2021.08.18 longcheer xugui added for buffer kmalloc size end */
+/* 2021.08.18 longcheer xugui added for buffer kmalloc size end */
 	tx_buf = spidev->tx_buffer;
 	rx_buf = spidev->rx_buffer;
 	total = 0;

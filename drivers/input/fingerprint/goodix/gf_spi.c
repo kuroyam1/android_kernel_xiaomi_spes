@@ -170,7 +170,7 @@ static void spi_clock_set(struct gf_dev *gf_dev, int speed)
 
 	rate = spi_clk_max_rate(gf_dev->core_clk, speed);
 	if (rate < 0) {
-		pr_debug("%s: no match found for requested clock frequency: %d",
+		pr_debug("%s: no match found for requested clock frequency: %d\n",
 				__func__, speed);
 		return;
 	}
@@ -554,7 +554,7 @@ static int gf_open(struct inode *inode, struct file *filp)
 #endif
 
 	if (status == 0) {
-		#if 0
+#if 0
 		rc = gpio_request(gf_dev->reset_gpio, "goodix_reset");
 		if (rc) {
 			dev_err(&gf_dev->spi->dev, "Failed to request RESET GPIO. rc=%d\n", rc);
@@ -562,14 +562,15 @@ static int gf_open(struct inode *inode, struct file *filp)
 			return -EPERM;
 		}
 		gpio_direction_output(gf_dev->reset_gpio, 0);
-		#endif
+#endif
 		gf_dev->irq_gpio = of_get_named_gpio(gf_dev->spi->dev.of_node, "fp-gpio-irq", 0);
-			pr_info("gf: irq_gpio: %d\n", gf_dev->irq_gpio);
 		if (!gpio_is_valid(gf_dev->irq_gpio)) {
 			pr_info("IRQ GPIO is invalid.\n");
 			mutex_unlock(&device_list_lock);
 			return -EPERM;
 		}
+		pr_info("gf: irq_gpio: %d\n", gf_dev->irq_gpio);
+
 		rc = gpio_request(gf_dev->irq_gpio, "goodix_irq");
 		if (rc) {
 			dev_err(&gf_dev->spi->dev, "Failed to request IRQ GPIO. rc=%d\n", rc);
@@ -857,10 +858,10 @@ static int gf_probe(struct platform_device *pdev)
 
 	proc_entry = proc_create(PROC_NAME, 0644, NULL, &proc_file_goodix_ops);
 	if (NULL == proc_entry) {
-		pr_err("gf3258 Couldn't create proc entry!");
+		pr_err("gf3258 Couldn't create proc entry!\n");
 		return -ENOMEM;
 	} else {
-		pr_err("gf3258 Create proc entry success!");
+		pr_info("gf3258 Create proc entry success!\n");
 	}
 	pr_info("version V%d.%d.%02d\n", VER_MAJOR, VER_MINOR, PATCH_LEVEL);
 

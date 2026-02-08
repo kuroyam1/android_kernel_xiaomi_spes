@@ -16,6 +16,7 @@
 
 &qupv3_se2_i2c {
 	status = "ok";
+	qcom,i2c-touch-active="focaltech,fts";
 	touchscreen {
 		status = "okay";
 		compatible = "focaltech,fts";
@@ -28,15 +29,11 @@
 		focaltech,irq-gpio = <&tlmm 80 2>;
 		focaltech,max-touch-number = <10>;
 		focaltech,display-coords = <0 0 1080 2400>;
-		panel1 = <&dsi_k7_38_0c_0a_video>;
-		panel2 = <&dsi_k7_38_0c_0b_video>;
+		panel = <&dsi_k7_38_0c_0a_video &dsi_k7_38_0c_0b_video>;
 		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend",
 			"pmx_ts_release";
-		pinctrl-0 = <&ts_int_active
-				&ts_reset_active
-				&ts_avdd>;
-		pinctrl-1 = <&ts_int_suspend
-				&ts_reset_suspend>;
+		pinctrl-0 = <&ts_int_active &ts_reset_active &ts_avdd>;
+		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
 		pinctrl-2 = <&ts_release>;
 	};
 };
@@ -257,6 +254,7 @@
 
 	thermal_message: thermal-message {
 		board-sensor = "VIRTUAL-SENSOR";
+		panel = <&dsi_k7_38_0c_0a_video &dsi_k7_38_0c_0b_video>;
 	};
 };
 

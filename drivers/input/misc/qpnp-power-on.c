@@ -2513,6 +2513,7 @@ static int qpnp_pon_remove(struct platform_device *pdev)
 	unsigned long flags;
 
 	device_remove_file(&pdev->dev, &dev_attr_debounce_us);
+	device_remove_file(&pdev->dev, &dev_attr_kpdpwr_reset);
 
 	cancel_delayed_work_sync(&pon->bark_work);
 

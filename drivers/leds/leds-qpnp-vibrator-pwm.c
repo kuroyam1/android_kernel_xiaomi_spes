@@ -418,7 +418,7 @@ static int qpnp_vibrator_pwm_probe(struct platform_device *pdev)
 {
 	struct vib_pwm_chip *chip;
 	int i, ret;
-	u32 base;
+	u32 base = 0;
 
 	pr_info("probe start\n");
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
@@ -480,7 +480,10 @@ fail:
 static int qpnp_vibrator_pwm_remove(struct platform_device *pdev)
 {
 	struct vib_pwm_chip *chip = dev_get_drvdata(&pdev->dev);
+	int i;
 
+	if (!chip)
+		return 0;
 	//pr_info("vib---wj---qpnp_vibrator_pwm_probe\n");
 	/*
 	if (!chip->disable_overdrive) {
@@ -489,6 +492,10 @@ static int qpnp_vibrator_pwm_remove(struct platform_device *pdev)
 	}*/
 	hrtimer_cancel(&chip->stop_timer);
 	cancel_work_sync(&chip->vib_work);
+
+	for (i = 0; i < ARRAY_SIZE(qpnp_vib_attrs); i++)
+		sysfs_remove_file(&chip->cdev.dev->kobj, &qpnp_vib_attrs[i].attr);
+
 	mutex_destroy(&chip->lock);
 	dev_set_drvdata(&pdev->dev, NULL);
 

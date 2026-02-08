@@ -6,9 +6,6 @@
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_atomic.h>
-#include <drm/drm_panel.h>
-#include <linux/notifier.h>
-#include <drm/drm_bridge.h>
 
 #include "msm_kms.h"
 #include "sde_connector.h"
@@ -24,49 +21,12 @@
 #define DEFAULT_PANEL_JITTER_ARRAY_SIZE		2
 #define DEFAULT_PANEL_PREFILL_LINES	25
 
-static BLOCKING_NOTIFIER_HEAD(drm_notifier_list);
-
 static struct dsi_display_mode_priv_info default_priv_info = {
 	.panel_jitter_numer = DEFAULT_PANEL_JITTER_NUMERATOR,
 	.panel_jitter_denom = DEFAULT_PANEL_JITTER_DENOMINATOR,
 	.panel_prefill_lines = DEFAULT_PANEL_PREFILL_LINES,
 	.dsc_enabled = false,
 };
-
-/*
- *	drm_register_client - register a client notifier
- *	@nb:notifier block to callback when event happen
- */
- 
-int drm_register_client(struct notifier_block *nb)
-{
-	pr_err("%s,%d\n", __func__, __LINE__);
-	return blocking_notifier_chain_register(&drm_notifier_list, nb);
-}
-EXPORT_SYMBOL(drm_register_client);
-
-/*
- *	drm_unregister_client - unregister a client notifier
- *	@nb:notifier block to callback when event happen
- */
- 
-int drm_unregister_client(struct notifier_block *nb)
-{
-	pr_err("%s,%d\n", __func__, __LINE__);
-	return blocking_notifier_chain_unregister(&drm_notifier_list, nb);
-}
-EXPORT_SYMBOL(drm_unregister_client);
-
-/*
- *	drm_notifier_call_chain - notify clients of drm_event
- */
-
-int drm_notifier_call_chain(unsigned long val, void *v)
-{
-	pr_err("%s,%d,val = %d\n", __func__, __LINE__,val);
-	return blocking_notifier_call_chain(&drm_notifier_list, val, v);
-}
-EXPORT_SYMBOL(drm_notifier_call_chain);
 
 static void convert_to_dsi_mode(const struct drm_display_mode *drm_mode,
 				struct dsi_display_mode *dsi_mode)
@@ -200,16 +160,8 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 {
 	int rc = 0;
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
-	struct drm_notify_data g_notify_data;
-	struct drm_device *dev = bridge->dev;
-	int event = 0;
-
-	if (dev->doze_state == DRM_BLANK_POWERDOWN) {
-		dev->doze_state = DRM_BLANK_UNBLANK;
-		pr_err("%s power on from power off\n", __func__);
-	}
-	event = dev->doze_state;
-	g_notify_data.data = &event;
+	struct drm_panel_notifier notify_data;
+	int power_mode = DRM_PANEL_BLANK_UNBLANK;
 
 	if (!bridge) {
 		DSI_ERR("Invalid params\n");
@@ -224,8 +176,6 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 	if (bridge->encoder->crtc->state->active_changed)
 		atomic_set(&c_bridge->display->panel->esd_recovery_pending, 0);
 
-	drm_notifier_call_chain(DRM_EARLY_EVENT_BLANK, &g_notify_data);
-
 	/* By this point mode should have been validated through mode_fixup */
 	rc = dsi_display_set_mode(c_bridge->display,
 			&(c_bridge->dsi_mode), 0x0);
@@ -234,6 +184,11 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 		       c_bridge->id, rc);
 		return;
 	}
+
+	notify_data.is_primary = c_bridge->display->is_prim_display;
+	notify_data.data = &power_mode;
+	drm_panel_notifier_call_chain(&c_bridge->display->panel->drm_panel,
+			DRM_PANEL_EARLY_EVENT_BLANK, &notify_data);
 
 	if (c_bridge->dsi_mode.dsi_mode_flags &
 		(DSI_MODE_FLAG_SEAMLESS | DSI_MODE_FLAG_VRR |
@@ -259,8 +214,10 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 				c_bridge->id, rc);
 		(void)dsi_display_unprepare(c_bridge->display);
 	}
-	drm_notifier_call_chain(DRM_EVENT_BLANK, &g_notify_data);
 	SDE_ATRACE_END("dsi_display_enable");
+
+	drm_panel_notifier_call_chain(&c_bridge->display->panel->drm_panel,
+			DRM_PANEL_EVENT_BLANK, &notify_data);
 
 	rc = dsi_display_splash_res_cleanup(c_bridge->display);
 	if (rc)
@@ -322,6 +279,8 @@ static void dsi_bridge_disable(struct drm_bridge *bridge)
 	int private_flags;
 	struct dsi_display *display;
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
+	struct drm_panel_notifier notify_data;
+	int power_mode = DRM_PANEL_BLANK_POWERDOWN;
 
 	if (!bridge) {
 		DSI_ERR("Invalid params\n");
@@ -330,6 +289,11 @@ static void dsi_bridge_disable(struct drm_bridge *bridge)
 	display = c_bridge->display;
 	private_flags =
 		bridge->encoder->crtc->state->adjusted_mode.private_flags;
+
+	notify_data.is_primary = display->is_prim_display;
+	notify_data.data = &power_mode;
+	drm_panel_notifier_call_chain(&display->panel->drm_panel,
+			DRM_PANEL_R_EARLY_EVENT_BLANK, &notify_data);
 
 	if (display && display->drm_conn) {
 		display->poms_pending =
@@ -349,23 +313,19 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 {
 	int rc = 0;
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
-	struct drm_notify_data g_notify_data;
-	struct drm_device *dev = bridge->dev;
-	int event = 0;
-
-	if (dev->doze_state == DRM_BLANK_UNBLANK) {
-		dev->doze_state = DRM_BLANK_POWERDOWN;
-		pr_err("%s wrong doze state\n", __func__);
-	}
-	event = dev->doze_state;
-	g_notify_data.data = &event;
+	struct drm_panel_notifier notify_data;
+	int power_mode = DRM_PANEL_BLANK_POWERDOWN;
 
 	if (!bridge) {
 		DSI_ERR("Invalid params\n");
 		return;
 	}
 
-	drm_notifier_call_chain(DRM_EARLY_EVENT_BLANK, &g_notify_data);
+	notify_data.is_primary = c_bridge->display->is_prim_display;
+	notify_data.data = &power_mode;
+	drm_panel_notifier_call_chain(&c_bridge->display->panel->drm_panel,
+			DRM_PANEL_EARLY_EVENT_BLANK, &notify_data);
+
 	SDE_ATRACE_BEGIN("dsi_bridge_post_disable");
 	SDE_ATRACE_BEGIN("dsi_display_disable");
 	rc = dsi_display_disable(c_bridge->display);
@@ -384,8 +344,10 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 		SDE_ATRACE_END("dsi_bridge_post_disable");
 		return;
 	}
-	drm_notifier_call_chain(DRM_EVENT_BLANK, &g_notify_data);
 	SDE_ATRACE_END("dsi_bridge_post_disable");
+
+	drm_panel_notifier_call_chain(&c_bridge->display->panel->drm_panel,
+			DRM_PANEL_EVENT_BLANK, &notify_data);
 }
 
 static void dsi_bridge_mode_set(struct drm_bridge *bridge,
@@ -1094,6 +1056,9 @@ int dsi_conn_post_kickoff(struct drm_connector *connector,
 				return -EINVAL;
 			}
 		}
+		if (dsi_panel_initialized(display->panel) &&
+				adj_mode.timing.refresh_rate == 90)
+			dsi_panel_set_backlight_control(display->panel, &adj_mode);
 
 		c_bridge->dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_VRR;
 	}

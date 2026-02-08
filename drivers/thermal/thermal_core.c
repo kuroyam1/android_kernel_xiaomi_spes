@@ -62,14 +62,22 @@ struct screen_monitor {
 	int screen_state;
 };
 
-struct screen_monitor sm;
-
+static struct drm_panel *prim_panel;
+static struct screen_monitor sm;
+static struct delayed_work panel_retry_work;
+static int panel_retry;
+static DEFINE_MUTEX(screen_mon_lock);
+static DEFINE_MUTEX(thermal_sysfs_lock);
 static atomic_t switch_mode = ATOMIC_INIT(-1);
 static atomic_t temp_state = ATOMIC_INIT(0);
 static char boost_buf[PAGE_SIZE];
 const char *board_sensor;
 static char board_sensor_temp[PAGE_SIZE];
 static struct device thermal_message_dev;
+
+#define PANEL_RETRY_MAX 5
+#define PANEL_RETRY_INTERVAL_MS 1000
+static void panel_retry_work_fn(struct work_struct *work);
 #endif
 
 static struct thermal_governor *def_governor;
@@ -1690,7 +1698,7 @@ static ssize_t
 thermal_screen_state_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%d\n", sm.screen_state);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", sm.screen_state);
 }
 static DEVICE_ATTR(screen_state, 0664, thermal_screen_state_show, NULL);
 
@@ -1698,16 +1706,32 @@ static ssize_t
 thermal_sconfig_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&switch_mode));
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&switch_mode));
 }
 
 static ssize_t
 thermal_sconfig_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
-	int val = -1;
+	char *kbuf;
+	int val;
+	int ret;
 
-	val = simple_strtol(buf, NULL, 10);
+	if (len == 0 || len > PAGE_SIZE - 1)
+		return -EINVAL;
+
+	kbuf = kmalloc(len + 1, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	memcpy(kbuf, buf, len);
+	kbuf[len] = '\0';
+
+	ret = kstrtoint(kbuf, 10, &val);
+	kfree(kbuf);
+	if (ret)
+		return ret;
+
 	atomic_set(&switch_mode, val);
 
 	return len;
@@ -1718,18 +1742,38 @@ static ssize_t
 thermal_boost_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, boost_buf);
+	ssize_t ret;
+
+	mutex_lock(&thermal_sysfs_lock);
+	ret = scnprintf(buf, PAGE_SIZE, "%s", boost_buf);
+	mutex_unlock(&thermal_sysfs_lock);
+
+	return ret;
 }
 
 static ssize_t
 thermal_boost_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
-	int ret;
+	char *kbuf;
+	ssize_t ret = len;
 
-	ret = snprintf(boost_buf, PAGE_SIZE, buf);
+	if (len == 0 || len > PAGE_SIZE - 1)
+		return -EINVAL;
 
-	return len;
+	kbuf = kmalloc(len + 1, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	memcpy(kbuf, buf, len);
+	kbuf[len] = '\0';
+
+	mutex_lock(&thermal_sysfs_lock);
+	scnprintf(boost_buf, PAGE_SIZE, "%s", kbuf);
+	mutex_unlock(&thermal_sysfs_lock);
+
+	kfree(kbuf);
+	return ret;
 }
 static DEVICE_ATTR(boost, 0644, thermal_boost_show, thermal_boost_store);
 
@@ -1737,16 +1781,32 @@ static ssize_t
 thermal_temp_state_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&temp_state));
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&temp_state));
 }
 
 static ssize_t
 thermal_temp_state_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
-	int val = -1;
+	char *kbuf;
+	int val;
+	int ret;
 
-	val = simple_strtol(buf, NULL, 10);
+	if (len == 0 || len > PAGE_SIZE - 1)
+		return -EINVAL;
+
+	kbuf = kmalloc(len + 1, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	memcpy(kbuf, buf, len);
+	kbuf[len] = '\0';
+
+	ret = kstrtoint(kbuf, 10, &val);
+	kfree(kbuf);
+	if (ret)
+		return ret;
+
 	atomic_set(&temp_state, val);
 
 	return len;
@@ -1764,11 +1824,25 @@ static ssize_t
 cpu_limits_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
+	char *kbuf;
 	unsigned int cpu;
 	unsigned int max;
+	int scanned;
 
-	if (sscanf(buf, "cpu%u %u", &cpu, &max) != CPU_LIMITS_PARAM_NUM) {
-		pr_err("input param error, can not prase param\n");
+	if (len == 0 || len > PAGE_SIZE - 1)
+		return -EINVAL;
+
+	kbuf = kmalloc(len + 1, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	memcpy(kbuf, buf, len);
+	kbuf[len] = '\0';
+
+	scanned = sscanf(kbuf, "cpu%u %u", &cpu, &max);
+	kfree(kbuf);
+	if (scanned != CPU_LIMITS_PARAM_NUM) {
+		pr_err("Thermal: input param error, cannot parse param.\n");
 		return -EINVAL;
 	}
 
@@ -1782,12 +1856,17 @@ static ssize_t
 thermal_board_sensor_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	if (!board_sensor) {
-		board_sensor = "invalid";
-		printk("thermal_board_sensor invalid.\n");
-	}
+	const char *sensor;
+	ssize_t ret;
 
-	return snprintf(buf, PAGE_SIZE, "%s", board_sensor);
+	mutex_lock(&thermal_sysfs_lock);
+	sensor = board_sensor ? board_sensor : "invalid";
+	if (!board_sensor)
+		pr_warn("Thermal: thermal_board_sensor invalid.\n");
+	ret = scnprintf(buf, PAGE_SIZE, "%s", sensor);
+	mutex_unlock(&thermal_sysfs_lock);
+
+	return ret;
 }
 static DEVICE_ATTR(board_sensor, 0664, thermal_board_sensor_show, NULL);
 
@@ -1795,16 +1874,38 @@ static ssize_t
 thermal_board_sensor_temp_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, board_sensor_temp);
+	ssize_t ret;
+
+	mutex_lock(&thermal_sysfs_lock);
+	ret = scnprintf(buf, PAGE_SIZE, "%s", board_sensor_temp);
+	mutex_unlock(&thermal_sysfs_lock);
+
+	return ret;
 }
 
 static ssize_t
 thermal_board_sensor_temp_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
-	snprintf(board_sensor_temp, PAGE_SIZE, buf);
+	char *kbuf;
+	ssize_t ret = len;
 
-	return len;
+	if (len == 0 || len > PAGE_SIZE - 1)
+		return -EINVAL;
+
+	kbuf = kmalloc(len + 1, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	memcpy(kbuf, buf, len);
+	kbuf[len] = '\0';
+
+	mutex_lock(&thermal_sysfs_lock);
+	scnprintf(board_sensor_temp, PAGE_SIZE, "%s", kbuf);
+	mutex_unlock(&thermal_sysfs_lock);
+
+	kfree(kbuf);
+	return ret;
 }
 static DEVICE_ATTR(board_sensor_temp, 0664, thermal_board_sensor_temp_show, thermal_board_sensor_temp_store);
 
@@ -1818,7 +1919,7 @@ static int create_thermal_message_node(void)
 	if (!ret) {
 		ret = sysfs_create_file(&thermal_message_dev.kobj, &dev_attr_screen_state.attr);
 		if (ret < 0)
-			pr_warn("Thermal: create batt message node failed\n");
+			pr_warn("Thermal: create screen state node failed\n");
 
 		ret = sysfs_create_file(&thermal_message_dev.kobj, &dev_attr_sconfig.attr);
 		if (ret < 0)
@@ -1860,39 +1961,97 @@ static void destroy_thermal_message_node(void)
 	device_unregister(&thermal_message_dev);
 }
 
-static int screen_state_for_thermal_callback(struct notifier_block *nb, unsigned long val, void *data)
+static int screen_state_for_thermal_callback(struct notifier_block *nb,
+		unsigned long val, void *data)
 {
-	struct drm_notify_data *evdata = data;
-	unsigned int blank;
+	struct drm_panel_notifier *evdata = data;
+	int power_mode;
 
-	if (val != DRM_EVENT_BLANK || !evdata || !evdata->data)
-		return 0;
+	if (val != DRM_PANEL_EVENT_BLANK || !evdata || !evdata->data)
+		return NOTIFY_OK;
 
-	blank = *(int *)(evdata->data);
-	switch (blank) {
-	case DRM_BLANK_LP1:
-		pr_info("%s: DRM_BLANK_LP1\n", __func__);
-	case DRM_BLANK_LP2:
-		pr_info("%s: DRM_BLANK_LP2\n", __func__);
-	case DRM_BLANK_POWERDOWN:
+	power_mode = *(int *)(evdata->data);
+	mutex_lock(&screen_mon_lock);
+	switch (power_mode) {
+	case DRM_PANEL_BLANK_LP1:
+		pr_info("%s: DRM_PANEL_BLANK_LP1\n", __func__);
 		sm.screen_state = 0;
-		pr_info("%s: DRM_BLANK_POWERDOWN\n", __func__);
 		break;
-	case DRM_BLANK_UNBLANK:
+	case DRM_PANEL_BLANK_LP2:
+		pr_info("%s: DRM_PANEL_BLANK_LP2\n", __func__);
+		sm.screen_state = 0;
+		break;
+	case DRM_PANEL_BLANK_POWERDOWN:
+		pr_info("%s: DRM_PANEL_BLANK_POWERDOWN\n", __func__);
+		sm.screen_state = 0;
+		break;
+	case DRM_PANEL_BLANK_UNBLANK:
+		pr_info("%s: DRM_PANEL_BLANK_UNBLANK\n", __func__);
 		sm.screen_state = 1;
-		pr_info("%s: DRM_BLANK_UNBLANK\n", __func__);
 		break;
 	default:
 		break;
 	}
+	mutex_unlock(&screen_mon_lock);
 
 	sysfs_notify(&thermal_message_dev.kobj, NULL, "screen_state");
 
 	return NOTIFY_OK;
 }
-#endif
 
-#ifdef CONFIG_ARCH_QCOM
+static int of_parse_drm_panel(void)
+{
+	struct device_node *np = NULL, *node = NULL;
+	struct drm_panel *panel;
+	int count, i, ret = -ENODEV;
+
+	np = of_find_node_by_name(NULL, "thermal-message");
+	if (!np)
+		return -ENODEV;
+
+	count = of_count_phandle_with_args(np, "panel", NULL);
+	if (count <= 0) {
+		of_node_put(np);
+		return -ENODEV;
+	}
+
+	for (i = 0; i < count; i++) {
+		node = of_parse_phandle(np, "panel", i);
+		if (!node)
+			continue;
+
+		panel = of_drm_find_panel(node);
+		of_node_put(node);
+		node = NULL;
+
+		if (IS_ERR(panel)) {
+			pr_info("thermal: phandle %d -> err %ld\n", i, PTR_ERR(panel));
+			continue;
+		}
+
+		mutex_lock(&screen_mon_lock);
+		if (!prim_panel) {
+			prim_panel = panel;
+			ret = drm_panel_notifier_register(prim_panel, &sm.thermal_notifier);
+			if (ret < 0) {
+				pr_warn("Thermal: drm_panel_notifier_register failed: %d\n", ret);
+				prim_panel = NULL;
+			} else {
+				pr_info("Thermal: notifier registered on prim_panel\n");
+			}
+		} else {
+			ret = 0;
+		}
+		mutex_unlock(&screen_mon_lock);
+
+		if (ret == 0)
+			break;
+	}
+
+	of_node_put(np);
+	return ret;
+}
+
 static int of_parse_thermal_message(void)
 {
 	struct device_node *np;
@@ -1901,13 +2060,58 @@ static int of_parse_thermal_message(void)
 	if (!np)
 		return -EINVAL;
 
-	if (of_property_read_string(np, "board-sensor", &board_sensor))
-		return -EINVAL;
+	if (of_property_read_string(np, "board-sensor", &board_sensor)) {
+		pr_warn("%s: board-sensor missing\n", __func__);
+	} else {
+		pr_info("%s: board sensor: %s\n", __func__, board_sensor);
+	}
 
-	//pr_info("%s board sensor: %s\n", board_sensor);
-	printk("board sensor: %s\n", board_sensor);
-
+	of_node_put(np);
 	return 0;
+}
+
+static void panel_retry_work_fn(struct work_struct *work)
+{
+	int ret;
+
+	ret = of_parse_drm_panel();
+	if (ret == 0) {
+		panel_retry = 0;
+		return;
+	}
+
+	panel_retry++;
+	if (panel_retry >= PANEL_RETRY_MAX) {
+		pr_warn("Thermal: panel not found after %d attempts, giving up\n",
+			panel_retry);
+		panel_retry = 0;
+		return;
+	}
+
+	schedule_delayed_work(&panel_retry_work, msecs_to_jiffies(PANEL_RETRY_INTERVAL_MS));
+}
+
+static void screen_monitor_register_notifier(void)
+{
+	sm.thermal_notifier.notifier_call = screen_state_for_thermal_callback;
+	sm.screen_state = -1;
+
+	panel_retry = 0;
+	INIT_DELAYED_WORK(&panel_retry_work, panel_retry_work_fn);
+	schedule_delayed_work(&panel_retry_work, 0);
+}
+
+static void screen_monitor_unregister_notifier(void)
+{
+	cancel_delayed_work_sync(&panel_retry_work);
+
+	mutex_lock(&screen_mon_lock);
+	if (prim_panel) {
+		drm_panel_notifier_unregister(prim_panel, &sm.thermal_notifier);
+		pr_info("Thermal: notifier unregistered\n");
+		prim_panel = NULL;
+	}
+	mutex_unlock(&screen_mon_lock);
 }
 #endif
 
@@ -1953,10 +2157,7 @@ static int __init thermal_init(void)
 		pr_warn("Thermal: Can not parse thermal message node, return %d\n",
 			result);
 
-	sm.thermal_notifier.notifier_call = screen_state_for_thermal_callback;
-	if (drm_register_client(&sm.thermal_notifier) < 0) {
-		pr_warn("Thermal: register screen state callback failed\n");
-	}
+	screen_monitor_register_notifier();
 #endif
 
 	return 0;
@@ -1979,7 +2180,7 @@ error:
 static void thermal_exit(void)
 {
 #ifdef CONFIG_ARCH_QCOM
-	drm_unregister_client(&sm.thermal_notifier);
+	screen_monitor_unregister_notifier();
 #endif
 	unregister_pm_notifier(&thermal_pm_nb);
 	of_thermal_destroy_zones();

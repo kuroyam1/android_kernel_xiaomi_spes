@@ -101,7 +101,6 @@
 #define FTS_Y_MAX_DISPLAY_DEFAULT	2400
 #define FTS_SET_ANGLE		0x8c
 
-
 #define FTS_TOUCH_DOWN		0
 #define FTS_TOUCH_UP		1
 #define FTS_TOUCH_CONTACT	2
@@ -224,10 +223,11 @@ struct fts_ts_data {
 	struct pinctrl_state *pins_suspend;
 	struct pinctrl_state *pins_release;
 #endif
+
 	struct notifier_block drm_notif;
+
 	int double_tap_pressed;
 	int single_tap_pressed;
-	
 #ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
 	//u8 palm_sensor_switch;
 	//bool palm_sensor_changed;
@@ -290,12 +290,6 @@ int fts_esdcheck_proc_busy(bool proc_debug);
 int fts_esdcheck_set_intr(bool intr);
 int fts_esdcheck_suspend(void);
 int fts_esdcheck_resume(void);
-#endif
-
-/* Production test */
-#if FTS_TEST_EN
-int fts_test_init(struct fts_ts_data *ts_data);
-int fts_test_exit(struct fts_ts_data *ts_data);
 #endif
 
 /* Point Report Check*/

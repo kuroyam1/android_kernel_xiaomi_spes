@@ -83,7 +83,7 @@ static int aw_dev_get_chipid(struct aw_device *aw_dev);
 int aw_dev_i2c_write_byte(struct aw_device *aw_dev,
 			uint8_t reg_addr, uint8_t reg_data)
 {
-	int ret = -1;
+	int ret = 0;
 	unsigned char cnt = 0;
 
 	while (cnt < AW_I2C_RETRIES) {
@@ -104,7 +104,7 @@ int aw_dev_i2c_write_byte(struct aw_device *aw_dev,
 int aw_dev_i2c_read_byte(struct aw_device *aw_dev,
 			uint8_t reg_addr, uint8_t *reg_data)
 {
-	int ret = -1;
+	int ret = 0;
 	unsigned char cnt = 0;
 
 	while (cnt < AW_I2C_RETRIES) {
@@ -126,8 +126,7 @@ int aw_dev_i2c_read_byte(struct aw_device *aw_dev,
 int aw_dev_i2c_read_msg(struct aw_device *aw_dev,
 			uint8_t reg_addr, uint8_t *data_buf, uint32_t data_len)
 {
-	int ret = -1;
-
+	int ret = 0;
 	struct i2c_msg msg[] = {
 	[0] = {
 		.addr = aw_dev->i2c_addr,
@@ -158,7 +157,7 @@ int aw_dev_i2c_read_msg(struct aw_device *aw_dev,
 int aw_dev_i2c_write_bits(struct aw_device *aw_dev,
 			uint8_t reg_addr, uint8_t mask, uint8_t reg_data)
 {
-	int ret = -1;
+	int ret = 0;
 	unsigned char reg_val = 0;
 
 	ret = aw_dev_i2c_read_byte(aw_dev, reg_addr, &reg_val);
@@ -166,6 +165,7 @@ int aw_dev_i2c_write_bits(struct aw_device *aw_dev,
 		AW_DEV_LOGE(aw_dev->dev, "i2c read error, ret=%d", ret);
 		return ret;
 	}
+
 	reg_val &= mask;
 	reg_val |= reg_data;
 	ret = aw_dev_i2c_write_byte(aw_dev, reg_addr, reg_val);
@@ -186,7 +186,7 @@ static int aw_dev_reg_update(struct aw_device *aw_dev,
 			struct aw_data_container *profile_data)
 {
 	int i = 0;
-	int ret = -1;
+	int ret = 0;
 
 	if (profile_data == NULL)
 		return -EINVAL;
@@ -240,6 +240,7 @@ void aw_dev_hw_pwr_ctrl(struct aw_device *aw_dev, bool enable)
 		AW_DEV_LOGD(aw_dev->dev, "product not have reset-pin, hardware pwd control invalid");
 		return;
 	}
+
 	if (enable) {
 		if (aw_dev_gpio_is_valid(aw_dev)) {
 			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_LOW_LEVEL);
@@ -287,7 +288,7 @@ int aw_dev_mute_ctrl(struct aw_device *aw_dev, bool enable)
 void aw_dev_soft_reset(struct aw_device *aw_dev)
 {
 	int i = 0;
-	int ret = -1;
+	int ret = 0;
 	struct aw_soft_rst_desc *soft_rst = &aw_dev->soft_rst_desc;
 
 	AW_DEV_LOGD(aw_dev->dev, "enter");
@@ -325,6 +326,7 @@ void aw_dev_soft_reset(struct aw_device *aw_dev)
 			return;
 		}
 	}
+
 	AW_DEV_LOGD(aw_dev->dev, "down");
 }
 
@@ -348,9 +350,7 @@ int aw_dev_default_pwr_off(struct aw_device *aw_dev,
 		}
 	}
 
-	aw_dev_hw_pwr_ctrl(aw_dev, false);
 	AW_DEV_LOGD(aw_dev->dev, "down");
-	return 0;
 
 reg_off_update_failed:
 	aw_dev_hw_pwr_ctrl(aw_dev, false);
@@ -413,6 +413,7 @@ int aw_dev_esd_reg_status_check(struct aw_device *aw_dev)
 		AW_DEV_LOGE(aw_dev->dev, "reg status check failed");
 		return -EINVAL;
 	}
+
 	return 0;
 }
 
@@ -449,6 +450,7 @@ int aw_dev_check_reg_is_rec_mode(struct aw_device *aw_dev)
 			aw_dev->is_rec_mode = AW_NOT_REC_MODE;
 		}
 	}
+
 	return 0;
 }
 
@@ -465,7 +467,7 @@ static int aw_dev_pid_9b_reg_update(struct aw_device *aw_dev,
 			struct aw_data_container *profile_data)
 {
 	int i = 0;
-	int ret = -1;
+	int ret = 0;
 	uint8_t reg_val = 0;
 
 	if (profile_data == NULL)
@@ -480,6 +482,7 @@ static int aw_dev_pid_9b_reg_update(struct aw_device *aw_dev,
 		AW_DEV_LOGE(aw_dev->dev, "reg_config count of bin is error, can not update reg");
 		return -EINVAL;
 	}
+
 	ret = aw_dev_i2c_write_byte(aw_dev, AW87XXX_PID_9B_ENCRYPTION_REG,
 		AW87XXX_PID_9B_ENCRYPTION_BOOST_OUTPUT_SET);
 	if (ret < 0)
@@ -782,7 +785,7 @@ static void aw_dev_chip_init(struct aw_device *aw_dev)
 
 static int aw_dev_get_chipid(struct aw_device *aw_dev)
 {
-	int ret = -1;
+	int ret = 0;
 	unsigned int cnt = 0;
 	unsigned char reg_val = 0;
 
@@ -810,7 +813,7 @@ static int aw_dev_get_chipid(struct aw_device *aw_dev)
 
 int aw_dev_init(struct aw_device *aw_dev)
 {
-	int ret = -1;
+	int ret = 0;
 
 	ret = aw_dev_get_chipid(aw_dev);
 	if (ret < 0) {

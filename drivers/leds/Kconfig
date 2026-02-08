@@ -815,7 +815,7 @@ config LEDS_QPNP_VIBRATOR
 	  is connected on the VIB_DRV_N line and can be controlled
 	  manually or by the DTEST lines.It uses the android timed-output
 	  framework.
-	  
+
 config LEDS_QPNP_VIBRATOR_PWM
 	tristate "Vibrator-PWM support for QPNP PMIC"
 	depends on LEDS_CLASS && MFD_SPMI_PMIC

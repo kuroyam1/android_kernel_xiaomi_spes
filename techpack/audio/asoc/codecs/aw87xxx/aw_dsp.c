@@ -240,7 +240,7 @@ int aw_dsp_set_rx_module_enable(int enable)
 
 int aw_dsp_get_vmax(uint32_t *vmax, int dev_index)
 {
-	int ret  = 0;
+	int ret = 0;
 	int32_t param_id = 0;
 
 	switch (dev_index % AW_DSP_CHANNEL_MAX) {
@@ -255,6 +255,7 @@ int aw_dsp_get_vmax(uint32_t *vmax, int dev_index)
 			dev_index);
 		return -EINVAL;
 	}
+
 #ifdef AW_QCOM_OPEN_DSP_PLATFORM
 	ret = aw_qcom_read_data_from_dsp(param_id,
 			(void *)vmax, sizeof(uint32_t));
@@ -283,6 +284,7 @@ int aw_dsp_set_vmax(uint32_t vmax, int dev_index)
 			dev_index);
 		return -EINVAL;
 	}
+
 #ifdef AW_QCOM_OPEN_DSP_PLATFORM
 	ret = aw_qcom_write_data_to_dsp(param_id, &vmax, sizeof(uint32_t));
 #elif defined AW_MTK_OPEN_DSP_PLATFORM

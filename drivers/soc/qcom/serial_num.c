@@ -11,7 +11,7 @@
 #include <linux/mod_devicetable.h>
 
 #define sn_readl(drvdata, off)		__raw_readl(drvdata->base + off)
-#define fuse_readl(drvdata, off)	__raw_readl(drvdata->fuse_base + off)
+#define fuse_readl(drvdata, off)		__raw_readl(drvdata->fuse_base + off)
 
 #define SERIAL_NUM	(0x000)
 
@@ -135,7 +135,7 @@ static int sn_fuse_probe(struct platform_device *pdev)
 	dev_info(dev, "serial num: %x buqingshuai\n", sn);
 	dev_info(drvdata->dev, "fuse state: 0x%x,0x%x,0x%x buqingshuai\n",
 			fuse_state1, fuse_state2, fuse_state3);
-	dev_info(dev, "SN interface initializedbuqingshuai\n");
+	dev_info(dev, "SN interface initialized buqingshuai\n");
 	return 0;
 }
 

@@ -103,7 +103,6 @@ static int aw87xxx_update_off_prof(struct aw87xxx *aw87xxx, char *profile)
 	if (!prof_desc->prof_st)
 		goto no_bin_pwr_off;
 
-
 	data_container = &prof_desc->data_container;
 	AW_DEV_LOGD(aw87xxx->dev, "get profile[%s] data len [%d]",
 			profile, data_container->len);
@@ -251,9 +250,10 @@ int aw87xxx_show_current_profile_index(int dev_index)
 			profile = aw87xxx->current_profile;
 		}
 	}
-	if (profile != NULL) {
+
+	if (profile != NULL)
 		index = aw_get_prof_index(profile);
-	}
+
 	AW_LOGD("not found struct aw87xxx, dev_index = [%d], index = [%d]", dev_index, index);
 	return index;
 }
@@ -288,7 +288,7 @@ EXPORT_SYMBOL(aw87xxx_set_profile);
  ************************************************************************/
 static int aw87xxx_esd_update_off_prof(struct aw87xxx *aw87xxx, char *profile)
 {
-	int ret = 0;
+	int ret = -EINVAL;
 	struct aw_prof_desc *prof_desc = NULL;
 	struct aw_data_container *data_container = NULL;
 	struct aw_device *aw_dev = &aw87xxx->aw_dev;
@@ -409,7 +409,6 @@ static int aw87xxx_profile_switch_info(struct snd_kcontrol *kcontrol,
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
 	uinfo->count = 1;
 
-	/*make sure have prof */
 	count = aw_acf_get_profile_count(aw87xxx->dev, &aw87xxx->acf_info);
 	if (count <= 0) {
 		uinfo->value.enumerated.items = 0;
@@ -423,11 +422,9 @@ static int aw87xxx_profile_switch_info(struct snd_kcontrol *kcontrol,
 
 	name = uinfo->value.enumerated.name;
 	count = uinfo->value.enumerated.item;
-	profile_name = aw_acf_get_prof_name_form_index(aw87xxx->dev,
-		&aw87xxx->acf_info, count);
+	profile_name = aw_acf_get_prof_name_form_index(aw87xxx->dev, &aw87xxx->acf_info, count);
 	if (profile_name == NULL) {
-		strlcpy(uinfo->value.enumerated.name, "NULL",
-			strlen("NULL") + 1);
+		strlcpy(uinfo->value.enumerated.name, "NULL", strlen("NULL") + 1);
 		return 0;
 	}
 
@@ -439,7 +436,7 @@ static int aw87xxx_profile_switch_info(struct snd_kcontrol *kcontrol,
 static int aw87xxx_profile_switch_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
-	int ret = -1;
+	int ret = -EINVAL;
 	char *profile_name = NULL;
 	int index = ucontrol->value.integer.value[0];
 	struct aw87xxx *aw87xxx = (struct aw87xxx *)kcontrol->private_value;
@@ -452,8 +449,7 @@ static int aw87xxx_profile_switch_put(struct snd_kcontrol *kcontrol,
 
 	profile_name = aw_acf_get_prof_name_form_index(aw87xxx->dev, acf_info, index);
 	if (!profile_name) {
-		AW_DEV_LOGE(aw87xxx->dev, "not found profile name,index=[%d]",
-				index);
+		AW_DEV_LOGE(aw87xxx->dev, "not found profile name,index=[%d]", index);
 		return -EINVAL;
 	}
 
@@ -461,8 +457,7 @@ static int aw87xxx_profile_switch_put(struct snd_kcontrol *kcontrol,
 
 	ret = aw87xxx_update_profile(aw87xxx, profile_name);
 	if (ret < 0) {
-		AW_DEV_LOGE(aw87xxx->dev, "set dev_index[%d] profile failed, profile = %s",
-			aw87xxx->dev_index, profile_name);
+		AW_DEV_LOGE(aw87xxx->dev, "set dev_index[%d] profile failed, profile = %s", aw87xxx->dev_index, profile_name);
 		return ret;
 	}
 
@@ -487,19 +482,15 @@ static int aw87xxx_profile_switch_get(struct snd_kcontrol *kcontrol,
 	}
 
 	profile = aw87xxx->current_profile;
-	AW_DEV_LOGD(aw87xxx->dev, "current profile:[%s]",
-		aw87xxx->current_profile);
+	AW_DEV_LOGD(aw87xxx->dev, "current profile:[%s]", aw87xxx->current_profile);
 
-
-	index = aw_acf_get_prof_index_form_name(aw87xxx->dev,
-		&aw87xxx->acf_info, aw87xxx->current_profile);
+	index = aw_acf_get_prof_index_form_name(aw87xxx->dev, &aw87xxx->acf_info, aw87xxx->current_profile);
 	if (index < 0) {
 		AW_DEV_LOGE(aw87xxx->dev, "get profile index failed");
 		return index;
 	}
 
 	ucontrol->value.integer.value[0] = index;
-
 	return 0;
 }
 
@@ -514,10 +505,10 @@ static int aw87xxx_vmax_get_info(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int aw87xxxx_vmax_get(struct snd_kcontrol *kcontrol,
+static int aw87xxx_vmax_get(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
-	int ret = -1;
+	int ret = -EINVAL;
 	int vmax_val = 0;
 	struct aw87xxx *aw87xxx = (struct aw87xxx *)kcontrol->private_value;
 
@@ -537,33 +528,44 @@ static int aw87xxxx_vmax_get(struct snd_kcontrol *kcontrol,
 }
 
 static int aw87xxx_kcontrol_dynamic_create(struct aw87xxx *aw87xxx,
-						void *codec)
+			void *codec)
 {
-	struct snd_kcontrol_new *aw87xxx_kcontrol = NULL;
+	struct snd_kcontrol_new *aw87xxx_kcontrol;
 	aw_snd_soc_codec_t *soc_codec = (aw_snd_soc_codec_t *)codec;
+	char *names_buf;
 	char *kctl_name[AW87XXX_KCONTROL_NUM];
 	int kcontrol_num = AW87XXX_KCONTROL_NUM;
-	int ret = -1;
+	int ret = -EINVAL;
+
+	if (!aw87xxx || !codec)
+		return -EINVAL;
 
 	AW_DEV_LOGD(aw87xxx->dev, "enter");
 	aw87xxx->codec = soc_codec;
 
+	/* allocate controls array */
 	aw87xxx_kcontrol = devm_kzalloc(aw87xxx->dev,
-			sizeof(struct snd_kcontrol_new) * kcontrol_num,
+			sizeof(*aw87xxx_kcontrol) * kcontrol_num,
 			GFP_KERNEL);
-	if (aw87xxx_kcontrol == NULL) {
+	if (!aw87xxx_kcontrol) {
 		AW_DEV_LOGE(aw87xxx->dev, "aw87xxx_kcontrol devm_kzalloc failed");
 		return -ENOMEM;
 	}
 
-	kctl_name[0] = devm_kzalloc(aw87xxx->dev, AW_NAME_BUF_MAX,
-			GFP_KERNEL);
-	if (kctl_name[0] == NULL)
+	names_buf = devm_kzalloc(aw87xxx->dev,
+			AW_NAME_BUF_MAX * kcontrol_num, GFP_KERNEL);
+	if (!names_buf)
 		return -ENOMEM;
+
+	kctl_name[0] = names_buf + (0 * AW_NAME_BUF_MAX);
+	kctl_name[1] = names_buf + (1 * AW_NAME_BUF_MAX);
 
 	snprintf(kctl_name[0], AW_NAME_BUF_MAX, "aw87xxx_profile_switch_%d",
 			aw87xxx->dev_index);
+	snprintf(kctl_name[1], AW_NAME_BUF_MAX, "aw87xxx_vmax_get_%d",
+			aw87xxx->dev_index);
 
+	/* control 0 */
 	aw87xxx_kcontrol[0].name = kctl_name[0];
 	aw87xxx_kcontrol[0].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
 	aw87xxx_kcontrol[0].info = aw87xxx_profile_switch_info;
@@ -571,32 +573,27 @@ static int aw87xxx_kcontrol_dynamic_create(struct aw87xxx *aw87xxx,
 	aw87xxx_kcontrol[0].put = aw87xxx_profile_switch_put;
 	aw87xxx_kcontrol[0].private_value = (unsigned long)aw87xxx;
 
-	kctl_name[1] = devm_kzalloc(aw87xxx->codec->dev, AW_NAME_BUF_MAX,
-			GFP_KERNEL);
-	if (kctl_name[1] == NULL)
-		return -ENOMEM;
-
-	snprintf(kctl_name[1], AW_NAME_BUF_MAX, "aw87xxx_vmax_get_%d",
-			aw87xxx->dev_index);
-
+	/* control 1 */
 	aw87xxx_kcontrol[1].name = kctl_name[1];
 	aw87xxx_kcontrol[1].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
 	aw87xxx_kcontrol[1].access = SNDRV_CTL_ELEM_ACCESS_READ;
 	aw87xxx_kcontrol[1].info = aw87xxx_vmax_get_info;
-	aw87xxx_kcontrol[1].get = aw87xxxx_vmax_get;
+	aw87xxx_kcontrol[1].get = aw87xxx_vmax_get;
 	aw87xxx_kcontrol[1].private_value = (unsigned long)aw87xxx;
 
+	/* add controls */
 	ret = aw_componet_codec_ops.add_codec_controls(aw87xxx->codec,
-				aw87xxx_kcontrol, kcontrol_num);
+						      aw87xxx_kcontrol,
+						      kcontrol_num);
 	if (ret < 0) {
-		AW_DEV_LOGE(aw87xxx->dev, "add codec controls failed, ret = %d",
-			ret);
+		AW_DEV_LOGE(aw87xxx->dev,
+			    "add codec controls failed, ret = %d", ret);
 		return ret;
 	}
 
 	AW_DEV_LOGD(aw87xxx->dev, "add codec controls[%s,%s]",
-		aw87xxx_kcontrol[0].name,
-		aw87xxx_kcontrol[1].name);
+		    aw87xxx_kcontrol[0].name,
+		    aw87xxx_kcontrol[1].name);
 
 	return 0;
 }
@@ -610,7 +607,7 @@ int aw87xxx_add_codec_controls(void *codec)
 {
 	struct list_head *pos = NULL;
 	struct aw87xxx *aw87xxx = NULL;
-	int ret = -1;
+	int ret = -EINVAL;
 
 	list_for_each(pos, &g_aw87xxx_list) {
 		aw87xxx = list_entry(pos, struct aw87xxx, list);
@@ -664,18 +661,15 @@ static void aw87xxx_fw_load_retry(struct aw87xxx *aw87xxx)
 	struct acf_bin_info *acf_info = &aw87xxx->acf_info;
 	int ram_timer_val = 2000;
 
-	AW_DEV_LOGD(aw87xxx->dev, "failed to read [%s]",
-			aw87xxx->fw_name);
-
 	if (acf_info->load_count < AW_LOAD_FW_RETRIES) {
 		AW_DEV_LOGD(aw87xxx->dev,
-			"restart hrtimer to load firmware");
+				"restart hrtimer to load firmware");
 		schedule_delayed_work(&aw87xxx->fw_load_work,
-			msecs_to_jiffies(ram_timer_val));
+				msecs_to_jiffies(ram_timer_val));
 	} else {
 		acf_info->load_count = 0;
 		AW_DEV_LOGE(aw87xxx->dev,
-			"can not load firmware,please check name or file exists");
+				"can not load firmware,please check name or file exists");
 		return;
 	}
 	acf_info->load_count++;
@@ -683,19 +677,20 @@ static void aw87xxx_fw_load_retry(struct aw87xxx *aw87xxx)
 
 static void aw87xxx_fw_load(const struct firmware *fw, void *context)
 {
-	int ret = -1;
+	int ret = 0;
 	struct aw87xxx *aw87xxx = context;
 	struct acf_bin_info *acf_info = &aw87xxx->acf_info;
 
 	AW_DEV_LOGD(aw87xxx->dev, "enter");
 
 	if (!fw) {
+		AW_DEV_LOGD(aw87xxx->dev, "failed to read [%s]", aw87xxx->fw_name);
 		aw87xxx_fw_load_retry(aw87xxx);
 		return;
 	}
 
 	AW_DEV_LOGD(aw87xxx->dev, "loaded %s - size: %ld",
-		aw87xxx->fw_name, (u_long)(fw ? fw->size : 0));
+			aw87xxx->fw_name, (u_long)(fw ? fw->size : 0));
 
 	mutex_lock(&aw87xxx->reg_lock);
 	acf_info->fw_data = vmalloc(fw->size);
@@ -720,9 +715,6 @@ static void aw87xxx_fw_load(const struct firmware *fw, void *context)
 	}
 
 	AW_DEV_LOGD(aw87xxx->dev, "acf parse succeed");
-	mutex_unlock(&aw87xxx->reg_lock);
-	release_firmware(fw);
-	return;
 
 exit_acf_parse_failed:
 exit_vmalloc_failed:
@@ -904,7 +896,7 @@ static ssize_t aw87xxx_attr_set_hwen(struct device *dev,
 				struct device_attribute *attr, const char *buf,
 				size_t len)
 {
-	int ret = -1;
+	int ret = 0;
 	unsigned int state;
 	struct aw87xxx *aw87xxx = dev_get_drvdata(dev);
 
@@ -971,13 +963,14 @@ int aw87xxx_awrw_write(struct aw87xxx *aw87xxx,
 
 	mutex_lock(&aw87xxx->reg_lock);
 	ret = i2c_master_send(aw87xxx->aw_dev.i2c, data_buf, buf_len);
+	mutex_unlock(&aw87xxx->reg_lock);
+
 	if (ret < 0) {
 		AW_DEV_LOGE(aw87xxx->dev, "write failed");
 		vfree(data_buf);
 		data_buf = NULL;
 		return -EFAULT;
 	}
-	mutex_unlock(&aw87xxx->reg_lock);
 
 	vfree(data_buf);
 	data_buf = NULL;
@@ -1026,7 +1019,7 @@ static int aw87xxx_awrw_parse_buf(struct aw87xxx *aw87xxx,
 {
 	int data[AWRW_HDR_MAX] = {0};
 	struct aw_i2c_packet *packet = &aw87xxx->i2c_packet;
-	int ret = -1;
+	int ret = 0;
 
 	if (sscanf(buf, "0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
 		&data[AWRW_HDR_WR_FLAG], &data[AWRW_HDR_ADDR_BYTES],
@@ -1052,7 +1045,7 @@ static ssize_t aw87xxx_attr_awrw_store(struct device *dev,
 	struct aw87xxx *aw87xxx = dev_get_drvdata(dev);
 	struct aw_i2c_packet *packet = &aw87xxx->i2c_packet;
 	int wr_status = 0;
-	int ret = -1;
+	int ret = 0;
 
 	if (count < AWRW_HDR_LEN) {
 		AW_DEV_LOGE(aw87xxx->dev, "data count too smaller, please check write format");
@@ -1091,7 +1084,7 @@ static ssize_t aw87xxx_attr_awrw_show(struct device *dev,
 	struct aw_i2c_packet *packet = &aw87xxx->i2c_packet;
 	int data_len = 0;
 	size_t len = 0;
-	int ret = -1, i = 0;
+	int ret = 0, i = 0;
 	char *reg_data = NULL;
 
 	if (packet->status != AWRW_I2C_ST_READ) {
@@ -1110,12 +1103,12 @@ static ssize_t aw87xxx_attr_awrw_show(struct device *dev,
 	mutex_lock(&aw87xxx->reg_lock);
 	ret = aw_dev_i2c_read_msg(&aw87xxx->aw_dev, packet->reg_addr,
 				(char *)reg_data, data_len);
+	mutex_unlock(&aw87xxx->reg_lock);
+
 	if (ret < 0) {
 		ret = -EFAULT;
-		mutex_unlock(&aw87xxx->reg_lock);
 		goto exit;
 	}
-	mutex_unlock(&aw87xxx->reg_lock);
 
 	AW_DEV_LOGD(aw87xxx->dev, "reg_addr 0x%02x, reg_num %d",
 		packet->reg_addr, packet->reg_num);
@@ -1199,7 +1192,7 @@ int aw87xxx_dtsi_dev_index_check(struct aw87xxx *cur_aw87xxx)
 static int aw87xxx_dtsi_parse(struct aw87xxx *aw87xxx,
 				struct device_node *dev_node)
 {
-	int ret = -1;
+	int ret = 0;
 	int32_t dev_index = -EINVAL;
 
 	ret = of_property_read_u32(dev_node, "dev_index", &dev_index);
@@ -1275,7 +1268,7 @@ static int aw87xxx_i2c_probe(struct i2c_client *client,
 {
 	struct device_node *dev_node = client->dev.of_node;
 	struct aw87xxx *aw87xxx = NULL;
-	int ret = -1;
+	int ret = 0;
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		AW_DEV_LOGE(&client->dev, "check_functionality failed");
@@ -1403,7 +1396,7 @@ static struct i2c_driver aw87xxx_i2c_driver = {
 
 static int __init aw87xxx_pa_init(void)
 {
-	int ret;
+	int ret = 0;
 
 	AW_LOGI("driver version: %s", AW87XXX_DRIVER_VERSION);
 

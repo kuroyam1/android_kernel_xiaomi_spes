@@ -86,21 +86,19 @@ static ssize_t powerup_reason_show(struct kobject *kobj,
 	if (((pu_reason & BIT(PU_REASON_EVENT_HWRST)) && qpnp_pon_is_ps_hold_reset()) ||
 			(pu_reason & BIT(PU_REASON_EVENT_WARMRST))) {
 		reset_reason = pu_reason >> 16;
-		reset_reason_index =
-		find_first_bit((unsigned long *)&reset_reason,
+		reset_reason_index = find_first_bit((unsigned long *)&reset_reason,
 				sizeof(reset_reason)*BITS_PER_BYTE);
-		if (reset_reason_index < RS_REASON_MAX
-			&& reset_reason_index >= 0) {
+		if (reset_reason_index < RS_REASON_MAX && reset_reason_index >= 0) {
 			if (reset_reason_index == RS_REASON_EVENT_FASTBOOT)
 				reset_reason_index = RS_REASON_EVENT_NORMAL;
-			s += snprintf(s,
-				strlen(reset_reasons[reset_reason_index]) + 2,
-				"%s\n", reset_reasons[reset_reason_index]);
+			s += snprintf(s, strlen(reset_reasons[reset_reason_index]) + 2,
+					"%s\n", reset_reasons[reset_reason_index]);
 			pr_debug("%s: rs_reason [0x%x], first non-zero bit %d\n",
-				__func__, reset_reason, reset_reason_index);
+					__func__, reset_reason, reset_reason_index);
 			goto out;
 		};
 	}
+
 	if (qpnp_pon_is_lpk() && (pu_reason & BIT(PU_REASON_EVENT_HWRST)))
 		pu_reason_index = PU_REASON_EVENT_LPK;
 	else if (pu_reason & BIT(PU_REASON_EVENT_HWRST))
@@ -117,14 +115,17 @@ static ssize_t powerup_reason_show(struct kobject *kobj,
 		pu_reason_index = PU_REASON_EVENT_KPD;
 	else if (pu_reason & BIT(PU_REASON_EVENT_PON1))
 		pu_reason_index = PU_REASON_EVENT_PON1;
+
 	if (pu_reason_index < PU_REASON_MAX && pu_reason_index >= 0) {
 		s += snprintf(s, strlen(powerup_reasons[pu_reason_index]) + 2,
-			"%s\n", powerup_reasons[pu_reason_index]);
+				"%s\n", powerup_reasons[pu_reason_index]);
 		pr_debug("%s: pu_reason [0x%x] index %d\n",
-			__func__, pu_reason, pu_reason_index);
+				__func__, pu_reason, pu_reason_index);
 		goto out;
 	}
+
 	s += snprintf(s, 15, "unknown reboot\n");
+
 out:
 	return (s - buf);
 }

@@ -66,14 +66,6 @@
 
 #include <asm/bootinfo.h>
 
-#ifdef CONFIG_OF_FLATTREE
-void __init early_init_dt_setup_pureason_arch(unsigned long pu_reason)
-{
-	set_powerup_reason(pu_reason);
-	pr_info("Powerup reason=0x%x\n", get_powerup_reason());
-}
-#endif
-
 static int num_standard_resources;
 static struct resource *standard_resources;
 
@@ -107,6 +99,14 @@ static struct resource mem_res[] = {
 
 #define kernel_code mem_res[0]
 #define kernel_data mem_res[1]
+
+#ifdef CONFIG_OF_FLATTREE
+void __init early_init_dt_setup_pureason_arch(unsigned long pu_reason)
+{
+	set_powerup_reason(pu_reason);
+	pr_info("Powerup reason=0x%x\n", get_powerup_reason());
+}
+#endif
 
 /*
  * The recorded values of x0 .. x3 upon kernel entry.

@@ -23,7 +23,6 @@ static ssize_t calibration_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	ssize_t result;
-
 	struct elliptic_shared_data_block *calibration_obj =
 		elliptic_get_shared_obj(ELLIPTIC_OBJ_ID_CALIBRATION_DATA);
 
@@ -46,7 +45,6 @@ static ssize_t calibration_v2_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	ssize_t result;
-
 	struct elliptic_shared_data_block *calibration_obj =
 		elliptic_get_shared_obj(ELLIPTIC_OBJ_ID_CALIBRATION_V2_DATA);
 
@@ -69,7 +67,6 @@ static ssize_t diagnostics_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	ssize_t result;
-
 	struct elliptic_shared_data_block *diagnostics_obj =
 		elliptic_get_shared_obj(ELLIPTIC_OBJ_ID_DIAGNOSTICS_DATA);
 
@@ -92,7 +89,6 @@ static ssize_t ml_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	ssize_t result;
-
 	struct elliptic_shared_data_block *ml_obj =
 		elliptic_get_shared_obj(ELLIPTIC_OBJ_ID_ML_DATA);
 
@@ -115,7 +111,7 @@ static ssize_t calibration_show_core(struct device *dev,
 	struct device_attribute *attr, char *buf, int pretty)
 {
 	ssize_t result;
-	int length;
+	int length = 0;
 	int i;
 	uint8_t *caldata;
 
@@ -139,7 +135,7 @@ static ssize_t calibration_show_core(struct device *dev,
 	}
 
 	caldata = (uint8_t *)calibration_obj->buffer;
-	length = 0;
+
 	if (pretty) {
 		if (caldata[0] == 0xDE &&
 			caldata[1] == 0xAD) {
@@ -172,7 +168,7 @@ static ssize_t calibration_v2_show_core(struct device *dev,
 	struct device_attribute *attr, char *buf, int pretty)
 {
 	ssize_t result;
-	int length;
+	int length = 0;
 	int i;
 	uint8_t *caldata;
 
@@ -196,7 +192,7 @@ static ssize_t calibration_v2_show_core(struct device *dev,
 	}
 
 	caldata = (uint8_t *)calibration_obj->buffer;
-	length = 0;
+
 	if (pretty) {
 		if (caldata[0] == 0xDE &&
 			caldata[1] == 0xAD) {
@@ -239,7 +235,7 @@ static ssize_t diagnostics_show_core(struct device *dev,
 	struct device_attribute *attr, char *buf, int pretty)
 {
 	ssize_t result;
-	int length;
+	int length = 0;
 	uint32_t *data32;
 	int i;
 
@@ -262,7 +258,6 @@ static ssize_t diagnostics_show_core(struct device *dev,
 		return -EINVAL;
 	}
 
-	length = 0;
 	data32 = (uint32_t *)diagnostics_obj->buffer;
 
 	if (pretty) {
@@ -291,7 +286,7 @@ static ssize_t ml_show_core(struct device *dev,
 	struct device_attribute *attr, char *buf, int pretty)
 {
 	ssize_t result;
-	int length;
+	int length = 0;
 	int i;
 	uint32_t *mldata;
 
@@ -315,7 +310,7 @@ static ssize_t ml_show_core(struct device *dev,
 	}
 
 	mldata = (uint32_t *)ml_obj->buffer;
-	length = 0;
+
 	if (pretty) {
 		if (mldata[0] == 0x0 &&
 			mldata[1] == 0x0) {
@@ -349,14 +344,12 @@ static ssize_t ml_show(struct device *dev,
 	return ml_show_core(dev, attr, buf, 0);
 }
 
-
 static ssize_t version_show_core(struct device *dev,
 	struct device_attribute *attr, char *buf, int pretty)
 {
 	ssize_t result;
 	struct elliptic_engine_version_info *version_info;
-	int length;
-
+	int length = 0;
 	struct elliptic_shared_data_block *version_obj =
 		elliptic_get_shared_obj(ELLIPTIC_OBJ_ID_VERSION_INFO);
 
@@ -403,12 +396,10 @@ static ssize_t version_show(struct device *dev,
 	return version_show_core(dev, attr, buf, 0);
 }
 
-
 static ssize_t branch_show_core(struct device *dev,
 	struct device_attribute *attr, char *buf, int pretty)
 {
-	int length;
-
+	int length = 0;
 	struct elliptic_shared_data_block *branch_obj =
 		elliptic_get_shared_obj(ELLIPTIC_OBJ_ID_BRANCH_INFO);
 
@@ -441,8 +432,7 @@ static ssize_t branch_show(struct device *dev,
 static ssize_t tag_show_core(struct device *dev,
 	struct device_attribute *attr, char *buf, int pretty)
 {
-	int length;
-
+	int length = 0;
 	struct elliptic_shared_data_block *tag_obj =
 		elliptic_get_shared_obj(ELLIPTIC_OBJ_ID_TAG_INFO);
 
@@ -476,8 +466,7 @@ static ssize_t cache_show(char *buf, int pretty)
 {
 	struct elliptic_system_configuration_parameters_cache *cache =
 				&elliptic_system_configuration_cache;
-
-	int length;
+	int length = 0;
 
 	length = snprintf(buf, PAGE_SIZE - 1, "Cache:\n");
 	length += snprintf(buf + length, PAGE_SIZE - 1, "    mi:%d\n",
@@ -503,12 +492,10 @@ static ssize_t cache_show(char *buf, int pretty)
 static ssize_t opmode_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	int length;
+	int length = 0;
 	ssize_t result;
-
 	struct elliptic_system_configuration_parameters_cache *cache =
 				&elliptic_system_configuration_cache;
-	length =0;
 
 	length += snprintf(buf + length, PAGE_SIZE - 1, "%d\n",
 							cache->operation_mode);
@@ -519,11 +506,10 @@ static ssize_t opmode_show(struct device *dev,
 static ssize_t opmode_flags_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	int length;
+	int length = 0;
 	ssize_t result;
 	struct elliptic_system_configuration_parameters_cache *cache =
 				&elliptic_system_configuration_cache;
-	length =0;
 
 	length += snprintf(buf + length, PAGE_SIZE - 1, "%d\n",
 							cache->operation_mode_flags);
@@ -533,11 +519,10 @@ static ssize_t opmode_flags_show(struct device *dev,
 
 static ssize_t driver_version_show(char *buf)
 {
-	int length;
+	int length = 0;
 
 	length = snprintf(buf, PAGE_SIZE, "Driver version: %s-%s (%s)\n",
 				build_name, build_number, build_source_version);
-
 	return (ssize_t)length;
 }
 
@@ -571,6 +556,7 @@ static ssize_t state_show(struct device *dev,
 	length += cache_show(buf + length, 1);
 	if (length > PAGE_SIZE)
 		return (ssize_t)0;
+
 	return (ssize_t)length;
 }
 
@@ -616,22 +602,36 @@ int elliptic_initialize_sysfs(void)
 	if (!elliptic_sysfs_kobj) {
 		kobject_create_and_add_failed = 1;
 		EL_PRINT_E("failed to create kobj");
+		elliptic_sysfs_kobj = NULL;
 		return -ENOMEM;
 	}
 
 	err = sysfs_create_group(elliptic_sysfs_kobj, &elliptic_attr_group);
-
 	if (err) {
 		sysfs_create_group_failed = 1;
-		EL_PRINT_E("failed to create sysfs group");
+		EL_PRINT_E("failed to create sysfs group: %d", err);
 		kobject_put(elliptic_sysfs_kobj);
-		return -ENOMEM;
+		elliptic_sysfs_kobj = NULL;
+		return err;
 	}
+
+	sysfs_create_group_failed = 0;
+	kobject_create_and_add_failed = 0;
 
 	return 0;
 }
 
 void elliptic_cleanup_sysfs(void)
 {
+	if (!elliptic_sysfs_kobj)
+		return;
+
+	if (!sysfs_create_group_failed)
+		sysfs_remove_group(elliptic_sysfs_kobj, &elliptic_attr_group);
+
 	kobject_put(elliptic_sysfs_kobj);
+	elliptic_sysfs_kobj = NULL;
+
+	sysfs_create_group_failed = 0;
+	kobject_create_and_add_failed = 0;
 }

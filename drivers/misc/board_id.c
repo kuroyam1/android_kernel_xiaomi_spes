@@ -40,6 +40,7 @@ static int __init setup_board_new_version(char *str)
 }
 __setup("androidboot.board.new_version=", setup_board_new_version);
 #endif
+
 /*
  *
  * String :

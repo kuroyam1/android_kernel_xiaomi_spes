@@ -14,6 +14,7 @@
 #include <drm/drm_panel.h>
 #include <drm/msm_drm.h>
 
+#include "dsi_display.h"
 #include "dsi_defs.h"
 #include "dsi_ctrl_hw.h"
 #include "dsi_clk.h"
@@ -49,11 +50,6 @@ enum dsi_backlight_type {
 	DSI_BACKLIGHT_EXTERNAL,
 	DSI_BACKLIGHT_UNKNOWN,
 	DSI_BACKLIGHT_MAX,
-};
-
-enum dsi_doze_mode_type {
-	DSI_DOZE_LBM = 0,
-	DSI_DOZE_HBM,
 };
 
 enum bl_update_flag {
@@ -177,7 +173,7 @@ struct drm_panel_esd_config {
 	u32 groups;
 	int esd_err_irq_gpio;
 	int esd_err_irq;
-	int esd_err_irq_flags;
+	unsigned long esd_err_irq_flags;
 };
 
 struct dsi_panel {
@@ -235,11 +231,6 @@ struct dsi_panel {
 	enum dsi_panel_physical_type panel_type;
 
 	int hbm_mode;
-
-	bool doze_enabled;
-	enum dsi_doze_mode_type doze_mode;
-
-	u32 dsi_refresh_flag;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
@@ -265,6 +256,11 @@ static inline void dsi_panel_release_panel_lock(struct dsi_panel *panel)
 static inline bool dsi_panel_is_type_oled(struct dsi_panel *panel)
 {
 	return (panel->panel_type == DSI_DISPLAY_PANEL_TYPE_OLED);
+}
+
+static inline u32 dsi_panel_get_bl_level(struct dsi_panel *panel)
+{
+	return panel->bl_config.bl_level;
 }
 
 struct dsi_panel *dsi_panel_get(struct device *parent,
@@ -360,12 +356,8 @@ void dsi_panel_ext_bridge_put(struct dsi_panel *panel);
 void dsi_panel_calc_dsi_transfer_time(struct dsi_host_common_cfg *config,
 		struct dsi_display_mode *mode, u32 frame_threshold_us);
 
-void dsi_set_backlight_control(struct dsi_panel *panel,
-		struct dsi_display_mode *adj_mode);
-
 int dsi_panel_apply_hbm_mode(struct dsi_panel *panel);
 
-int dsi_panel_set_doze_status(struct dsi_panel *panel, bool status);
-int dsi_panel_set_doze_mode(struct dsi_panel *panel, enum dsi_doze_mode_type mode);
+void dsi_panel_set_backlight_control(struct dsi_panel *panel, struct dsi_display_mode *adj_mode);
 
 #endif /* _DSI_PANEL_H_ */

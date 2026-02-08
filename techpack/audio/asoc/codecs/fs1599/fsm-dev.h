@@ -69,7 +69,7 @@
 #if defined(__KERNEL__)
 #include <linux/module.h>
 #include <linux/regmap.h>
-//#include <linux/miscdevice.h>
+#include <linux/miscdevice.h>
 #include <linux/ioctl.h>
 #include <linux/workqueue.h>
 #include <linux/list.h>
@@ -133,7 +133,7 @@
 #define pr_warning(fmt, args...) printf(fmt "\n", ##args)
 #define logprint(fmt, args...) printf(fmt, ##args)
 #elif defined(__NDK_BUILD__)
-#include<android/log.h>
+#include <android/log.h>
 #define pr_debug(fmt, args...) __android_log_print(ANDROID_LOG_DEBUG,\
 		LOG_TAG, "%s: " fmt, __func__, ##args)
 #define pr_info(fmt, args...) __android_log_print(ANDROID_LOG_INFO,\

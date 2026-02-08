@@ -62,7 +62,6 @@ EXPORT_SYMBOL(aw_get_prof_index);
  *
  *************************************************************************/
 static int aw_crc8_check(const unsigned char *data, unsigned int data_size)
-
 {
 	unsigned char crc_value = 0x00;
 	unsigned char *pdata;
@@ -209,10 +208,11 @@ static int aw_check_profile_id_v_0_0_0_1(struct device *dev, char *fw_data)
 
 	return 0;
 }
+
 static int aw_check_data_v_0_0_0_1(struct device *dev,
 			char *fw_data, size_t size)
 {
-	int ret = -1;
+	int ret = 0;
 
 	/* check file type id is awinic acf file */
 	ret = aw_check_file_id(dev, fw_data, AW_ACF_FILE_ID);
@@ -324,7 +324,7 @@ static int aw_check_data_crc_v_1_0_0_0(struct device *dev, char *fw_data)
 static int aw_check_data_v_1_0_0_0(struct device *dev,
 			char *fw_data, size_t size)
 {
-	int ret = -1;
+	int ret = 0;
 
 	/* check file type id is awinic acf file */
 	ret = aw_check_file_id(dev, fw_data, AW_ACF_FILE_ID);
@@ -358,7 +358,7 @@ static int aw_check_data_v_1_0_0_0(struct device *dev,
 static int aw_check_acf_firmware(struct device *dev,
 			char *fw_data, size_t size)
 {
-	int ret = -1;
+	int ret = 0;
 	struct aw_acf_hdr *acf_hdr = NULL;
 
 	if (fw_data == NULL) {
@@ -411,7 +411,7 @@ static int aw_parse_reg_with_hdr(struct device *dev, uint8_t *data,
 			 uint32_t data_len, struct aw_prof_desc *prof_desc)
 {
 	struct aw_bin *aw_bin = NULL;
-	int ret = -1;
+	int ret = 0;
 
 	AW_DEV_LOGD(dev, "data_size:%d enter", data_len);
 
@@ -441,11 +441,6 @@ static int aw_parse_reg_with_hdr(struct device *dev, uint8_t *data,
 	prof_desc->data_container.len = aw_bin->header_info[0].valid_data_len;
 	prof_desc->prof_st = AW_PROFILE_OK;
 
-	kfree(aw_bin);
-	aw_bin = NULL;
-
-	return 0;
-
 parse_bin_failed:
 	kfree(aw_bin);
 	aw_bin = NULL;
@@ -455,7 +450,7 @@ parse_bin_failed:
 static int aw_parse_monitor_config(struct device *dev,
 				char *monitor_data, uint32_t data_len)
 {
-	int ret = -1;
+	int ret = 0;
 
 	if (monitor_data == NULL || data_len == 0) {
 		AW_DEV_LOGE(dev, "no data to parse");
@@ -521,7 +516,7 @@ static int aw_parse_data_by_sec_type_v_0_0_0_1(struct device *dev,
 				struct aw_acf_dde *prof_hdr,
 				struct aw_prof_desc *profile_prof_desc)
 {
-	int ret = -1;
+	int ret = 0;
 	char *cfg_data = acf_info->fw_data + prof_hdr->data_offset;
 
 	switch (prof_hdr->data_type) {
@@ -558,7 +553,7 @@ static int aw_parse_dev_type_v_0_0_0_1(struct device *dev,
 		struct acf_bin_info *acf_info, struct aw_all_prof_info *all_prof_info)
 {
 	int i = 0;
-	int ret = -1;
+	int ret = 0;
 	int sec_num = 0;
 	uint8_t soft_off_enable = acf_info->aw_dev->soft_off_enable;
 	struct aw_prof_desc *prof_desc = NULL;
@@ -611,7 +606,7 @@ static int aw_parse_default_type_v_0_0_0_1(struct device *dev,
 	struct acf_bin_info *acf_info, struct aw_all_prof_info *all_prof_info)
 {
 	int i = 0;
-	int ret = -1;
+	int ret = 0;
 	int sec_num = 0;
 	uint8_t soft_off_enable = acf_info->aw_dev->soft_off_enable;
 	struct aw_prof_desc *prof_desc = NULL;
@@ -1180,7 +1175,7 @@ static int aw_parse_data_by_sec_type_v_1_0_0_0(struct device *dev,
 				struct acf_bin_info *acf_info,
 				struct aw_acf_dde_v_1_0_0_0 *prof_hdr)
 {
-	int ret = -1;
+	int ret = 0;
 	char *cfg_data = acf_info->fw_data + prof_hdr->data_offset;
 	struct aw_prof_desc *prof_desc = NULL;
 
@@ -1579,4 +1574,3 @@ void aw_acf_init(struct aw_device *aw_dev, struct acf_bin_info *acf_info, int in
 	acf_info->fw_data = NULL;
 	acf_info->fw_size = 0;
 }
-

@@ -34,8 +34,6 @@
 #define DEFAULT_PANEL_PREFILL_LINES	25
 #define MIN_PREFILL_LINES      35
 
-extern void lcd_esd_enable(bool on);
-
 enum dsi_dsc_ratio_type {
 	DSC_8BPC_8BPP,
 	DSC_10BPC_8BPP,
@@ -75,7 +73,7 @@ static char dsi_dsc_rc_range_min_qp_1_1_scr1[][15] = {
  */
 static char dsi_dsc_rc_range_max_qp_1_1[][15] = {
 	{4, 4, 5, 6, 7, 7, 7, 8, 9, 10, 11, 12, 13, 13, 15},
-	{4, 8, 9, 10, 11, 11, 11, 12, 13, 14, 15, 16, 17, 17, 19},
+	{8, 8, 9, 10, 11, 11, 11, 12, 13, 14, 15, 16, 17, 17, 19},
 	{12, 12, 13, 14, 15, 15, 15, 16, 17, 18, 19, 20, 21, 21, 23},
 	{7, 8, 9, 10, 11, 11, 11, 12, 13, 13, 14, 14, 15, 15, 16},
 	};
@@ -374,6 +372,7 @@ static int dsi_panel_reset(struct dsi_panel *panel)
 	}
 
 	usleep_range(10000, 10010);
+
 	if (r_config->count) {
 		rc = gpio_direction_output(r_config->reset_gpio,
 			r_config->sequence[0].level);
@@ -454,8 +453,6 @@ static int dsi_panel_set_pinctrl_state(struct dsi_panel *panel, bool enable)
 static int dsi_panel_power_on(struct dsi_panel *panel)
 {
 	int rc = 0;
-	int power_status = DRM_PANEL_BLANK_UNBLANK;
-	struct drm_panel_notifier notifier_data;
 
 	rc = dsi_pwr_enable_regulator(&panel->power_info, true);
 	if (rc) {
@@ -480,13 +477,6 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 		goto error_disable_gpio;
 	}
 
-	notifier_data.data = &power_status;
-	notifier_data.refresh_rate = 90;
-	notifier_data.id = 1;
-	DSI_INFO("[%s]: dsi panel power on\n", __func__);
-	drm_panel_notifier_call_chain(&panel->drm_panel,
-			DRM_PANEL_EVENT_BLANK, &notifier_data);
-
 	goto exit;
 
 error_disable_gpio:
@@ -509,7 +499,6 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 {
 	int rc = 0;
 
-	usleep_range(11000, 11010);
 	if (gpio_is_valid(panel->reset_config.disp_en_gpio))
 		gpio_set_value(panel->reset_config.disp_en_gpio, 0);
 
@@ -526,6 +515,8 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 			DSI_WARN("set dir for panel test gpio failed rc=%d\n",
 				 rc);
 	}
+
+	usleep_range(11000, 11010);
 
 	rc = dsi_panel_set_pinctrl_state(panel, false);
 	if (rc) {
@@ -749,53 +740,6 @@ static int dsi_panel_update_pwm_backlight(struct dsi_panel *panel,
 
 error:
 	return rc;
-}
-
-int dsi_panel_update_doze(struct dsi_panel *panel)
-{
-	int rc = 0;
-
-	if (panel->doze_enabled && panel->doze_mode == DSI_DOZE_HBM) {
-		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DOZE_HBM);
-		if (rc)
-			DSI_ERR("[%s] failed to send DSI_CMD_SET_DOZE_HBM cmd, rc=%d\n",
-					panel->name, rc);
-	} else if (panel->doze_enabled && panel->doze_mode == DSI_DOZE_LBM) {
-		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DOZE_LBM);
-		if (rc)
-			DSI_ERR("[%s] failed to send DSI_CMD_SET_DOZE_LBM cmd, rc=%d\n",
-					panel->name, rc);
-	} else if (!panel->doze_enabled) {
-		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_NOLP);
-		if (rc)
-			DSI_ERR("[%s] failed to send DSI_CMD_SET_NOLP cmd, rc=%d\n",
-					panel->name, rc);
-	}
-
-	return rc;
-}
-
-int dsi_panel_set_doze_status(struct dsi_panel *panel, bool status)
-{
-	if (panel->doze_enabled == status)
-		return 0;
-
-	panel->doze_enabled = status;
-
-	return dsi_panel_update_doze(panel);
-}
-
-int dsi_panel_set_doze_mode(struct dsi_panel *panel, enum dsi_doze_mode_type mode)
-{
-	if (panel->doze_mode == mode)
-		return 0;
-
-	panel->doze_mode = mode;
-
-	if (!panel->doze_enabled)
-		return 0;
-
-	return dsi_panel_update_doze(panel);
 }
 
 int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
@@ -1299,16 +1243,6 @@ static int dsi_panel_parse_misc_host_config(struct dsi_host_common_cfg *host,
 
 	host->force_hs_clk_lane = utils->read_bool(utils->data,
 					"qcom,mdss-dsi-force-clock-lane-hs");
-
-	rc = utils->read_u32(utils->data, "qcom,mdss-dsi-clk-strength", &val);
-	if (!rc) {
-		host->clk_strength = val;
-		DSI_INFO("[%s] clk_strength = %d\n", name, val);
-	} else {
-		host->clk_strength = 0;
-		DSI_INFO("[%s] clk_strength default value = %d\n", name, val);
-	}
-
 	panel_cphy_mode = utils->read_bool(utils->data,
 					"qcom,panel-cphy-mode");
 	host->phy_type = panel_cphy_mode ? DSI_PHY_TYPE_CPHY
@@ -1908,8 +1842,6 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-hbm-off-command",
 	"qcom,mdss-dsi-hbm1-on-command",
 	"qcom,mdss-dsi-hbm2-on-command",
-	"qcom,mdss-dsi-doze-hbm-command",
-	"qcom,mdss-dsi-doze-lbm-command",
 	"qcom,mdss-dsi-dispparam-bc-90hz-command",
 	"qcom,mdss-dsi-dispparam-bc-60hz-command",
 };
@@ -1942,8 +1874,6 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-hbm-off-command-state",
 	"qcom,mdss-dsi-hbm1-on-command-state",
 	"qcom,mdss-dsi-hbm2-on-command-state",
-	"qcom,mdss-dsi-doze-hbm-command-state",
-	"qcom,mdss-dsi-doze-lbm-command-state",
 	"qcom,mdss-dsi-dispparam-bc-90hz-command-state",
 	"qcom,mdss-dsi-dispparam-bc-60hz-command-state",
 };
@@ -3375,33 +3305,42 @@ static int dsi_panel_parse_esd_config(struct dsi_panel *panel)
 	struct drm_panel_esd_config *esd_config;
 	struct dsi_parser_utils *utils = &panel->utils;
 	u8 *esd_mode = NULL;
+	unsigned long irqflags;
+	int gpio;
 
 	esd_config = &panel->esd_config;
 	esd_config->status_mode = ESD_MODE_MAX;
-	esd_config->esd_err_irq_gpio = of_get_named_gpio(panel->panel_of_node,
-			"qcom,esd-err-irq-gpio", 0);
-	esd_config->esd_err_irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
-
-	if (gpio_is_valid(esd_config->esd_err_irq_gpio)) {
-		DSI_DEBUG("esd irq gpio is valid\n");
-		esd_config->esd_err_irq = gpio_to_irq(esd_config->esd_err_irq_gpio);
-		rc = gpio_request(esd_config->esd_err_irq_gpio, "esd_err_int_gpio");
-		if (rc) {
-			DSI_ERR("%s: Failed to get esd irq GPIO%d (rc = %d)",
-					__func__, esd_config->esd_err_irq_gpio, rc);
-		} else {
-			DSI_INFO("%s: Succeed to get esd irq GPIO%d (rc = %d)",
-					__func__, esd_config->esd_err_irq_gpio, rc);
-			gpio_direction_input(esd_config->esd_err_irq_gpio);
-		}
-
-		return 0;
-	}
 	esd_config->esd_enabled = utils->read_bool(utils->data,
 		"qcom,esd-check-enabled");
 
 	if (!esd_config->esd_enabled)
 		return 0;
+
+	gpio = of_get_named_gpio_flags(panel->panel_of_node,
+			"qcom,esd-err-irq-gpio", 0,
+			(enum of_gpio_flags *)&irqflags);
+	if (!gpio_is_valid(gpio)) {
+		DSI_ERR("qcom,esd-err-irq-gpio missing/invalid (%d)\n", gpio);
+	} else {
+		esd_config->esd_err_irq_flags = irqflags;
+
+		rc = devm_gpio_request_one(panel->parent, gpio, GPIOF_IN, "esd_err_int_gpio");
+		if (rc) {
+			DSI_ERR("gpio_request(%d) failed, rc=%d\n", gpio, rc);
+		} else {
+			rc = gpio_to_irq(gpio);
+			if (rc < 0) {
+				DSI_ERR("gpio_to_irq(%d) failed, rc=%d\n", gpio, rc);
+			} else {
+				esd_config->esd_err_irq_gpio = gpio;
+				esd_config->esd_err_irq = rc;
+				DSI_INFO("parser saved esd gpio=%d irq=%d irqflags=0x%lx\n",
+						esd_config->esd_err_irq_gpio,
+						esd_config->esd_err_irq,
+						esd_config->esd_err_irq_flags);
+			}
+		}
+	}
 
 	rc = utils->read_string(utils->data,
 			"qcom,mdss-dsi-panel-status-check-mode", &string);
@@ -3579,8 +3518,6 @@ struct dsi_panel *dsi_panel_get(struct device *parent,
 	if (rc)
 		DSI_DEBUG("failed to parse esd config, rc=%d\n", rc);
 
-	panel->doze_mode = DSI_DOZE_LBM;
-	panel->doze_enabled = false;
 	panel->power_mode = SDE_MODE_DPMS_OFF;
 	drm_panel_init(&panel->drm_panel);
 	panel->drm_panel.dev = &panel->mipi_device.dev;
@@ -4192,10 +4129,6 @@ int dsi_panel_set_lp1(struct dsi_panel *panel)
 	if (rc)
 		DSI_ERR("[%s] failed to send DSI_CMD_SET_LP1 cmd, rc=%d\n",
 		       panel->name, rc);
-
-	rc = dsi_panel_set_doze_status(panel, true);
-	if (rc)
-		DSI_ERR("unable to set doze on\n");
 exit:
 	mutex_unlock(&panel->panel_lock);
 	return rc;
@@ -4218,10 +4151,6 @@ int dsi_panel_set_lp2(struct dsi_panel *panel)
 	if (rc)
 		DSI_ERR("[%s] failed to send DSI_CMD_SET_LP2 cmd, rc=%d\n",
 		       panel->name, rc);
-
-	rc = dsi_panel_set_doze_status(panel, true);
-	if (rc)
-		DSI_ERR("unable to set doze on\n");
 exit:
 	mutex_unlock(&panel->panel_lock);
 	return rc;
@@ -4252,10 +4181,6 @@ int dsi_panel_set_nolp(struct dsi_panel *panel)
 	if (rc)
 		DSI_ERR("[%s] failed to send DSI_CMD_SET_NOLP cmd, rc=%d\n",
 		       panel->name, rc);
-
-	rc = dsi_panel_set_doze_status(panel, false);
-	if (rc)
-		DSI_ERR("unable to set doze off\n");
 exit:
 	mutex_unlock(&panel->panel_lock);
 	return rc;
@@ -4594,21 +4519,6 @@ int dsi_panel_enable(struct dsi_panel *panel)
 		       panel->name, rc);
 	else
 		panel->panel_initialized = true;
-
-	DSI_INFO("[%s]: dsi panel send DSI_CMD_SET_ON\n", __func__);
-	if (panel->cur_mode->timing.refresh_rate == 90) {
-		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_BC_90HZ);
-		if (rc) {
-			DSI_ERR("[%s][%s] failed to send DSI_CMD_SET_DISP_BC_90HZ cmd, rc=%d\n",
-				__func__, panel->name, rc);
-		} else {
-			panel->dsi_refresh_flag = 90;
-			DSI_INFO("%s: refresh_rate = %d\n",
-				__func__, panel->cur_mode->timing.refresh_rate);
-		}
-	}
-
-	lcd_esd_enable(1);
 	mutex_unlock(&panel->panel_lock);
 	return rc;
 }
@@ -4635,62 +4545,75 @@ error:
 	return rc;
 }
 
-void dsi_set_backlight_control(struct dsi_panel *panel,
-			       struct dsi_display_mode *adj_mode)
-{
-	int rc = 0;
-
-	if (!panel || !adj_mode) {
-		pr_err("Invalid params\n");
-		return;
-	}
-
-	mutex_lock(&panel->panel_lock);
-	if (adj_mode->timing.refresh_rate == 90) {
-		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_BC_90HZ);
-		if (rc) {
-			pr_err("[%s][%s] failed to send DSI_CMD_SET_DISP_BC_90HZ cmd, rc=%d\n",
-				__func__, panel->name, rc);
-		} else {
-			panel->dsi_refresh_flag = 90;
-			DSI_INFO("%s: refresh_rate = %d\n",
-				__func__, adj_mode->timing.refresh_rate);
-		}
-	} else if (adj_mode->timing.refresh_rate == 60) {
-		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_BC_60HZ);
-		if (rc) {
-			DSI_ERR("[%s][%s] failed to send DSI_CMD_SET_DISP_BC_60HZ cmd, rc=%d\n",
-				__func__, panel->name, rc);
-		} else {
-			panel->dsi_refresh_flag = 60;
-			DSI_INFO("%s: refresh_rate = %d\n",
-				__func__, adj_mode->timing.refresh_rate);
-		}
-	}
-	mutex_unlock(&panel->panel_lock);
-
-	return;
-}
-
 int dsi_panel_apply_hbm_mode(struct dsi_panel *panel)
 {
 	static const enum dsi_cmd_set_type type_map[] = {
 		DSI_CMD_SET_DISP_HBM_OFF,
-		DSI_CMD_SET_DISP_HBM_ON
+		DSI_CMD_SET_DISP_HBM_ON,
+		DSI_CMD_SET_HBM1_ON,
+		DSI_CMD_SET_HBM2_ON
 	};
 	enum dsi_cmd_set_type type;
-	int rc;
+	int rc = 0;
+	int idx;
 
-	if (panel->hbm_mode >= 0 && panel->hbm_mode < ARRAY_SIZE(type_map))
-		type = type_map[panel->hbm_mode];
-	else
-		type = type_map[0];
+	if (!panel || !panel->panel_initialized) {
+		DSI_ERR("invalid params\n");
+		return -EINVAL;
+	}
 
 	mutex_lock(&panel->panel_lock);
+
+	idx = panel->hbm_mode;
+	if (idx < 0 || idx >= (int)ARRAY_SIZE(type_map)) {
+		DSI_ERR("hbm_mode %d out of range\n", idx);
+		mutex_unlock(&panel->panel_lock);
+		return -EINVAL;
+	}
+	type = type_map[idx];
 	rc = dsi_panel_tx_cmd_set(panel, type);
+
 	mutex_unlock(&panel->panel_lock);
 
 	return rc;
+}
+
+void dsi_panel_set_backlight_control(struct dsi_panel *panel,
+			struct dsi_display_mode *adj_mode)
+{
+	struct dsi_display_mode *cur_mode;
+	enum dsi_cmd_set_type cmd;
+	int rc = 0;
+
+	if (!panel || !panel->panel_initialized || !adj_mode) {
+		DSI_ERR("invalid params\n");
+		return;
+	}
+
+	mutex_lock(&panel->panel_lock);
+
+	cur_mode = panel->cur_mode;
+	if (!cur_mode || !cur_mode->priv_info) {
+		DSI_ERR("Invalid Mode\n");
+		goto out;
+	}
+
+	if (!cur_mode->priv_info->cmd_sets[DSI_CMD_SET_DISP_BC_90HZ].count)
+		goto out;
+
+	if (adj_mode->timing.refresh_rate == 90)
+		cmd = DSI_CMD_SET_DISP_BC_90HZ;
+	else if (adj_mode->timing.refresh_rate == 60)
+		cmd = DSI_CMD_SET_DISP_BC_60HZ;
+
+	rc = dsi_panel_tx_cmd_set(panel, cmd);
+	if (rc)
+		DSI_ERR("[%s] failed to send cmd %d, rc=%d\n", panel->name, cmd, rc);
+	else
+		DSI_INFO("[%s] refresh_rate: %d\n", panel->name, adj_mode->timing.refresh_rate);
+
+out:
+	mutex_unlock(&panel->panel_lock);
 }
 
 int dsi_panel_pre_disable(struct dsi_panel *panel)
@@ -4738,7 +4661,6 @@ int dsi_panel_disable(struct dsi_panel *panel)
 			panel->power_mode == SDE_MODE_DPMS_LP2))
 			dsi_pwr_panel_regulator_mode_set(&panel->power_info,
 				"ibb", REGULATOR_MODE_STANDBY);
-		lcd_esd_enable(0);
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_OFF);
 		if (rc) {
 			/*
@@ -4754,7 +4676,6 @@ int dsi_panel_disable(struct dsi_panel *panel)
 	}
 	panel->panel_initialized = false;
 	panel->power_mode = SDE_MODE_DPMS_OFF;
-	panel->doze_enabled = false;
 
 	mutex_unlock(&panel->panel_lock);
 	return rc;
@@ -4786,8 +4707,6 @@ error:
 int dsi_panel_post_unprepare(struct dsi_panel *panel)
 {
 	int rc = 0;
-	int power_status = DRM_PANEL_BLANK_POWERDOWN;
-	struct drm_panel_notifier notifier_data;
 
 	if (!panel) {
 		DSI_ERR("invalid params\n");
@@ -4802,14 +4721,6 @@ int dsi_panel_post_unprepare(struct dsi_panel *panel)
 		       panel->name, rc);
 		goto error;
 	}
-
-	notifier_data.data = &power_status;
-	notifier_data.refresh_rate = 90;
-	notifier_data.id = 1;
-	DSI_INFO("[%s]: dsi panel power off\n", __func__);
-	drm_panel_notifier_call_chain(&panel->drm_panel,
-			DRM_PANEL_EARLY_EVENT_BLANK, &notifier_data);
-
 error:
 	mutex_unlock(&panel->panel_lock);
 	return rc;

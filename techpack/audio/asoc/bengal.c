@@ -418,7 +418,6 @@ static const char *const mode_function[] = {"Music", "Voice", "Voip",
 		"Fm", "Notification", "Receiver", "Off"};
 static const char *const aw_spin[] = {"spin_0", "spin_90",
 					   "spin_180", "spin_270"};
-static unsigned int g_spin_value = 0;
 #endif /* CONFIG_SND_SOC_AW87XXX */
 static const char *const vi_feed_ch_text[] = {"One", "Two"};
 static char const *bit_format_text[] = {"S16_LE", "S24_LE", "S24_3LE",
@@ -1027,155 +1026,19 @@ static int msm_vi_feed_tx_ch_put(struct snd_kcontrol *kcontrol,
 }
 
 #ifdef CONFIG_SND_SOC_AW87XXX
-extern int aw87xxx_show_current_profile_index(int dev_index);
-struct snd_soc_card *pcard = NULL;
-static int aw87xxx_spk_pa_mode_get(struct snd_kcontrol *kcontrol,
-		struct snd_ctl_elem_value *ucontrol)
-{
-	int current_mode = 0;
-
-	current_mode = aw87xxx_show_current_profile_index(1);
-	ucontrol->value.integer.value[0] = current_mode;
-
-	pr_debug("%s: get mode: %d\n", __func__, current_mode);
-	return 0;
-}
-
-static int aw87xxx_spk_pa_mode_set(struct snd_kcontrol *kcontrol,
-		struct snd_ctl_elem_value *ucontrol)
-{
-	int set_mode;
-
-	set_mode = ucontrol->value.integer.value[0];
-	if (pcard)
-		pcard->aw87xxx_spk_mode = set_mode;
-
-	pr_debug("%s: set mode: %d success\n", __func__, set_mode);
-	return 0;
-}
-
-static int aw87xxx_rcv_pa_mode_get(struct snd_kcontrol *kcontrol,
-		struct snd_ctl_elem_value *ucontrol)
-{
-	int current_mode = 0;
-
-	current_mode = aw87xxx_show_current_profile_index(0);
-	ucontrol->value.integer.value[0] = current_mode;
-
-	pr_debug("%s: get mode: %d\n", __func__, current_mode);
-	return 0;
-}
-
-static int aw87xxx_rcv_pa_mode_set(struct snd_kcontrol *kcontrol,
-		struct snd_ctl_elem_value *ucontrol)
-{
-	int set_mode;
-
-	set_mode = ucontrol->value.integer.value[0];
-	if (pcard)
-		pcard->aw87xxx_rcv_mode = set_mode;
-
-	pr_debug("%s: set mode: %d success\n", __func__, set_mode);
-	return 0;
-}
-
-/*
-#define AW_MSG_ID_SPIN	(0x10013D2E)
-#define AW_DSP_TRY_TIME	(3)
-#define AW_10000_US	(10000)
-
-static DEFINE_MUTEX(g_aw_dsp_msg_lock);
-static DEFINE_MUTEX(g_aw_dsp_lock);
-
-extern int afe_get_topology(int port_id);
-extern int aw_send_afe_cal_apr(uint32_t param_id, void *buf, int cmd_size, bool write);
-extern int aw_check_dsp_ready(void);
-
-enum {
-	AW_SPIN_0 = 0,
-	AW_SPIN_90,
-	AW_SPIN_180,
-	AW_SPIN_270,
-	AW_SPIN_MAX,
-};
-
-static int g_spin_value = 0;
-
-static int aw_set_spin(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	int ret = -EINVAL;
-	uint32_t ctrl_value = 0;
-	int try = 0;
-
-	//change the channel according to the command
-	ctrl_value = ucontrol->value.integer.value[0];
-	if (ctrl_value >= AW_SPIN_MAX) {
-		pr_err("%s: spin [%d] unsupported\n", __func__, ctrl_value);
-		return -EINVAL;
-	}
-
-	mutex_lock(&g_aw_dsp_lock);
-	while (try < AW_DSP_TRY_TIME) {
-		if (aw_check_dsp_ready()) {
-			ret = aw_send_afe_cal_apr(AW_MSG_ID_SPIN, &ctrl_value, sizeof(int32_t), true);
-			mutex_unlock(&g_aw_dsp_lock);
-			return ret;
-		} else {
-			try++;
-			usleep_range(AW_10000_US, AW_10000_US + 10);
-			pr_info("%s: afe topo not ready, try again\n", __func__);
-		}
-	}
-	mutex_unlock(&g_aw_dsp_lock);
-
-	if (ret) {
-		pr_err("%s: write spin failed\n", __func__);
-		return ret;
-	}
-	pr_info("%s: write spin done, ctrl_value=%d\n", __func__, ctrl_value);
-	g_spin_value = ctrl_value;
-	return 0;
-}
-
-static int aw_get_spin(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	int ret = -EINVAL;
-	uint32_t ctrl_value = 0;
-	int try = 0;
-
-	mutex_lock(&g_aw_dsp_lock);
-	while (try < AW_DSP_TRY_TIME) {
-		if (aw_check_dsp_ready()) {
-			ret = aw_send_afe_cal_apr(AW_MSG_ID_SPIN, &ctrl_value, sizeof(int32_t), false);
-			ucontrol->value.integer.value[0] = ctrl_value;
-			pr_info("%s: read spin done, ctrl_value=%d\n", __func__, ctrl_value);
-			mutex_unlock(&g_aw_dsp_lock);
-			return ret;
-		} else {
-			try++;
-			usleep_range(AW_10000_US, AW_10000_US + 10);
-			pr_info("%s: afe topo not ready try again\n", __func__);
-		}
-	}
-	ucontrol->value.integer.value[0] = ctrl_value;
-	mutex_unlock(&g_aw_dsp_lock);
-	pr_info("%s: read spin done, ctrl_value=%d\n", __func__, ctrl_value);
-	return 0;
-}
-*/
-
 #define AW_MSG_ID_SPIN	(0x10013D2E)
 #define AW_DSP_TRY_TIME	(3)
 #define AW_10000_US		(10000)
 
+static struct snd_soc_card *pcard;
+static unsigned int g_spin_value = 0;
 static DEFINE_MUTEX(g_aw_dsp_msg_lock);
 static DEFINE_MUTEX(g_aw_dsp_lock);
 
 extern int afe_get_topology(int port_id);
 extern int aw_send_afe_cal_apr(uint32_t param_id, void *buf, int cmd_size, bool write);
 extern int aw_check_dsp_ready(void);
+extern int aw87xxx_show_current_profile_index(int dev_index);
 
 enum {
 	AW_SPIN_0 = 0,
@@ -1185,98 +1048,168 @@ enum {
 	AW_SPIN_MAX,
 };
 
+static int aw87xxx_spk_pa_mode_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int current_mode;
+
+	if (!ucontrol)
+		return -EINVAL;
+
+	current_mode = aw87xxx_show_current_profile_index(1);
+	if (current_mode < 0)
+		return current_mode;
+
+	ucontrol->value.integer.value[0] = current_mode;
+
+	pr_info("%s: get mode: %d\n", __func__, current_mode);
+	return 0;
+}
+
+static int aw87xxx_spk_pa_mode_set(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int set_mode;
+
+	if (!ucontrol)
+		return -EINVAL;
+
+	set_mode = ucontrol->value.integer.value[0];
+	if (WARN_ON_ONCE(!pcard))
+		return -ENODEV;
+
+	pcard->aw87xxx_spk_mode = set_mode;
+
+	pr_info("%s: set mode: %d success\n", __func__, set_mode);
+	return 0;
+}
+
+static int aw87xxx_rcv_pa_mode_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int current_mode;
+
+	if (!ucontrol)
+		return -EINVAL;
+
+	current_mode = aw87xxx_show_current_profile_index(0);
+	if (current_mode < 0)
+		return current_mode;
+
+	ucontrol->value.integer.value[0] = current_mode;
+
+	pr_info("%s: get mode: %d\n", __func__, current_mode);
+	return 0;
+}
+
+static int aw87xxx_rcv_pa_mode_set(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int set_mode;
+
+	if (!ucontrol)
+		return -EINVAL;
+
+	set_mode = ucontrol->value.integer.value[0];
+
+	if (WARN_ON_ONCE(!pcard))
+		return -ENODEV;
+
+	pcard->aw87xxx_rcv_mode = set_mode;
+
+	pr_info("%s: set mode: %d success\n", __func__, set_mode);
+	return 0;
+}
+
 static int aw_set_spin(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
-	int ret = -EINVAL;
-	uint32_t ctrl_value = 0;
+	int ret = 0;
+	int32_t ctrl_value;
 	int try = 0;
 
-	if (!ucontrol) {
-		pr_err("%s: invalid ucontrol pointer\n", __func__);
+	if (!ucontrol)
 		return -EINVAL;
-	}
 
-	ctrl_value = ucontrol->value.integer.value[0];
-	if (ctrl_value >= AW_SPIN_MAX) {
+	ctrl_value = (int32_t)ucontrol->value.integer.value[0];
+	if (ctrl_value < 0 || ctrl_value >= AW_SPIN_MAX) {
 		pr_err("%s: spin [%d] unsupported\n", __func__, ctrl_value);
 		return -EINVAL;
 	}
 
-	mutex_lock(&g_aw_dsp_lock);
-
 	while (try < AW_DSP_TRY_TIME) {
-		if (aw_check_dsp_ready()) {
-			mutex_lock(&g_aw_dsp_msg_lock);
-			ret = aw_send_afe_cal_apr(AW_MSG_ID_SPIN, &ctrl_value, sizeof(int32_t), true);
-			mutex_unlock(&g_aw_dsp_msg_lock);
-			goto out_unlock;
+		mutex_lock(&g_aw_dsp_lock);
+
+		if (!aw_check_dsp_ready()) {
+			mutex_unlock(&g_aw_dsp_lock);
+			try++;
+			usleep_range(AW_10000_US, AW_10000_US + 10);
+			pr_info("%s: afe topo not ready, try=%d\n", __func__, try);
+			continue;
 		}
 
-		try++;
-		usleep_range(AW_10000_US, AW_10000_US + 10);
-		pr_info("%s: afe topo not ready, try again (%d/%d)\n", __func__, try, AW_DSP_TRY_TIME);
+		mutex_lock(&g_aw_dsp_msg_lock);
+		ret = aw_send_afe_cal_apr(AW_MSG_ID_SPIN, &ctrl_value,
+				sizeof(ctrl_value), true);
+		mutex_unlock(&g_aw_dsp_msg_lock);
+
+		mutex_unlock(&g_aw_dsp_lock);
+
+		if (ret) {
+			pr_err("%s: aw_send_afe_cal_apr failed: %d\n", __func__, ret);
+			return ret;
+		}
+
+		g_spin_value = (unsigned int)ctrl_value;
+		pr_info("%s: write spin done, ctrl_value=%d\n", __func__, ctrl_value);
+		return 0;
 	}
 
-	ret = -EAGAIN;
-	pr_err("%s: DSP not ready after %d tries\n", __func__, AW_DSP_TRY_TIME);
-
-out_unlock:
-	mutex_unlock(&g_aw_dsp_lock);
-
-	if (ret) {
-		pr_err("%s: write spin failed (%d)\n", __func__, ret);
-		return ret;
-	}
-
-	pr_info("%s: write spin done, ctrl_value=%d\n", __func__, ctrl_value);
-	g_spin_value = ctrl_value;
-	return 0;
+	pr_err("%s: dsp not ready after %d tries\n", __func__, AW_DSP_TRY_TIME);
+	return -ETIMEDOUT;
 }
 
 static int aw_get_spin(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
-	int ret = -EINVAL;
-	uint32_t ctrl_value = 0;
+	int ret;
+	int32_t ctrl_value = 0;
 	int try = 0;
 
-	if (!ucontrol) {
-		pr_err("%s: invalid ucontrol pointer\n", __func__);
+	if (!ucontrol)
 		return -EINVAL;
-	}
-
-	mutex_lock(&g_aw_dsp_lock);
 
 	while (try < AW_DSP_TRY_TIME) {
-		if (aw_check_dsp_ready()) {
-			mutex_lock(&g_aw_dsp_msg_lock);
-			ret = aw_send_afe_cal_apr(AW_MSG_ID_SPIN, &ctrl_value, sizeof(int32_t), false);
-			mutex_unlock(&g_aw_dsp_msg_lock);
-			goto out_unlock;
+		mutex_lock(&g_aw_dsp_lock);
+
+		if (!aw_check_dsp_ready()) {
+			mutex_unlock(&g_aw_dsp_lock);
+			try++;
+			usleep_range(AW_10000_US, AW_10000_US + 10);
+			pr_info("%s: afe topo not ready, try=%d\n", __func__, try);
+			continue;
 		}
 
-		try++;
-		usleep_range(AW_10000_US, AW_10000_US + 10);
-		pr_info("%s: afe topo not ready, try again (%d/%d)\n", __func__, try, AW_DSP_TRY_TIME);
+		mutex_lock(&g_aw_dsp_msg_lock);
+		ret = aw_send_afe_cal_apr(AW_MSG_ID_SPIN, &ctrl_value,
+				sizeof(ctrl_value), false);
+		mutex_unlock(&g_aw_dsp_msg_lock);
+
+		mutex_unlock(&g_aw_dsp_lock);
+
+		if (ret) {
+			pr_err("%s: aw_send_afe_cal_apr read failed: %d\n", __func__, ret);
+			return ret;
+		}
+
+		ucontrol->value.integer.value[0] = ctrl_value;
+		pr_info("%s: read spin done, ctrl_value=%d\n", __func__, ctrl_value);
+		return 0;
 	}
 
-	ret = -EAGAIN;
-	pr_warn("%s: DSP not ready after %d tries\n", __func__, AW_DSP_TRY_TIME);
-	ctrl_value = g_spin_value;
-
-out_unlock:
-	mutex_unlock(&g_aw_dsp_lock);
-
-	ucontrol->value.integer.value[0] = ctrl_value;
-
-	if (ret) {
-		pr_err("%s: read spin failed (%d), return ctrl_value=%d\n", __func__, ret, ctrl_value);
-		return ret;
-	}
-
-	pr_info("%s: read spin done, ctrl_value=%d\n", __func__, ctrl_value);
-	return 0;
+	ucontrol->value.integer.value[0] = (int)g_spin_value;
+	pr_info("%s: read spin fallback, ctrl_value=%d\n", __func__, (int)g_spin_value);
+	return -ETIMEDOUT;
 }
 #endif /* CONFIG_SND_SOC_AW87XXX */
 
@@ -7202,6 +7135,11 @@ static int msm_asoc_machine_remove(struct platform_device *pdev)
 	snd_event_master_deregister(&pdev->dev);
 	snd_soc_unregister_card(card);
 	msm_i2s_auxpcm_deinit();
+
+#ifdef CONFIG_SND_SOC_AW87XXX
+	if (pcard)
+		pcard = NULL;
+#endif /* CONFIG_SND_SOC_AW87XXX */
 
 	return 0;
 }

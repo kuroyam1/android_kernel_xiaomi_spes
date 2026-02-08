@@ -35,13 +35,14 @@
 
 #define AWINIC_CODE_VERSION "V0.0.7-V1.0.4"	/* "code version"-"excel version" */
 
-#define DEBUG_LOG_LEVEL
+//#define DEBUG_LOG_LEVEL
 #ifdef DEBUG_LOG_LEVEL
-#define DBG(fmt, arg...) do {\
-printk("AWINIC_BIN %s,line= %d,"fmt, __func__, __LINE__, ##arg);\
+#define DBG(fmt, arg...) do { \
+	printk("AWINIC_BIN %s,line= %d,"fmt, __func__, __LINE__, ##arg); \
 } while (0)
-#define DBG_ERR(fmt, arg...) do {\
-printk("AWINIC_BIN_ERR %s,line= %d,"fmt, __func__, __LINE__, ##arg);\
+
+#define DBG_ERR(fmt, arg...) do { \
+	printk("AWINIC_BIN_ERR %s,line= %d,"fmt, __func__, __LINE__, ##arg); \
 } while (0)
 #else
 #define DBG(fmt, arg...) do {} while (0)
@@ -441,6 +442,7 @@ int aw_parsing_bin_file(struct aw_bin *bin)
 		DBG_ERR("aw_bin_parse bin is NULL\n");
 		return -8;
 	}
+
 	bin->p_addr = bin->info.data;
 	bin->all_bin_parse_num = 0;
 	bin->multi_bin_parse_num = 0;
@@ -450,9 +452,9 @@ int aw_parsing_bin_file(struct aw_bin *bin)
 	ret = aw_check_bin_header_version(bin);
 	if (ret < 0) {
 		DBG_ERR("aw_bin_parse check bin header version error\n");
+		bin->p_addr = NULL;
 		return ret;
 	}
-	bin->p_addr = NULL;
 
 	/* check bin header info */
 	for (i = 0; i < bin->all_bin_parse_num; i++) {

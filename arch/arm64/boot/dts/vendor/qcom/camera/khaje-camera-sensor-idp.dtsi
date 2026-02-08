@@ -18,8 +18,8 @@
 		id_val1 = <85>;
 		init_num = <2>;
 		inits = <4 75 14 15>;
-		en-gpio = <&tlmm 26 0>;
-		iov-gpio = <&tlmm 54 0>;
+		en-gpios = <&tlmm 26 0>;
+		iov-gpios = <&tlmm 54 0>;
 		status = "ok";
 	};
 };

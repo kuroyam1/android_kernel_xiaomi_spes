@@ -60,7 +60,6 @@ static dev_t elliptic_major;
 
 static struct wakeup_source *wake_source;
 
-
 void elliptic_data_cancel(struct elliptic_data *elliptic_data)
 {
 	atomic_set(&elliptic_data->abort_io, 1);

@@ -234,7 +234,7 @@ static int st21nfc_loc_set_polaritymode(struct st21nfc_device *st21nfc_dev, int 
 	int ret;
 
 	if (enable_debug_log)
-		pr_info("%s:%d mode %d", __FILE__, __LINE__, mode);
+		pr_info("%s:%d mode %d\n", __FILE__, __LINE__, mode);
 
 	st21nfc_dev->polarity_mode = mode;
 	/* setup irq_flags */
@@ -277,7 +277,7 @@ static int st21nfc_loc_set_polaritymode(struct st21nfc_device *st21nfc_dev, int 
 	st21nfc_disable_irq(st21nfc_dev);
 
 	if (enable_debug_log)
-		pr_info("%s:%d ret %d", __FILE__, __LINE__, ret);
+		pr_info("%s:%d ret %d\n", __FILE__, __LINE__, ret);
 
 	return ret;
 }
@@ -547,7 +547,7 @@ static int st21nfc_dev_open(struct inode *inode, struct file *filp)
 					   struct st21nfc_device, st21nfc_device);
 
 	if (enable_debug_log)
-		pr_info("%s:%d dev_open", __FILE__, __LINE__);
+		pr_info("%s:%d dev_open\n", __FILE__, __LINE__);
 
 	if (st21nfc_dev->device_open) {
 		ret = -EBUSY;
@@ -952,9 +952,9 @@ static int st21nfc_probe(struct i2c_client *client,
 	}
 
 	/* QCOM and MTK54 use standard GPIO definition */
-	st21nfc_dev->gpiod_pidle = devm_gpiod_get(dev, "pidle", GPIOD_IN);
+	st21nfc_dev->gpiod_pidle = devm_gpiod_get(dev, "st,pidle", GPIOD_IN);
 	if (IS_ERR_OR_NULL(st21nfc_dev->gpiod_pidle)) {
-		pr_warn("[OPTIONAL] %s: Unable to request pidle-gpio\n", __func__);
+		pr_warn("[OPTIONAL] %s: Unable to request pidle-gpios\n", __func__);
 		ret = 0;
 	} else {
 		/* Start the power stat in power mode idle */
@@ -989,7 +989,7 @@ static int st21nfc_probe(struct i2c_client *client,
 		INIT_WORK(&(st21nfc_dev->st_p_work), st21nfc_pstate_wq);
 	}
 
-	st21nfc_dev->gpiod_clkreq = devm_gpiod_get(dev, "clkreq", GPIOD_IN);
+	st21nfc_dev->gpiod_clkreq = devm_gpiod_get(dev, "st,clkreq", GPIOD_IN);
 	if (IS_ERR_OR_NULL(st21nfc_dev->gpiod_clkreq)) {
 		pr_warn("[OPTIONAL] %s: Unable to request clkreq-gpios\n", __func__);
 		ret = 0;

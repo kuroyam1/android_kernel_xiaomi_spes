@@ -1014,13 +1014,14 @@ static irqreturn_t subsys_err_fatal_intr_handler (int irq, void *dev_id)
 	subsystem_restart_dev(d->subsys);
 
 /*2019.12.09 longcheer weipuchao add for checknv begin*/
-	#ifdef CHECK_NV_DESTROYED_MI
+#ifdef CHECK_NV_DESTROYED_MI
 	if (strnstr(last_modem_sfr_reason, STR_NV_SIGNATURE_DESTROYED, strlen(last_modem_sfr_reason))) {
 		pr_err("errimei_dev: the NV has been destroyed, should restart to recovery\n");
-		schedule_delayed_work(&create_kobj_work, msecs_to_jiffies(1*1000));
+		schedule_delayed_work(&create_kobj_work, msecs_to_jiffies(1000));
 	}
-	#endif
+#endif
 /*2019.12.09 longcheer weipuchao add for checknv end*/
+
 	return IRQ_HANDLED;
 }
 
@@ -1431,7 +1432,7 @@ static int __init pil_tz_init(void)
 {
 	last_ssr_reason_entry = proc_create("last_mcrash", S_IFREG | S_IRUGO, NULL, &last_ssr_reason_file_ops);
 	if (!last_ssr_reason_entry) {
-	    printk(KERN_ERR "pil: cannot create proc entry last_mcrash\n");
+		printk(KERN_ERR "pil: cannot create proc entry last_mcrash\n");
 	}
 	return platform_driver_register(&pil_tz_driver);
 }
@@ -1440,8 +1441,8 @@ module_init(pil_tz_init);
 static void __exit pil_tz_exit(void)
 {
 	if (last_ssr_reason_entry) {
-	    remove_proc_entry("last_mcrash", NULL);
-	    last_ssr_reason_entry = NULL;
+		remove_proc_entry("last_mcrash", NULL);
+		last_ssr_reason_entry = NULL;
 	}
 /*2019.12.09 longcheer weipuchao add for checknv begin*/
 #ifdef CHECK_NV_DESTROYED_MI

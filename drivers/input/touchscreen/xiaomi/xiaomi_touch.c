@@ -49,63 +49,105 @@ static long xiaomi_touch_dev_ioctl(struct file *file,
 				   unsigned int cmd,
 				   unsigned long arg)
 {
-	int ret = -EINVAL;
+	int err = 0;
 	int buf[VALUE_TYPE_SIZE] = {0, };
-	struct xiaomi_touch_pdata *pdata = file->private_data;
-	void __user *argp = (void __user *) arg;
-	struct xiaomi_touch_interface *touch_data = pdata->touch_data;
-	struct xiaomi_touch *dev = pdata->device;
+	struct xiaomi_touch_pdata *pdata;
+	void __user *argp = (void __user *)arg;
+	struct xiaomi_touch_interface *touch_data;
+	struct xiaomi_touch *dev;
 	int user_cmd = _IOC_NR(cmd);
 
-	if (!pdata || !touch_data || !dev) {
-		pr_err("%s: invalid memory\n", __func__);
-		return -ENOMEM;
-	}
+	if (!file)
+		return -ENODEV;
+
+	pdata = file->private_data;
+	if (!pdata)
+		return -ENODEV;
+
+	touch_data = pdata->touch_data;
+	dev = pdata->device;
+	if (!touch_data || !dev)
+		return -ENODEV;
+
+	if (copy_from_user(buf, argp, sizeof(buf)))
+		return -EFAULT;
 
 	mutex_lock(&dev->mutex);
 
-	ret = copy_from_user(&buf, (int __user *)argp, sizeof(buf));
 	pr_info("%s: cmd: %d, mode: %d, value: %d\n",
-			__func__, user_cmd, buf[1], buf[2]);
+		__func__, user_cmd, buf[1], buf[2]);
 
 	switch (user_cmd) {
 	case SET_CUR_VALUE:
-		if (touch_data->setModeValue)
-			buf[0] = touch_data->setModeValue(buf[1], buf[2]);
+		if (touch_data->setModeValue) {
+			int r = touch_data->setModeValue(buf[1], buf[2]);
+			if (r < 0)
+				err = r;
+			else
+				buf[0] = r;
+		} else {
+			err = -ENOTTY;
+		}
 		break;
 	case GET_CUR_VALUE:
 	case GET_DEF_VALUE:
 	case GET_MIN_VALUE:
 	case GET_MAX_VALUE:
-		if (touch_data->getModeValue)
-			buf[0] = touch_data->getModeValue(buf[1], user_cmd);
+		if (touch_data->getModeValue) {
+			int r = touch_data->getModeValue(buf[1], user_cmd);
+			if (r < 0)
+				err = r;
+			else
+				buf[0] = r;
+		} else {
+			err = -ENOTTY;
+		}
 		break;
+
 	case RESET_MODE:
-		if (touch_data->resetMode)
-			buf[0] = touch_data->resetMode(buf[1]);
+		if (touch_data->resetMode) {
+			int r = touch_data->resetMode(buf[1]);
+			if (r < 0)
+				err = r;
+			else
+				buf[0] = r;
+		} else {
+			err = -ENOTTY;
+		}
 		break;
 	case GET_MODE_VALUE:
-		if (touch_data->getModeValue)
-			ret = touch_data->getModeAll(buf[1], buf);
+		if (touch_data->getModeAll) {
+			int r = touch_data->getModeAll(buf[1], buf);
+			if (r < 0)
+				err = r;
+		} else {
+			err = -ENOTTY;
+		}
 		break;
 	default:
-		pr_err("%s: don't support mode\n", __func__);
-		ret = -EINVAL;
+		pr_err("%s: unsupported ioctl cmd %d\n", __func__, user_cmd);
+		err = -EINVAL;
 		break;
 	}
 
-	if (ret >= 0)
-		ret = copy_to_user((int __user *)argp, &buf, sizeof(buf));
-	else
-		pr_err("%s: can't get data from touch driver\n", __func__);
+	if (!err) {
+		if (copy_to_user(argp, buf, sizeof(buf))) {
+			err = -EFAULT;
+		}
+	} else {
+		pr_err("%s: driver operation failed: %d\n", __func__, err);
+	}
 
 	mutex_unlock(&dev->mutex);
-	return ret;
+	return err;
 }
 
 static int xiaomi_touch_dev_release(struct inode *inode,
 				    struct file *file)
 {
+	if (file->private_data)
+		file->private_data = NULL;
+
 	return 0;
 }
 static const struct file_operations xiaomitouch_dev_fops = {
@@ -324,11 +366,13 @@ static int xiaomi_touch_probe(struct platform_device *pdev)
 
 	pr_info("%s: over\n", __func__);
 
-	return ret;
+	return 0;
 
 sys_group_err:
-	kfree(pdata->touch_data);
-	pdata->touch_data = NULL;
+	if (pdata->touch_data) {
+		kfree(pdata->touch_data);
+		pdata->touch_data = NULL;
+	}
 data_mem_err:
 	device_destroy(xiaomi_touch_dev.class, 0);
 device_create_err:
@@ -336,17 +380,42 @@ device_create_err:
 class_create_err:
 	misc_deregister(&xiaomi_touch_dev.misc_dev);
 parse_dt_err:
+	touch_pdata = NULL;
 	pr_err("%s: fail!\n", __func__);
 	return ret;
 }
 
 static int xiaomi_touch_remove(struct platform_device *pdev)
 {
-	device_destroy(xiaomi_touch_dev.class, 0);
-	class_destroy(xiaomi_touch_dev.class);
+	struct xiaomi_touch_pdata *pdata;
+
+	if (xiaomi_touch_dev.dev)
+		pdata = dev_get_drvdata(xiaomi_touch_dev.dev);
+	else
+		pdata = touch_pdata;
+
+	if (xiaomi_touch_dev.dev && xiaomi_touch_dev.attrs.attrs)
+		sysfs_remove_group(&xiaomi_touch_dev.dev->kobj, &xiaomi_touch_dev.attrs);
+
+	if (xiaomi_touch_dev.dev) {
+		device_destroy(xiaomi_touch_dev.class, xiaomi_touch_dev.dev->devt);
+		xiaomi_touch_dev.dev = NULL;
+	}
+
+	if (xiaomi_touch_dev.class) {
+		class_destroy(xiaomi_touch_dev.class);
+		xiaomi_touch_dev.class = NULL;
+	}
+
 	misc_deregister(&xiaomi_touch_dev.misc_dev);
-	kfree(touch_pdata->touch_data);
-	touch_pdata->touch_data = NULL;
+
+	if (pdata && pdata->touch_data) {
+		kfree(pdata->touch_data);
+		pdata->touch_data = NULL;
+	}
+
+	touch_pdata = NULL;
+
 	return 0;
 }
 

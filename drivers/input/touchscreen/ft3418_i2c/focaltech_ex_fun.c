@@ -756,7 +756,7 @@ static int fts_parse_buf(const char *buf, size_t cmd_len)
 		FTS_DEBUG("read %02X, %d bytes", rw_op.reg, rw_op.len);
 	} else {
 		if (cmd_len < (length * 2 + 5)) {
-			pr_err("data invalided!\n");
+			FTS_ERROR("data invalided!");
 			return -EINVAL;
 		}
 		FTS_DEBUG("write %02X, %d bytes", rw_op.reg, length);
@@ -769,7 +769,7 @@ static int fts_parse_buf(const char *buf, size_t cmd_len)
 	if (rw_op.len > 0) {
 		tmpbuf = (char *)kzalloc(rw_op.len, GFP_KERNEL);
 		if (!tmpbuf) {
-			FTS_ERROR("allocate memory failed!\n");
+			FTS_ERROR("allocate memory failed!");
 			return -ENOMEM;
 		}
 
@@ -952,8 +952,7 @@ static ssize_t fts_driverinfo_show(struct device *dev,
 	count += snprintf(buf + count, PAGE_SIZE, "Max Touchs:%d\n",
 			pdata->max_touch_number);
 
-	count += snprintf(buf + count, PAGE_SIZE,
-			"reset gpio:%d,int gpio:%d,irq:%d\n",
+	count += snprintf(buf + count, PAGE_SIZE, "reset gpio:%d,int gpio:%d,irq:%d\n",
 			pdata->reset_gpio, pdata->irq_gpio, ts_data->irq);
 
 	count += snprintf(buf + count, PAGE_SIZE, "IC ID:0x%02x%02x\n",
@@ -964,9 +963,8 @@ static ssize_t fts_driverinfo_show(struct device *dev,
 		count += snprintf(buf + count, PAGE_SIZE, "BUS:%s,addr:0x%x\n",
 				"I2C", ts_data->client->addr);
 	} else {
-		count += snprintf(buf + count, PAGE_SIZE,
-				"BUS:%s,mode:%d,max_freq:%d\n", "SPI",
-				ts_data->spi->mode, ts_data->spi->max_speed_hz);
+		count += snprintf(buf + count, PAGE_SIZE, "BUS:%s,mode:%d,max_freq:%d\n",
+				"SPI", ts_data->spi->mode, ts_data->spi->max_speed_hz);
 	}
 	mutex_unlock(&input_dev->mutex);
 

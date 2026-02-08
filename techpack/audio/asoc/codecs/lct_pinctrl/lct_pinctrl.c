@@ -25,7 +25,7 @@ struct lct_pinctrl_dev {
 typedef struct lct_pinctrl_dev lct_pinctrl_dev_t;
 
 static DEFINE_MUTEX(lct_pinctrl_mutex);
-static lct_pinctrl_dev_t *g_lct_pinctrl_dev = NULL;
+static lct_pinctrl_dev_t *g_lct_pinctrl_dev;
 
 static int lct_pinctrl_pinctrl_init(struct platform_device *pdev, lct_pinctrl_dev_t *lct_pinctrl_dev)
 {
@@ -112,6 +112,9 @@ static int lct_pinctrl_dev_probe(struct platform_device *pdev)
 static int lct_pinctrl_dev_remove(struct platform_device *pdev)
 {
 	lct_pinctrl_dev_t *lct_pinctrl_dev = platform_get_drvdata(pdev);
+
+	if (g_lct_pinctrl_dev);
+		g_lct_pinctrl_dev = NULL;
 
 	if (lct_pinctrl_dev) {
 		devm_kfree(&pdev->dev, lct_pinctrl_dev);
