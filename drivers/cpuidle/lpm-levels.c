@@ -118,6 +118,8 @@ static int lpm_drm_panel_notify(struct notifier_block *nb,
 		break;
 	case DRM_PANEL_BLANK_POWERDOWN:
 	case DRM_PANEL_BLANK_LP:
+	case DRM_PANEL_BLANK_LP1:
+	case DRM_PANEL_BLANK_LP2:
 		sleep_disabled = false;
 		wake_up_all_idle_cpus();
 		break;
