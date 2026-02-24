@@ -209,7 +209,7 @@ static irqreturn_t max77729_irq_thread(int irq, void *data)
 	max77729->doing_irq = 1;
 
 	ret = wait_event_timeout(max77729->suspend_wait,
-			!max77729->suspended, msecs_to_jiffies(200));
+			!max77729->suspended, msecs_to_jiffies(300));
 	if (!ret) {
 		pr_info("[%s]: %s: suspend_wait timeout\n", MFD_DEV_NAME, __func__);
 		max77729->doing_irq = 0;
