@@ -42,7 +42,7 @@ struct vdm_state_transition {
 }
 
 #define VDM_DFP_CMD_REACTION(cmd, init, req)		\
-	VDM_CMD_REACTION(cmd, init, req, \
+	VDM_CMD_REACTION(cmd, init, req,  \
 		VDM_CMD_FLAG_SEND_BY_DFP | VDM_CMD_FLAG_RECV_BY_UFP)
 
 #define VDM_UFP_CMD_REACTION(cmd, init, req)		\
@@ -55,7 +55,7 @@ struct vdm_state_transition {
 		| VDM_CMD_FLAG_CABLE_CMD)
 
 #define VDM_DFP_CMD_REACTION_PD30(cmd, init, req)		\
-	VDM_CMD_REACTION(cmd, init, req, \
+	VDM_CMD_REACTION(cmd, init, req,  \
 		VDM_CMD_FLAG_SEND_BY_DFP | VDM_CMD_FLAG_RECV_BY_UFP |	\
 		VDM_CMD_FLAG_PD30_DUPLEX)
 
@@ -137,7 +137,7 @@ static inline bool pd_vdm_state_transit_rx(struct pd_port *pd_port,
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (!pd_check_pe_state_ready(pd_port)) {
-		PE_DBG("670 : invalid, current status\n");
+		PE_DBG("670: invalid, current status\n");
 		return false;
 	}
 
@@ -482,8 +482,8 @@ static inline bool pd_process_uvdm(
 	pd_put_dpm_event(pd_port, PD_DPM_NOT_SUPPORT);
 #endif	/* CONFIG_USB_PD_UVDM */
 
-	/* TODO: Reply Not_Supported Message*/
-	PE_DBG("659 : Invalid UVDM\n");
+	/* TODO: Reply Not_Supported Message */
+	PE_DBG("659: Invalid UVDM\n");
 	return false;
 }
 

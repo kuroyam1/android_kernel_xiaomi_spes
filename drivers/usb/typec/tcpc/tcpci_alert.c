@@ -101,7 +101,7 @@ static int tcpci_vbus_level_changed(struct tcpc_device *tcpc)
 {
 	int rv = 0;
 
-	TCPC_INFO("ps_change=%d\n", tcpc->vbus_level);
+	TCPC_INFO("ps_change = %d\n", tcpc->vbus_level);
 
 	rv = tcpc_typec_handle_ps_change(tcpc, tcpc->vbus_level);
 	if (rv < 0)
@@ -256,7 +256,7 @@ static int tcpci_alert_fault(struct tcpc_device *tcpc)
 	uint8_t fault_status = 0;
 
 	tcpci_get_fault_status(tcpc, &fault_status);
-	TCPC_INFO("FaultAlert=0x%02x\n", fault_status);
+	TCPC_INFO("FaultAlert = 0x%02x\n", fault_status);
 	tcpci_fault_status_clear(tcpc, fault_status);
 	return 0;
 }
@@ -418,13 +418,13 @@ static inline int tcpci_set_wake_lock(struct tcpc_device *tcpc, bool pd_lock)
 {
 	if (!!pd_lock != !!tcpc->wake_lock_pd) {
 		if (pd_lock) {
-			TCPC_DBG("wake_lock=1\n");
+			TCPC_DBG("wake_lock = 1\n");
 			__pm_wakeup_event(tcpc->attach_wake_lock,
 					  CONFIG_TCPC_ATTACH_WAKE_LOCK_TOUT);
 			if (tcpc->typec_watchdog)
 				tcpci_set_intrst(tcpc, true);
 		} else {
-			TCPC_DBG("wake_lock=0\n");
+			TCPC_DBG("wake_lock = 0\n");
 			if (tcpc->typec_watchdog)
 				tcpci_set_intrst(tcpc, false);
 			__pm_relax(tcpc->attach_wake_lock);

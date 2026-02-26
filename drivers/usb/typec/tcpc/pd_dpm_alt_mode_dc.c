@@ -234,7 +234,6 @@ bool dc_dfp_verify_en_unlock1(struct pd_port *pd_port)
 	return true;
 }
 
-
 bool dc_dfp_start_en_unlock2(struct pd_port *pd_port)
 {
 	uint32_t rn_code = dc_get_random_code();

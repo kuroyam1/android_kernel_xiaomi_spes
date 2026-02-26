@@ -759,7 +759,7 @@ uint8_t pd_dpm_get_ready_reaction(struct pd_port *pd_port)
 
 	if (evt > 0 && dpm_check_clear_reaction(pd_port, reaction)) {
 		clear_reaction |= reaction->bit_mask;
-		DPM_DBG("clear_reaction=%d\n", evt);
+		DPM_DBG("clear_reaction = %d\n", evt);
 	}
 
 	dpm_reaction_clear(pd_port, clear_reaction);

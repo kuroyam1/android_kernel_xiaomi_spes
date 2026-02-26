@@ -16,28 +16,25 @@
 static struct class *adapter_class;
 static int log_level = 0;
 
-#define class_err(fmt, ...)							\
-do {										\
-	if (log_level >= 0)							\
-		pr_err("[xm_adapter_class]: %s: " fmt, __func__, ##__VA_ARGS__);	\
-	else							\
-		pr_err("[xm_adapter_class]: %s: " fmt, __func__, ##__VA_ARGS__);	\
+#define class_err(fmt, ...)						\
+do {									\
+	printk(KERN_ERR "[xm_adapter_class]: " fmt, ##__VA_ARGS__);	\
 } while (0)
 
 #define class_info(fmt, ...)							\
 do {										\
 	if (log_level >= 1)							\
-		pr_err("[xm_adapter_class]: %s: " fmt, __func__, ##__VA_ARGS__);	\
-	else							\
-		pr_info("[xm_adapter_class]: %s: " fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_ERR "[xm_adapter_class]: " fmt, ##__VA_ARGS__);	\
+	else									\
+		printk(KERN_INFO "[xm_adapter_class]: " fmt, ##__VA_ARGS__);	\
 } while (0)
 
 #define class_dbg(fmt, ...)							\
 do {										\
 	if (log_level >= 2)							\
-		pr_err("[xm_adapter_class]: %s: " fmt, __func__, ##__VA_ARGS__);	\
-	else							\
-		pr_debug("[xm_adapter_class]: %s: " fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_ERR "[xm_adapter_class]: " fmt, ##__VA_ARGS__);	\
+	else									\
+		printk(KERN_DEBUG "[xm_adapter_class]: " fmt, ##__VA_ARGS__);	\
 } while (0)
 
 static const char * const usbpd_state_strings[] = {
@@ -304,8 +301,8 @@ static ssize_t adapter_show_name(struct device *dev,
 	struct adapter_device *adapter_dev = to_adapter_device(dev);
 
 	return snprintf(buf, 20, "%s\n",
-			adapter_dev->props.alias_name ?
-			adapter_dev->props.alias_name : "anonymous");
+		       adapter_dev->props.alias_name ?
+		       adapter_dev->props.alias_name : "anonymous");
 }
 
 static void adapter_device_release(struct device *dev)
@@ -318,7 +315,7 @@ static void adapter_device_release(struct device *dev)
 int adapter_dev_get_id(struct adapter_device *adapter_dev)
 {
 	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
-			adapter_dev->ops->get_svid)
+	    adapter_dev->ops->get_svid)
 		return adapter_dev->ops->get_svid(adapter_dev);
 
 	return -ENOTSUPP;
@@ -337,7 +334,7 @@ EXPORT_SYMBOL(adapter_dev_get_pd_verified);
 int adapter_dev_get_svid(struct adapter_device *adapter_dev)
 {
 	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
-			adapter_dev->ops->get_svid)
+	    adapter_dev->ops->get_svid)
 		return adapter_dev->ops->get_svid(adapter_dev);
 
 	return -ENOTSUPP;
@@ -350,13 +347,12 @@ int adapter_dev_request_vdm_cmd(struct adapter_device *adapter_dev,
 	unsigned int data_len)
 {
 	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
-			adapter_dev->ops->request_vdm_cmd)
+	    adapter_dev->ops->request_vdm_cmd)
 		return adapter_dev->ops->request_vdm_cmd(adapter_dev, cmd, data, data_len);
 
 	return -ENOTSUPP;
 }
 EXPORT_SYMBOL(adapter_dev_request_vdm_cmd);
-
 
 static ssize_t adapter_id_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -367,7 +363,7 @@ static ssize_t adapter_id_show(struct device *dev,
 		adapter_dev->ops->get_svid) {
 		adapter_dev->ops->get_svid(adapter_dev);
 	}
-	class_info("adapter_id is %08x\n", adapter_dev->adapter_id);
+	class_info("%s: adapter_id is %08x\n", __func__, adapter_dev->adapter_id);
 
 	return snprintf(buf, PAGE_SIZE, "%08x\n", adapter_dev->adapter_id);
 }
@@ -394,7 +390,7 @@ static ssize_t adapter_svid_show(struct device *dev,
 		adapter_dev->ops->get_svid) {
 		adapter_dev->ops->get_svid(adapter_dev);
 	}
-	class_info("adapter_svid is %04x\n", adapter_dev->adapter_svid);
+	class_info("%s: adapter_svid is %04x\n", __func__, adapter_dev->adapter_svid);
 
 	return snprintf(buf, PAGE_SIZE, "%04x\n", adapter_dev->adapter_svid);
 }
@@ -422,7 +418,7 @@ static int StringToHex(char *str, unsigned char *out, unsigned int *outlen)
 	return tmplen / 2 + tmplen % 2;
 }
 
-static ssize_t request_vdm_cmd_store(struct device *dev,
+/*static ssize_t request_vdm_cmd_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct adapter_device *adapter_dev = to_adapter_device(dev);
@@ -434,35 +430,142 @@ static ssize_t request_vdm_cmd_store(struct device *dev,
 
 	if (in_interrupt()) {
 		data = kmalloc(40, GFP_ATOMIC);
-		class_info("kmalloc atomic ok.\n");
+		class_info("%s: kmalloc atomic ok.\n", __func__);
 	} else {
 		data = kmalloc(40, GFP_KERNEL);
-		class_info("kmalloc kernel ok.\n");
+		class_info("%s: kmalloc kernel ok.\n", __func__);
 	}
 	memset(data, 0, 40);
 
-	ret = sscanf(buf, "%d,%s\n", &cmd, buffer);
-	if (ret < 2) {
-		class_info("Invalid input format: %s\n", buf);
-		kfree(data);
-		return -EINVAL;
-	}
-
-	class_info("cmd:%d, buffer:%s\n", cmd, buffer);
+	ret = sscanf(buf, "%d,%s", &cmd, buffer);
+	class_info("%s: cmd:%d, buffer:%s\n", __func__, cmd, buffer);
 
 	StringToHex(buffer, data, &count);
-	class_info("count = %d\n", count);
+	class_info("%s: count = %d\n", __func__, count);
 
 	for (i = 0; i < count; i++)
-		class_info("%02x\n", data[i]);
+		class_dbg("%02x\n", data[i]);
 
 	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
-			adapter_dev->ops->request_vdm_cmd) {
+	    adapter_dev->ops->request_vdm_cmd) {
 		adapter_dev->ops->request_vdm_cmd(adapter_dev,
 							cmd, data, count);
 	}
 	kfree(data);
 
+	return size;
+}*/
+
+static ssize_t request_vdm_cmd_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct adapter_device *adapter_dev = to_adapter_device(dev);
+	int cmd;
+	char buffer[64];
+	unsigned char *data;
+	unsigned int count = 0;
+	int sscanf_ret;
+	gfp_t gfp = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
+	const size_t alloc_size = 40;
+	size_t token_len = 0;
+	size_t max_hex_chars = alloc_size * 2;
+	size_t i;
+
+	data = kmalloc_array(alloc_size, sizeof(*data), gfp);
+	if (!data) {
+		class_err("%s: allocation failed\n", __func__);
+		return -ENOMEM;
+	}
+	class_info("%s: kmalloc_array %s ok.\n", __func__, in_interrupt() ? "atomic" : "kernel");
+
+	sscanf_ret = sscanf(buf, "%d,%63s", &cmd, buffer);
+	if (sscanf_ret <= 0) {
+		class_err("%s: sscanf failed or no input\n", __func__);
+		kfree(data);
+		return -EINVAL;
+	}
+	if (sscanf_ret == 1)
+		buffer[0] = '\0';
+
+	token_len = strnlen(buffer, sizeof(buffer));
+	class_info("%s: cmd: %d, buffer_len: %zu\n", __func__, cmd, token_len);
+
+	while (token_len > 0 && isspace((unsigned char)buffer[0])) {
+		memmove(buffer, buffer + 1, token_len); /* include terminator */
+		buffer[token_len - 1] = '\0';
+		token_len = strnlen(buffer, sizeof(buffer));
+	}
+
+	while (token_len > 0 && isspace((unsigned char)buffer[token_len - 1])) {
+		buffer[--token_len] = '\0';
+	}
+
+	if (token_len >= 2 && buffer[0] == '0' &&
+	    (buffer[1] == 'x' || buffer[1] == 'X')) {
+		memmove(buffer, buffer + 2, token_len - 1);
+		buffer[token_len - 2] = '\0';
+		token_len = strnlen(buffer, sizeof(buffer));
+	}
+
+	if (token_len > 0) {
+		if (!strncasecmp(buffer, "none", 4) ||
+		    !strncasecmp(buffer, "null", 4) ||
+		    !strncasecmp(buffer, "no", 2) ||
+		    (token_len == 1 && buffer[0] == '-')) {
+			class_info("%s: token indicates no payload ('%s')\n", __func__, buffer);
+			if (adapter_dev && adapter_dev->ops && adapter_dev->ops->request_vdm_cmd)
+				adapter_dev->ops->request_vdm_cmd(adapter_dev, cmd, data, 0);
+			kfree(data);
+			return size;
+		}
+	}
+
+	if (token_len == 0) {
+		class_info("%s: empty token, zero-length payload\n", __func__);
+		if (adapter_dev && adapter_dev->ops && adapter_dev->ops->request_vdm_cmd)
+			adapter_dev->ops->request_vdm_cmd(adapter_dev, cmd, data, 0);
+		kfree(data);
+		return size;
+	}
+
+	if (token_len > max_hex_chars) {
+		class_err("%s: token too long (%zu > %zu), truncating\n",
+			  __func__, token_len, max_hex_chars);
+		token_len = max_hex_chars;
+		buffer[token_len] = '\0';
+	}
+
+	if (token_len % 2 != 0 && token_len + 1 < sizeof(buffer)) {
+		memmove(buffer + 1, buffer, token_len + 1);
+		buffer[0] = '0';
+		token_len++;
+	}
+
+	for (i = 0; i < token_len; i++) {
+		unsigned char c = buffer[i];
+		bool ok = (c >= '0' && c <= '9') ||
+			  (c >= 'a' && c <= 'f') ||
+			  (c >= 'A' && c <= 'F');
+		if (!ok) {
+			class_err("%s: invalid hex char at pos %zu: 0x%02x\n",
+				  __func__, i, c);
+			kfree(data);
+			return -EINVAL;
+		}
+	}
+
+	StringToHex(buffer, data, &count);
+	if (count > alloc_size) {
+		class_err("%s: StringToHex produced too many bytes (%u), clamping to %zu\n",
+			  __func__, count, alloc_size);
+		count = alloc_size;
+	}
+
+	class_info("%s: final count = %u\n", __func__, count);
+	if (adapter_dev && adapter_dev->ops && adapter_dev->ops->request_vdm_cmd)
+		adapter_dev->ops->request_vdm_cmd(adapter_dev, cmd, data, count);
+
+	kfree(data);
 	return size;
 }
 
@@ -492,7 +595,7 @@ static ssize_t request_vdm_cmd_show(struct device *dev,
 	case USBPD_UVDM_NAN_ACK:
 		return snprintf(buf, PAGE_SIZE, "%d,Null\n", cmd);
 	case USBPD_UVDM_REVERSE_AUTHEN:
-		return snprintf(buf, PAGE_SIZE, "%d,%d", cmd,
+		return snprintf(buf, PAGE_SIZE, "%d,%d\n", cmd,
 			adapter_dev->vdm_data.reauth);
 	case USBPD_UVDM_AUTHENTICATION:
 		for (i = 0; i < USBPD_UVDM_SS_LEN; i++) {
@@ -503,7 +606,7 @@ static ssize_t request_vdm_cmd_show(struct device *dev,
 		}
 		return snprintf(buf, PAGE_SIZE, "%d,%s\n", cmd, str_buf);
 	default:
-		class_err("feedbak cmd:%d is not support\n", cmd);
+		class_err("%s: feedbak cmd:%d is not support\n", __func__, cmd);
 		break;
 	}
 	return snprintf(buf, PAGE_SIZE, "%d,%s\n", cmd, str_buf);
@@ -517,19 +620,20 @@ static ssize_t verify_process_store(struct device *dev,
 	struct adapter_device *adapter_dev = to_adapter_device(dev);
 	int val;
 
-	if (sscanf(buf, "%d\n", &val) != 1) {
+	if (sscanf(buf, "%d", &val) != 1) {
 		adapter_dev->verify_process = 0;
 		return -EINVAL;
 	}
 
 	adapter_dev->verify_process = !!val;
 
-	class_info("batterysecret verify process: %d\n", adapter_dev->verify_process);
+	class_info("%s: batterysecret verify process: %d\n",
+		__func__, adapter_dev->verify_process);
 
 	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
 			adapter_dev->ops->set_pd_verify_process) {
 		adapter_dev->ops->set_pd_verify_process(adapter_dev,
-							adapter_dev->verify_process);
+				adapter_dev->verify_process);
 	}
 
 	return size;
@@ -551,16 +655,16 @@ static ssize_t usbpd_verifed_store(struct device *dev,
 	int val = 0;
 	struct adapter_power_cap cap = {0};
 
-	if (sscanf(buf, "%d\n", &val) != 1) {
+	if (sscanf(buf, "%d", &val) != 1) {
 		adapter_dev->verifed = 0;
 		return -EINVAL;
 	}
-	class_info("batteryd set usbpd verifyed: %d\n", val);
+	class_info("%s: batteryd set usbpd verifyed: %d\n", __func__, val);
 	adapter_dev->verifed = !!val;
 
 	if (adapter_dev->verifed) {
 		if (adapter_dev != NULL && adapter_dev->ops != NULL &&
-			adapter_dev->ops->get_cap)
+				adapter_dev->ops->get_cap)
 			adapter_dev->ops->get_cap(adapter_dev, XM_PD_APDO_REGAIN, &cap);
 	}
 
@@ -586,7 +690,7 @@ static ssize_t current_pr_show(struct device *dev,
 		adapter_dev->ops->get_power_role) {
 		adapter_dev->ops->get_power_role(adapter_dev);
 	}
-	class_info("current_pr is %d\n", adapter_dev->role);
+	class_info("%s: current_pr is %d\n", __func__, adapter_dev->role);
 	if (adapter_dev->role == PD_ROLE_SINK_FOR_ADAPTER)
 		pr = "sink";
 	else if (adapter_dev->role == PD_ROLE_SOURCE_FOR_ADAPTER)
@@ -605,12 +709,13 @@ static ssize_t current_state_show(struct device *dev,
 		adapter_dev->ops->get_current_state) {
 		adapter_dev->ops->get_current_state(adapter_dev);
 	}
-	class_err("current_state is %d\n", adapter_dev->current_state);
+	class_info("%s: current_state is %d\n", __func__, adapter_dev->current_state);
 
 	if (adapter_dev->current_state >= (sizeof(usbpd_state_strings) / sizeof(usbpd_state_strings[0])))
 		adapter_dev->current_state = 0;
 
-	class_err("%s\n", usbpd_state_strings[adapter_dev->current_state]);
+	class_info("%s: %s\n", __func__,
+		usbpd_state_strings[adapter_dev->current_state]);
 
 	return snprintf(buf, PAGE_SIZE, "%s\n",
 			usbpd_state_strings[adapter_dev->current_state]);
@@ -634,6 +739,7 @@ static struct device_attribute dev_attr_pdos[] = {
 	PDO_ATTR(6),
 	PDO_ATTR(7),
 };
+
 static ssize_t pdo_n_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -652,7 +758,7 @@ static ssize_t pdo_n_show(struct device *dev,
 				adapter_dev->received_pdos[i]);
 	}
 
-	class_err("Invalid PDO index\n");
+	class_err("%s: Invalid PDO index\n", __func__);
 	return -EINVAL;
 }
 
@@ -687,7 +793,7 @@ static const struct attribute_group *adapter_groups[] = {
 };
 
 int register_adapter_device_notifier(struct adapter_device *adapter_dev,
-		struct notifier_block *nb)
+			struct notifier_block *nb)
 {
 	int ret;
 
@@ -697,7 +803,7 @@ int register_adapter_device_notifier(struct adapter_device *adapter_dev,
 EXPORT_SYMBOL(register_adapter_device_notifier);
 
 int unregister_adapter_device_notifier(struct adapter_device *adapter_dev,
-		struct notifier_block *nb)
+			struct notifier_block *nb)
 {
 	return srcu_notifier_chain_unregister(&adapter_dev->evt_nh, nb);
 }
@@ -725,7 +831,7 @@ struct adapter_device *adapter_device_register(const char *name,
 	struct srcu_notifier_head *head = NULL;
 	int rc;
 
-	class_err("name=%s\n", name);
+	class_info("%s: name = %s\n", __func__, name);
 	adapter_dev = kzalloc(sizeof(*adapter_dev), GFP_KERNEL);
 	if (!adapter_dev)
 		return ERR_PTR(-ENOMEM);
@@ -734,8 +840,8 @@ struct adapter_device *adapter_device_register(const char *name,
 	adapter_dev->dev.class = adapter_class;
 	adapter_dev->dev.parent = parent;
 	adapter_dev->dev.release = adapter_device_release;
-	dev_set_name(&adapter_dev->dev, "%s", name);
 	dev_set_drvdata(&adapter_dev->dev, devdata);
+	dev_set_name(&adapter_dev->dev, "%s", name);
 	head = &adapter_dev->evt_nh;
 	srcu_init_notifier_head(head);
 	/* Rename srcu's lock to avoid LockProve warning */
@@ -744,7 +850,7 @@ struct adapter_device *adapter_device_register(const char *name,
 	/* Copy properties */
 	if (props) {
 		memcpy(&adapter_dev->props, props,
-				sizeof(struct adapter_properties));
+		       sizeof(struct adapter_properties));
 	}
 	rc = device_register(&adapter_dev->dev);
 	if (rc) {
@@ -775,7 +881,6 @@ void adapter_device_unregister(struct adapter_device *adapter_dev)
 	device_unregister(&adapter_dev->dev);
 }
 EXPORT_SYMBOL(adapter_device_unregister);
-
 
 static int adapter_match_device_by_name(struct device *dev,
 	const void *data)
@@ -809,8 +914,8 @@ int adapter_class_init(void)
 {
 	adapter_class = class_create(THIS_MODULE, "Charging_Adapter");
 	if (IS_ERR(adapter_class)) {
-		class_err("Unable to create Charging Adapter class; errno = %ld\n",
-			PTR_ERR(adapter_class));
+		class_err("%s: Unable to create Charging Adapter class, errno = %ld\n",
+			__func__, PTR_ERR(adapter_class));
 		return PTR_ERR(adapter_class);
 	}
 	adapter_class->dev_groups = adapter_groups;
@@ -819,3 +924,6 @@ int adapter_class_init(void)
 }
 EXPORT_SYMBOL(adapter_class_init);
 
+MODULE_DESCRIPTION("Xiaomi PD Adapter Driver");
+MODULE_AUTHOR("getian@xiaomi.com");
+MODULE_LICENSE("GPL");

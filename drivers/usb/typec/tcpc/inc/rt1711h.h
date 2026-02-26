@@ -194,13 +194,13 @@
 	((en << 7) | (tout & 0x0f))
 
 #if ENABLE_RT1711_DBG
-#define RT1711_INFO(format, args...) \
-	pd_dbg_info("%s: line-%d: " format,\
-	__func__, __LINE__, ##args)
+#define RT1711_INFO(fmt, ...)					\
+	do {							\
+		pd_dbg_info("%s():%d: " fmt,			\
+			__func__, __LINE__, ##__VA_ARGS__);	\
+	} while (0)
 #else
-#define RT1711_INFO(format, args...) \
-	pr_info("[RT1711]: %s: " format,\
-	__func__, ##args)
+#define RT1711_INFO(fmt, ...) do { } while (0)
 #endif
 
 #endif /* #ifndef __LINUX_RT1711H_H */

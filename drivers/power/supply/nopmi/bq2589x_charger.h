@@ -25,7 +25,6 @@ enum bq2589x_part_no {
 	SC89890H = 0x04,
 };
 
-
 #define BQ2589X_STATUS_PLUGIN		0x0001
 #define BQ2589X_STATUS_PG			0x0002
 #define BQ2589X_STATUS_CHARGE_ENABLE	0x0004
@@ -79,7 +78,6 @@ struct bq2589x_config {
 	bool	use_absolute_vindpm;
 };
 
-
 struct bq2589x {
 	struct device *dev;
 	struct i2c_client *client;
@@ -88,6 +86,9 @@ struct bq2589x {
 
 	struct tcpc_device *tcpc_dev;
 	struct notifier_block pd_nb;
+
+	struct gpio_desc *irq_gpiod;
+	struct gpio_desc *usb_switch1_gpiod;
 
 	int		revision;
 	unsigned int	status;
@@ -101,7 +102,9 @@ struct bq2589x {
 
 	struct mutex i2c_rw_lock;
 	struct mutex usb_switch_lock;
+	spinlock_t usb_switch_lock_spin;
 	struct mutex dpdm_lock;
+	struct mutex irq_complete;
 	//atomic_t dpdm_running;
 
 	struct bq2589x_config cfg;
@@ -109,16 +112,17 @@ struct bq2589x {
 	struct work_struct adapter_in_work;
 	struct work_struct adapter_out_work;
 	struct work_struct start_charging_work;
-	struct delayed_work irq_work;
 	struct delayed_work monitor_work;
 	struct delayed_work ico_work;
 	struct delayed_work charger_work;
-	struct delayed_work pe_volt_tune_work;
+	struct delayed_work tune_volt_work;
 	struct delayed_work check_pe_tuneup_work;
 	struct delayed_work time_delay_work;
 	struct delayed_work usb_changed_work;
-	struct delayed_work dpdm_work;
 	//struct delayed_work period_work;
+
+	struct delayed_work irq_work;
+	struct workqueue_struct *irq_wq;
 
 	struct power_supply_desc usb;
 	struct power_supply_desc wall;
@@ -139,9 +143,22 @@ struct bq2589x {
 	bool chg_online; 
 
 	int irq_gpio;
-	int usb_switch1;
+	int usb_switch1_gpio;
 	bool usb_switch_flag;
-	bool is_awake;
+	bool irq_requested;
+	bool usb_switch1_requested;
+
+	// pm ops
+	int irq;
+	bool resume_completed;
+	bool irq_disabled;
+	bool irq_waiting;
+	bool shutting_down;
+
+	struct wakeup_source *bq_ws;
+
+	atomic_t irq_pending;
+	atomic_t is_awake;
 };
 
 struct pe_ctrl {

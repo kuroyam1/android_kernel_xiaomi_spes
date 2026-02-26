@@ -63,86 +63,86 @@ ssize_t max77729_chg_store_attrs(struct device *dev,
 	.store = max77729_chg_store_attrs,			\
 }
 
-#define MAX77729_CHG_SAFEOUT2                0x80
+#define MAX77729_CHG_SAFEOUT2		0x80
 
 /* MAX77729_CHG_REG_CHG_INT */
-#define MAX77729_BYP_I                  (1 << 0)
+#define MAX77729_BYP_I		(1 << 0)
 #define MAX77729_INP_LIMIT_I		(1 << 1)
-#define MAX77729_BATP_I                 (1 << 2)
-#define MAX77729_BAT_I                  (1 << 3)
-#define MAX77729_CHG_I                  (1 << 4)
-#define MAX77729_WCIN_I                 (1 << 5)
-#define MAX77729_CHGIN_I                (1 << 6)
-#define MAX77729_AICL_I                 (1 << 7)
+#define MAX77729_BATP_I		(1 << 2)
+#define MAX77729_BAT_I		(1 << 3)
+#define MAX77729_CHG_I		(1 << 4)
+#define MAX77729_WCIN_I		(1 << 5)
+#define MAX77729_CHGIN_I		(1 << 6)
+#define MAX77729_AICL_I		(1 << 7)
 
 /* MAX77729_CHG_REG_CHG_INT_MASK */
-#define MAX77729_BYP_IM                 (1 << 0)
+#define MAX77729_BYP_IM		(1 << 0)
 #define MAX77729_INP_LIMIT_IM		(1 << 1)
-#define MAX77729_BATP_IM                (1 << 2)
-#define MAX77729_BAT_IM                 (1 << 3)
-#define MAX77729_CHG_IM                 (1 << 4)
-#define MAX77729_WCIN_IM                (1 << 5)
-#define MAX77729_CHGIN_IM               (1 << 6)
-#define MAX77729_AICL_IM                (1 << 7)
+#define MAX77729_BATP_IM		(1 << 2)
+#define MAX77729_BAT_IM		(1 << 3)
+#define MAX77729_CHG_IM		(1 << 4)
+#define MAX77729_WCIN_IM		(1 << 5)
+#define MAX77729_CHGIN_IM		(1 << 6)
+#define MAX77729_AICL_IM		(1 << 7)
 
 /* MAX77729_CHG_REG_CHG_INT_OK */
-#define MAX77729_BYP_OK                 0x01
-#define MAX77729_BYP_OK_SHIFT           0
+#define MAX77729_BYP_OK		0x01
+#define MAX77729_BYP_OK_SHIFT		0
 #define MAX77729_DISQBAT_OK		0x02
 #define MAX77729_DISQBAT_OK_SHIFT	1
 #define MAX77729_BATP_OK		0x04
 #define MAX77729_BATP_OK_SHIFT		2
-#define MAX77729_BAT_OK                 0x08
-#define MAX77729_BAT_OK_SHIFT           3
-#define MAX77729_CHG_OK                 0x10
-#define MAX77729_CHG_OK_SHIFT           4
+#define MAX77729_BAT_OK		0x08
+#define MAX77729_BAT_OK_SHIFT		3
+#define MAX77729_CHG_OK		0x10
+#define MAX77729_CHG_OK_SHIFT		4
 #define MAX77729_WCIN_OK		0x20
 #define MAX77729_WCIN_OK_SHIFT		5
-#define MAX77729_CHGIN_OK               0x40
-#define MAX77729_CHGIN_OK_SHIFT         6
-#define MAX77729_AICL_OK                0x80
-#define MAX77729_AICL_OK_SHIFT          7
-#define MAX77729_DETBAT                 0x04
-#define MAX77729_DETBAT_SHIFT           2
+#define MAX77729_CHGIN_OK		0x40
+#define MAX77729_CHGIN_OK_SHIFT		6
+#define MAX77729_AICL_OK		0x80
+#define MAX77729_AICL_OK_SHIFT		7
+#define MAX77729_DETBAT		0x04
+#define MAX77729_DETBAT_SHIFT	2
 
 /* MAX77729_CHG_REG_CHG_DTLS_00 */
 #define MAX77729_BATP_DTLS		0x01
 #define MAX77729_BATP_DTLS_SHIFT	0
 #define MAX77729_WCIN_DTLS		0x18
 #define MAX77729_WCIN_DTLS_SHIFT	3
-#define MAX77729_CHGIN_DTLS             0x60
-#define MAX77729_CHGIN_DTLS_SHIFT       5
+#define MAX77729_CHGIN_DTLS		0x60
+#define MAX77729_CHGIN_DTLS_SHIFT	5
 
 /* MAX77729_CHG_REG_CHG_DTLS_01 */
-#define MAX77729_CHG_DTLS               0x0F
-#define MAX77729_CHG_DTLS_SHIFT         0
-#define MAX77729_BAT_DTLS               0x70
-#define MAX77729_BAT_DTLS_SHIFT         4
+#define MAX77729_CHG_DTLS		0x0F
+#define MAX77729_CHG_DTLS_SHIFT	0
+#define MAX77729_BAT_DTLS		0x70
+#define MAX77729_BAT_DTLS_SHIFT	4
 
 /* MAX77729_CHG_REG_CHG_DTLS_02 */
-#define MAX77729_BYP_DTLS               0x0F
-#define MAX77729_BYP_DTLS_SHIFT         0
-#define MAX77729_BYP_DTLS0      0x1
-#define MAX77729_BYP_DTLS1      0x2
-#define MAX77729_BYP_DTLS2      0x4
-#define MAX77729_BYP_DTLS3      0x8
+#define MAX77729_BYP_DTLS		0x0F
+#define MAX77729_BYP_DTLS_SHIFT	0
+#define MAX77729_BYP_DTLS0		0x1
+#define MAX77729_BYP_DTLS1		0x2
+#define MAX77729_BYP_DTLS2		0x4
+#define MAX77729_BYP_DTLS3		0x8
 
 #if 1
 /* MAX77729_CHG_REG_CHG_CNFG_00 */
-#define CHG_CNFG_00_MODE_SHIFT		        0
-#define CHG_CNFG_00_CHG_SHIFT		        0
-#define CHG_CNFG_00_UNO_SHIFT		        1
-#define CHG_CNFG_00_OTG_SHIFT		        1
-#define CHG_CNFG_00_BUCK_SHIFT		        2
-#define CHG_CNFG_00_BOOST_SHIFT		        3
-#define CHG_CNFG_00_WDTEN_SHIFT		        4
-#define CHG_CNFG_00_MODE_MASK		        (0x0F << CHG_CNFG_00_MODE_SHIFT)
-#define CHG_CNFG_00_CHG_MASK		        (1 << CHG_CNFG_00_CHG_SHIFT)
-#define CHG_CNFG_00_UNO_MASK		        (1 << CHG_CNFG_00_UNO_SHIFT)
-#define CHG_CNFG_00_OTG_MASK		        (1 << CHG_CNFG_00_OTG_SHIFT)
-#define CHG_CNFG_00_BUCK_MASK		        (1 << CHG_CNFG_00_BUCK_SHIFT)
-#define CHG_CNFG_00_BOOST_MASK		        (1 << CHG_CNFG_00_BOOST_SHIFT)
-#define CHG_CNFG_00_WDTEN_MASK		        (1 << CHG_CNFG_00_WDTEN_SHIFT)
+#define CHG_CNFG_00_MODE_SHIFT		0
+#define CHG_CNFG_00_CHG_SHIFT		0
+#define CHG_CNFG_00_UNO_SHIFT		1
+#define CHG_CNFG_00_OTG_SHIFT		1
+#define CHG_CNFG_00_BUCK_SHIFT		2
+#define CHG_CNFG_00_BOOST_SHIFT		3
+#define CHG_CNFG_00_WDTEN_SHIFT		4
+#define CHG_CNFG_00_MODE_MASK		(0x0F << CHG_CNFG_00_MODE_SHIFT)
+#define CHG_CNFG_00_CHG_MASK		(1 << CHG_CNFG_00_CHG_SHIFT)
+#define CHG_CNFG_00_UNO_MASK		(1 << CHG_CNFG_00_UNO_SHIFT)
+#define CHG_CNFG_00_OTG_MASK		(1 << CHG_CNFG_00_OTG_SHIFT)
+#define CHG_CNFG_00_BUCK_MASK		(1 << CHG_CNFG_00_BUCK_SHIFT)
+#define CHG_CNFG_00_BOOST_MASK		(1 << CHG_CNFG_00_BOOST_SHIFT)
+#define CHG_CNFG_00_WDTEN_MASK		(1 << CHG_CNFG_00_WDTEN_SHIFT)
 #define CHG_CNFG_00_UNO_CTRL			(CHG_CNFG_00_UNO_MASK | CHG_CNFG_00_BOOST_MASK)
 #define CHG_CNFG_00_OTG_CTRL			(CHG_CNFG_00_OTG_MASK | CHG_CNFG_00_BOOST_MASK)
 #define MAX77729_MODE_DEFAULT			0x04
@@ -152,28 +152,28 @@ ssize_t max77729_chg_store_attrs(struct device *dev,
 #define MAX77729_MODE_BUCK			0x04
 #define MAX77729_MODE_BOOST			0x08
 #endif
-#define CHG_CNFG_00_MODE_SHIFT		        0
-#define CHG_CNFG_00_MODE_MASK		        (0x0F << CHG_CNFG_00_MODE_SHIFT)
-#define CHG_CNFG_00_WDTEN_SHIFT		        4
-#define CHG_CNFG_00_WDTEN_MASK		        (1 << CHG_CNFG_00_WDTEN_SHIFT)
+#define CHG_CNFG_00_MODE_SHIFT		0
+#define CHG_CNFG_00_MODE_MASK		(0x0F << CHG_CNFG_00_MODE_SHIFT)
+#define CHG_CNFG_00_WDTEN_SHIFT		4
+#define CHG_CNFG_00_WDTEN_MASK		(1 << CHG_CNFG_00_WDTEN_SHIFT)
 
 /* MAX77729_CHG_REG_CHG_CNFG_00 MODE[3:0] */
-#define MAX77729_MODE_0_ALL_OFF						0x0
-#define MAX77729_MODE_1_ALL_OFF						0x1
-#define MAX77729_MODE_2_ALL_OFF						0x2
-#define MAX77729_MODE_3_ALL_OFF						0x3
-#define MAX77729_MODE_4_BUCK_ON						0x4
-#define MAX77729_MODE_5_BUCK_CHG_ON					0x5
-#define MAX77729_MODE_6_BUCK_CHG_ON					0x6
-#define MAX77729_MODE_7_BUCK_CHG_ON					0x7
-#define MAX77729_MODE_8_BOOST_UNO_ON				0x8
-#define MAX77729_MODE_9_BOOST_ON					0x9
-#define MAX77729_MODE_A_BOOST_OTG_ON				0xA
-#define MAX77729_MODE_B_RESERVED					0xB
-#define MAX77729_MODE_C_BUCK_BOOST_UNO_ON				0xC
-#define MAX77729_MODE_D_BUCK_CHG_BOOST_UNO_ON			0xD
-#define MAX77729_MODE_E_BUCK_BOOST_OTG_ON				0xE
-#define MAX77729_MODE_F_BUCK_CHG_BOOST_OTG_ON			0xF
+#define MAX77729_MODE_0_ALL_OFF			0x0
+#define MAX77729_MODE_1_ALL_OFF			0x1
+#define MAX77729_MODE_2_ALL_OFF			0x2
+#define MAX77729_MODE_3_ALL_OFF			0x3
+#define MAX77729_MODE_4_BUCK_ON			0x4
+#define MAX77729_MODE_5_BUCK_CHG_ON			0x5
+#define MAX77729_MODE_6_BUCK_CHG_ON			0x6
+#define MAX77729_MODE_7_BUCK_CHG_ON			0x7
+#define MAX77729_MODE_8_BOOST_UNO_ON			0x8
+#define MAX77729_MODE_9_BOOST_ON			0x9
+#define MAX77729_MODE_A_BOOST_OTG_ON		0xA
+#define MAX77729_MODE_B_RESERVED			0xB
+#define MAX77729_MODE_C_BUCK_BOOST_UNO_ON		0xC
+#define MAX77729_MODE_D_BUCK_CHG_BOOST_UNO_ON	0xD
+#define MAX77729_MODE_E_BUCK_BOOST_OTG_ON		0xE
+#define MAX77729_MODE_F_BUCK_CHG_BOOST_OTG_ON	0xF
 
 /* MAX77729_CHG_REG_CHG_CNFG_01 */
 #define CHG_CNFG_01_FCHGTIME_SHIFT			0
@@ -200,7 +200,7 @@ ssize_t max77729_chg_store_attrs(struct device *dev,
 #define MAX77729_OTG_ILIM_900		0x1
 #define MAX77729_OTG_ILIM_1200		0x2
 #define MAX77729_OTG_ILIM_1500		0x3
-#define MAX77729_CHG_CC                         0x3F
+#define MAX77729_CHG_CC		0x3F
 
 /* MAX77729_CHG_REG_CHG_CNFG_03 */
 #define CHG_CNFG_03_TO_ITH_SHIFT		0
@@ -217,17 +217,17 @@ ssize_t max77729_chg_store_attrs(struct device *dev,
 
 #define CHG_CNFG_03_SYS_TRACK_DIS_SHIFT		7
 #define CHG_CNFG_03_SYS_TRACK_DIS_MASK		(0x1 << CHG_CNFG_03_SYS_TRACK_DIS_SHIFT)
-#define MAX77729_SYS_TRACK_ENABLE	        0x0
-#define MAX77729_SYS_TRACK_DISABLE	        0x1
+#define MAX77729_SYS_TRACK_ENABLE		0x0
+#define MAX77729_SYS_TRACK_DISABLE		0x1
 
 /* MAX77729_CHG_REG_CHG_CNFG_04 */
-#define MAX77729_CHG_MINVSYS_MASK               0xC0
+#define MAX77729_CHG_MINVSYS_MASK		0xC0
 #define MAX77729_CHG_MINVSYS_SHIFT		6
-#define MAX77729_CHG_PRM_MASK                   0x1F
-#define MAX77729_CHG_PRM_SHIFT                  0
+#define MAX77729_CHG_PRM_MASK		0x1F
+#define MAX77729_CHG_PRM_SHIFT		0
 
-#define CHG_CNFG_04_CHG_CV_PRM_SHIFT            0
-#define CHG_CNFG_04_CHG_CV_PRM_MASK             (0x3F << CHG_CNFG_04_CHG_CV_PRM_SHIFT)
+#define CHG_CNFG_04_CHG_CV_PRM_SHIFT		0
+#define CHG_CNFG_04_CHG_CV_PRM_MASK		(0x3F << CHG_CNFG_04_CHG_CV_PRM_SHIFT)
 
 /* MAX77729_CHG_REG_CHG_CNFG_05 */
 #define CHG_CNFG_05_REG_B2SOVRC_SHIFT	0
@@ -281,11 +281,11 @@ ssize_t max77729_chg_store_attrs(struct device *dev,
 #define MAX77729_CHG_FSW_1_5MHz		0x02
 
 /* MAX77729_CHG_REG_CHG_CNFG_09 */
-#define MAX77729_CHG_CHGIN_LIM                  0x7F
-#define MAX77729_CHG_EN                         0x80
+#define MAX77729_CHG_CHGIN_LIM		0x7F
+#define MAX77729_CHG_EN		0x80
 
 /* MAX77729_CHG_REG_CHG_CNFG_10 */
-#define MAX77729_CHG_WCIN_LIM                   0x3F
+#define MAX77729_CHG_WCIN_LIM		0x3F
 
 /* MAX77729_CHG_REG_CHG_CNFG_11 */
 #define CHG_CNFG_11_VBYPSET_SHIFT		0
@@ -306,17 +306,17 @@ ssize_t max77729_chg_store_attrs(struct device *dev,
 
 /* MAX77729_CHG_REG_CHG_SWI_INT */
 #define MAX77729_CLIENT_TREG_I			(1 << 0)
-#define MAX77729_CV_I				(1 << 1)
+#define MAX77729_CV_I			(1 << 1)
 #define MAX77729_CLIENT_FAULT_I			(1 << 2)
 
 /* MAX77729_CHG_REG_CHG_SWI_INT_MASK */
 #define MAX77729_CLIENT_TREG_IM			(1 << 0)
-#define MAX77729_CV_IM				(1 << 1)
+#define MAX77729_CV_IM			(1 << 1)
 #define MAX77729_CLIENT_FAULT_IM		(1 << 2)
 
 /* MAX77729_CHG_REG_CHG_SWI_STATUS */
 #define MAX77729_CLIENT_TREG_S			0x00
-#define MAX77729_CV_S				0x01
+#define MAX77729_CV_S			0x01
 
 /* MAX77729_CHG_REG_CHG_SWI_STATUS */
 #define MAX77729_DIS_MIN_SELECTOR		0x80
@@ -325,17 +325,17 @@ ssize_t max77729_chg_store_attrs(struct device *dev,
 #define MAX77729_SWI_READBACK			0x3F
 
 /* MAX77729_CHG_REG_CHG_CLIENT_CNTL */
-#define MAX77729_BOVE				0x03
+#define MAX77729_BOVE			0x03
 
-#define REDUCE_CURRENT_STEP						100
-#define MINIMUM_INPUT_CURRENT					300
-#define SLOW_CHARGING_CURRENT_STANDARD          400
+#define REDUCE_CURRENT_STEP			100
+#define MINIMUM_INPUT_CURRENT			300
+#define SLOW_CHARGING_CURRENT_STANDARD	400
 
 #define WC_CURRENT_STEP		100
 #define WC_CURRENT_START	480
 
-#define MAX77729_MAX_ICL			3000
-#define MAX77729_MAX_FCC			6000
+#define MAX77729_MAX_ICL		3000
+#define MAX77729_MAX_FCC		6000
 
 typedef struct max77729_charger_platform_data {
 	/* wirelss charger */
@@ -363,11 +363,11 @@ typedef struct max77729_charger_platform_data {
 } max77729_charger_platform_data_t;
 
 struct max77729_charger_data {
-	struct device           *dev;
-	struct i2c_client       *i2c;
-	struct i2c_client       *pmic_i2c;
-	struct i2c_client       *fg_i2c;
-	struct i2c_client       *muic;
+	struct device	*dev;
+	struct i2c_client	*i2c;
+	struct i2c_client	*pmic_i2c;
+	struct i2c_client	*fg_i2c;
+	struct i2c_client	*muic;
 
 	struct max77729_platform_data *max77729_pdata;
 
@@ -385,7 +385,7 @@ struct max77729_charger_data {
 	struct votable		*fcc_votable;
 	struct votable		*mainfcc_votable;
 	struct votable		*fv_votable;
-	struct votable      *chgctrl_votable;
+	struct votable		*chgctrl_votable;
 	/*add by xiaomi end*/
 
 	struct power_supply	*psy_chg;
@@ -396,12 +396,12 @@ struct max77729_charger_data {
 	struct delayed_work	chgin_work;
 	struct delayed_work	aicl_work;
 	struct delayed_work	isr_work;
-	struct delayed_work notify_work;
-	struct delayed_work batt_notify_work;
+	struct delayed_work	notify_work;
+	struct delayed_work	batt_notify_work;
 
 	/* mutex */
-	struct mutex            charger_mutex;
-	struct mutex            mode_mutex;
+	struct mutex charger_mutex;
+	struct mutex mode_mutex;
 
 	/* wakelock */
 	struct wakeup_source *chgin_ws;
@@ -453,7 +453,6 @@ struct max77729_charger_data {
 
 	max77729_charger_platform_data_t *pdata;
 };
-
 
 int max77729_usb_get_property(struct power_supply *psy,
 		enum power_supply_property psp,

@@ -34,7 +34,7 @@
 #define ds_info(fmt, ...)	do { pr_info(fmt, ##__VA_ARGS__); } while (0)
 #define ds_dbg(fmt, ...)	do { pr_debug(fmt, ##__VA_ARGS__); } while (0)
 #define ds_err(fmt, ...)	do { pr_err(fmt, ##__VA_ARGS__); } while (0)
-#define ds_log(fmt, ...)	do { pr_info(fmt, ##__VA_ARGS__); } while (0)
+#define ds_log(fmt, ...)	do { pr_debug(fmt, ##__VA_ARGS__); } while (0)
 
 struct ds28e16_data {
 	struct platform_device *pdev;
@@ -51,7 +51,7 @@ struct ds28e16_data {
 	int page0_val;
 };
 
-struct mutex ds_cmd_lock; // cmd Lock 2022_4_19 updated
+DEFINE_MUTEX(ds_cmd_lock); // cmd Lock 2022_4_19 updated
 
 unsigned int attr_trytimes = 1;
 
@@ -93,6 +93,9 @@ unsigned char mi_page0_data[16] = {0x00};
 unsigned char mi_page1_data[16] = {0x00};
 unsigned char mi_counter[16] = {0x00};
 int mi_auth_result;
+
+// 1-wire flags
+extern int onewire_gpio_get_status(void);
 
 unsigned char crc_low_first(unsigned char *ptr, unsigned char len)
 {
@@ -140,7 +143,7 @@ short Read_RomID(unsigned char *RomID)
 
 	ds_dbg("Ready to write 0x33 to maxim IC!\n");
 	write_byte(CMD_READ_ROM);
-	Delay_us(10);
+	udelay(10);
 	for (i = 0; i < 8; i++)
 		RomID[i] = read_byte();
 
@@ -252,7 +255,7 @@ int DS28E16_standard_cmd_flow(unsigned char *write_buf, int delay_ms,
 	// check for strong pull-up
 	if (delay_ms > 0) {
 		write_byte(CMD_RELEASE_BYTE);
-		Delay_us(1000*delay_ms);
+		mdelay(delay_ms);
 	}
 
 	read_byte();
@@ -381,7 +384,7 @@ void Virtual_cmd_readStatus(void)
 	read_byte();
 	read_byte();
 	write_byte(CMD_RELEASE_BYTE);
-	Delay_us(50*1000);
+	mdelay(50);
 
 	for (num = 0; num < 11; num++)
 		read_byte();
@@ -1026,7 +1029,7 @@ static int ds28el16_Read_RomID_retry(unsigned char *RomID)
 		ds_info("Virtual_cmd_readStatus Repeat... %d\n", i);
 		Virtual_cmd_readStatus();
 		Read_RomID(RomID);
-		Delay_us(100);
+		udelay(100);
 	}
 
 	for (i = 0; i < GET_ROM_ID_RETRY; i++) {
@@ -1137,7 +1140,7 @@ int ds28e16_get_chip_ok(struct ds28e16_data *ds28e16_data, int *val)
 		*val = 1;
 	}
 
-	ds_log("getian---flag_mi_romid: %d, flag_mi_status: %d, val=%d.\n", flag_mi_romid, flag_mi_status, *val);
+	ds_log("getian---flag_mi_romid: %d, flag_mi_status: %d, val: %d\n", flag_mi_romid, flag_mi_status, *val);
 	return DS_TRUE;
 }
 
@@ -1229,19 +1232,7 @@ static int verify_get_property(struct power_supply *psy, enum power_supply_prope
 			val->strval = "unknown";
 		break;
 	case POWER_SUPPLY_PROP_AUTHEN_RESULT:
-		if (!data->batt_verified) {
-			ret = AuthenticateDS28E16(auth_ANON, auth_BDCONST, 0,
-					pagenumber, challenge, session_seed, S_secret);
-			if (ret == DS_TRUE) {
-				val->intval = true;
-				data->batt_verified = true;
-			} else {
-				val->intval = false;
-				data->batt_verified = false;
-			}
-		} else {
-			val->intval = true;
-		}
+		val->intval = data->batt_verified ? 1 : 0;
 		break;
 	case POWER_SUPPLY_PROP_PAGENUMBER:
 		val->intval = pagenumber;
@@ -1253,10 +1244,16 @@ static int verify_get_property(struct power_supply *psy, enum power_supply_prope
 		memcpy(val->arrayval, mi_romid, 8);
 		break;
 	case POWER_SUPPLY_PROP_CHIP_OK:
+		if (data->romid_verified) {
+			val->intval = 1;
+			break;
+		}
+
 		ret = ds28e16_get_chip_ok(data, &tmp);
 		if (ret != DS_TRUE)
 			return -EAGAIN;
-		val->intval = tmp;
+
+		val->intval = tmp ? 1 : 0;
 		break;
 	case POWER_SUPPLY_PROP_DS_STATUS:
 		ret = ds28el16_get_page_status_retry(buf);
@@ -1341,10 +1338,12 @@ static int verify_prop_is_writeable(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_PAGENUMBER:
+/*
 	case POWER_SUPPLY_PROP_PAGEDATA:
 	case POWER_SUPPLY_PROP_SESSION_SEED:
 	case POWER_SUPPLY_PROP_S_SECRET:
 	case POWER_SUPPLY_PROP_CHALLENGE:
+*/
 	case POWER_SUPPLY_PROP_AUTH_ANON:
 	case POWER_SUPPLY_PROP_AUTH_BDCONST:
 		ret = 1;
@@ -1362,7 +1361,7 @@ static int verify_psy_register(struct ds28e16_data *ds)
 	struct power_supply_config verify_psy_cfg = {};
 
 	ds->verify_psy_d.name = "batt_verify";
-	ds->verify_psy_d.type = POWER_SUPPLY_TYPE_BATT_VERIFY;
+	ds->verify_psy_d.type = POWER_SUPPLY_TYPE_BATTERY_VERIFY;
 	ds->verify_psy_d.properties = verify_props;
 	ds->verify_psy_d.num_properties = ARRAY_SIZE(verify_props);
 	ds->verify_psy_d.get_property = verify_get_property;
@@ -1372,15 +1371,16 @@ static int verify_psy_register(struct ds28e16_data *ds)
 	verify_psy_cfg.drv_data = ds;
 	verify_psy_cfg.of_node = ds->dev->of_node;
 	verify_psy_cfg.num_supplicants = 0;
+
 	ds->verify_psy = devm_power_supply_register(ds->dev,
-			&ds->verify_psy_d,
-			&verify_psy_cfg);
+			&ds->verify_psy_d, &verify_psy_cfg);
 	if (IS_ERR(ds->verify_psy)) {
 		ds_err("Failed to register verify_psy\n");
 		return PTR_ERR(ds->verify_psy);
 	}
 
-	ds_log("power supply register %s successfully\n", ds->verify_psy_d.name);
+	ds_log("%s power supply register successfully\n", ds->verify_psy_d.name);
+
 	return 0;
 }
 
@@ -1436,7 +1436,7 @@ static ssize_t ds28e16_ds_Auth_Result_status_read(struct device *dev,
 				"Authenticate success!!!\n");
 	else
 		return scnprintf(buf, PAGE_SIZE,
-				"Authenticate failed : other reason.\n");
+				"Authenticate failed : other reason\n");
 }
 
 static ssize_t ds28e16_ds_romid_status_read(struct device *dev,
@@ -1460,7 +1460,7 @@ static ssize_t ds28e16_ds_romid_status_read(struct device *dev,
 		ds_dbg("RomID = %02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x\n",
 			RomID[0], RomID[1], RomID[2], RomID[3],
 			RomID[4], RomID[5], RomID[6], RomID[7]);
-		Delay_us(1000);
+		mdelay(1);
 	}
 
 	ds_log("test done, success time: %d\n", count);
@@ -1514,7 +1514,7 @@ static ssize_t ds28e16_ds_pagedata_status_read(struct device *dev,
 				pagedata[4], pagedata[5], pagedata[6], pagedata[7],
 				pagedata[8], pagedata[9], pagedata[10], pagedata[11],
 				pagedata[12], pagedata[13], pagedata[14], pagedata[15]);
-		Delay_us(1000);
+		mdelay(1);
 	}
 
 	ds_log("test done, success time: %d\n", count);
@@ -1733,7 +1733,7 @@ static ssize_t ds28e16_ds_readstatus_status_read(struct device *dev,
 				status[4], status[5], status[6], status[7],
 				status[8], status[9], status[10], status[11],
 				status[12], status[13], status[14], status[15]);
-		Delay_us(1000);
+		mdelay(1);
 	}
 	ds_log("test done, success time: %d\n", count);
 	return scnprintf(buf, PAGE_SIZE,
@@ -1796,121 +1796,112 @@ static const struct attribute_group ds_attr_group = {
 
 static int authentic_period_ms = 5000;
 #define AUTHENTIC_COUNT_MAX 5
-int retry_authentic = 0;
+static int retry_authentic = 0;
 static void authentic_work(struct work_struct *work)
 {
-	int rc;
-	union power_supply_propval pval = {0,};
-	struct ds28e16_data *ds28e16_data = container_of(work,
-			struct ds28e16_data, authentic_work.work);
+	int i, authen_result = 0;
+	struct ds28e16_data *data = container_of(work,
+				struct ds28e16_data, authentic_work.work);
 
-	rc = power_supply_get_property(ds28e16_data->verify_psy,
-			POWER_SUPPLY_PROP_AUTHEN_RESULT, &pval);
-	if (pval.intval != true) {
-		retry_authentic++;
-		if (retry_authentic < AUTHENTIC_COUNT_MAX) {
-			ds_info("battery authentic retry times is %d.\n", retry_authentic);
-			schedule_delayed_work(&ds28e16_data->authentic_work,
-					msecs_to_jiffies(authentic_period_ms));
-		}
-
-		/*if (retry_authentic == AUTHENTIC_COUNT_MAX) {
-			ds_info("authentic result is %d\n", pval.intval);
-		}*/
-		ds28e16_data->batt_verified = false;
-	} else {
-		ds28e16_data->batt_verified = true;
+	for (i = 0; i < 3; i++) {
+		authen_result = AuthenticateDS28E16(auth_ANON, auth_BDCONST, 0,
+				pagenumber, challenge, session_seed, S_secret);
+		udelay(100);
+		if (authen_result == DS_TRUE)
+			break;
 	}
 
-	ds_info("authentic result is %d\n", pval.intval);
-	return;
+	if (authen_result == DS_TRUE) {
+		data->batt_verified = true;
+		retry_authentic = 0;
+		power_supply_changed(data->verify_psy);
+		ds_info("battery verify success: %d\n", authen_result);
+	} else {
+		retry_authentic++;
+		if (retry_authentic < AUTHENTIC_COUNT_MAX) {
+			schedule_delayed_work(&data->authentic_work,
+					msecs_to_jiffies(authentic_period_ms));
+			ds_info("battery verify retry times is %d\n", retry_authentic);
+		} else {
+			data->batt_verified = false;
+			retry_authentic = 0;
+			power_supply_changed(data->verify_psy);
+			ds_info("battery verify failed: %d\n", authen_result);
+		}
+	}
 }
 
 static int ds28e16_probe(struct platform_device *pdev)
 {
-	int tmp, retval = 0;
-	unsigned char buf[50] = {0x00};
 	struct ds28e16_data *ds28e16_data;
+	int retval = 0;
+	static int probe_cnt = 0;
 
-	ds_log("entry\n");
+	ds_info("entry, probe_cnt: %d\n", ++probe_cnt);
 	ds_dbg("platform_device is %s\n", pdev->name);
+
+	if (!onewire_gpio_get_status()) {
+		if (probe_cnt < 50) {
+			ds_err("onewire provider not ready, defer probe\n");
+			return -EPROBE_DEFER;
+		} else {
+			ds_err("onewire provider not available, exit\n");
+			return -ENODEV;
+		}
+	}
+
 	if (strcmp(pdev->name, "soc:maxim_ds28e16") != 0)
 		return -ENODEV;
 
 	if (!pdev->dev.of_node || !of_device_is_available(pdev->dev.of_node))
 		return -ENODEV;
 
-	if (pdev->dev.of_node) {
-		ds28e16_data = devm_kzalloc(&pdev->dev, sizeof(struct ds28e16_data), GFP_KERNEL);
-		if (!ds28e16_data) {
-			ds_err("Failed to allocate memory\n");
-			return -ENOMEM;
-		}
-
-		retval = ds28e16_parse_dt(&pdev->dev, ds28e16_data);
-		if (retval) {
-			retval = -EINVAL;
-			goto ds28e16_parse_dt_err;
-		}
-	} else {
-		ds28e16_data = pdev->dev.platform_data;
-	}
-
+	ds28e16_data = devm_kzalloc(&pdev->dev, sizeof(*ds28e16_data), GFP_KERNEL);
 	if (!ds28e16_data) {
-		ds_err("No platform data found\n");
-		return -EINVAL;
+		ds_err("Failed to allocate memory\n");
+		return -ENOMEM;
 	}
 
-	mutex_init(&ds_cmd_lock); //2022_4_19 updated
+	retval = ds28e16_parse_dt(&pdev->dev, ds28e16_data);
+	if (retval) {
+		ds_err("ds28e16_parse_dt failed: %d\n", retval);
+		retval = -EINVAL;
+		goto out;
+	}
+
 	ds28e16_data->dev = &pdev->dev;
 	ds28e16_data->pdev = pdev;
 	platform_set_drvdata(pdev, ds28e16_data);
 
-	ds28e16_data->romid_verified = false;
-	ds28e16_data->page0_val = 0;
-
-	retval = ds28e16_get_chip_ok(ds28e16_data, &tmp);
-	if (retval < 0)
-		ds_log("CHIP_OK not ready (%d)\n", retval);
-	else
-		ds_log("CHIP_OK = %d\n", tmp);
-
-	retval = ds28e16_get_page0_data(ds28e16_data, buf, sizeof(buf));
-	if (retval < 0)
-		ds_log("page0_data not ready (%d)\n", retval);
-	else
-		ds_log("page0[0] = %d\n", ds28e16_data->page0_val);
+	//mutex_init(&ds_cmd_lock);
 
 	INIT_DELAYED_WORK(&ds28e16_data->authentic_work, authentic_work);
 
 	retval = verify_psy_register(ds28e16_data);
 	if (retval) {
 		ds_err("Failed to verify_psy_register, err: %d\n", retval);
-		goto ds28e16_psy_register_err;
+		goto out_init;
 	}
 
 	retval = sysfs_create_group(&ds28e16_data->dev->kobj, &ds_attr_group);
 	if (retval) {
 		ds_err("Failed to register sysfs, err: %d\n", retval);
-		goto ds28e16_create_group_err;
+		goto out_verify_psy;
 	}
 
 	schedule_delayed_work(&ds28e16_data->authentic_work,
-			msecs_to_jiffies(500)); //updated 20220615 make sure onewire gpio source ready
+			msecs_to_jiffies(500));
 
-	ds_log("success\n");
+	ds_info("success\n");
 	return 0;
 
-ds28e16_create_group_err:
-	//sysfs_remove_groups(&ds28e16_data->dev->kobj, &(&ds_attr_group));
+out_verify_psy:
 	verify_psy_unregister(ds28e16_data);
-ds28e16_psy_register_err:
+out_init:
+	//mutex_destroy(&ds_cmd_lock);
 	platform_set_drvdata(pdev, NULL);
-	//dev_set_drvdata(ds28e16_data->dev, NULL);
-	mutex_destroy(&ds_cmd_lock); //2022_4_20 updated
-ds28e16_parse_dt_err:
-	//kfree(ds28e16_data);
-	ds_log("fail!\n");
+out:
+	ds_err("fail: %d\n", retval);
 	return retval;
 }
 
@@ -1924,8 +1915,8 @@ static int ds28e16_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&ds28e16_data->authentic_work);
 	sysfs_remove_group(&ds28e16_data->dev->kobj, &ds_attr_group);
 	verify_psy_unregister(ds28e16_data);
+	//mutex_destroy(&ds_cmd_lock); //2022_4_19 updated
 	platform_set_drvdata(pdev, NULL);
-	mutex_destroy(&ds_cmd_lock); //2022_4_19 updated
 	//kfree(ds28e16_data);
 
 	return 0;
@@ -1972,13 +1963,13 @@ static struct platform_driver ds28e16_driver = {
 
 static int __init ds28e16_init(void)
 {
-	ds_log("entry\n");
+	ds_info("entry\n");
 	return platform_driver_register(&ds28e16_driver);
 }
 
 static void __exit ds28e16_exit(void)
 {
-	ds_log("entry\n");
+	ds_info("entry\n");
 	platform_driver_unregister(&ds28e16_driver);
 }
 

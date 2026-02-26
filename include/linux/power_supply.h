@@ -441,6 +441,10 @@ enum power_supply_property {
 enum power_supply_type {
 	POWER_SUPPLY_TYPE_UNKNOWN = 0,
 	POWER_SUPPLY_TYPE_BATTERY,
+	/* add battery verify properties */
+#ifdef CONFIG_BATT_VERIFY_BY_DS28E16
+	POWER_SUPPLY_TYPE_BATTERY_VERIFY,	/* battery verify */
+#endif
 	POWER_SUPPLY_TYPE_UPS,
 	POWER_SUPPLY_TYPE_MAINS,
 	POWER_SUPPLY_TYPE_USB,			/* Standard Downstream Port */
@@ -463,10 +467,6 @@ enum power_supply_type {
 	POWER_SUPPLY_TYPE_UFP,			/* Type-C UFP */
 	POWER_SUPPLY_TYPE_DFP,			/* Type-C DFP */
 	POWER_SUPPLY_TYPE_CHARGE_PUMP,		/* Charge Pump */
-	/* add battery verify properties */
-#ifdef CONFIG_BATT_VERIFY_BY_DS28E16
-	POWER_SUPPLY_TYPE_BATT_VERIFY,		/* battery verify */
-#endif
 };
 
 enum power_supply_usb_type {

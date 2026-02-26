@@ -33,6 +33,7 @@ static struct {
 	char buf[PD_INFO_BUF_SIZE + 1 + OUT_BUF_MAX];
 } pd_dbg_buffer[2];
 
+static struct task_struct *print_out_task;
 static struct mutex buff_lock;
 static unsigned int using_buf;
 static wait_queue_head_t print_out_wait_que;
@@ -51,13 +52,151 @@ void pd_dbg_info_unlock(void)
 
 static inline bool pd_dbg_print_out(void)
 {
+	int used;
+	unsigned int index;
+	unsigned int i;
+
+	mutex_lock(&buff_lock);
+	index = using_buf;
+	using_buf ^= 0x01;
+	used = pd_dbg_buffer[index].used;
+	mutex_unlock(&buff_lock);
+
+	if (used == 0)
+		return false;
+
+	if (used >= PD_INFO_BUF_SIZE)
+		used = PD_INFO_BUF_SIZE - 1;
+	pd_dbg_buffer[index].buf[used] = '\0';
+
+	pr_info("///PD dbg info %u\n", used);
+
+	for (i = 0; i < (unsigned int)used; i += OUT_BUF_MAX) {
+		unsigned int chunk = used - i;
+		if (chunk > OUT_BUF_MAX)
+			chunk = OUT_BUF_MAX;
+
+		while (atomic_read(&busy))
+			usleep_range(1000, 2000);
+
+		pr_notice("%.*s", chunk, pd_dbg_buffer[index].buf + i);
+	}
+
+	pd_dbg_buffer[index].used = 0;
+
+	msleep(MSG_POLLING_MS);
+	return true;
+}
+
+static int print_out_thread_fn(void *data)
+{
+	while (!kthread_should_stop()) {
+		wait_event(print_out_wait_que,
+			   atomic_read(&pending_print_out) ||
+			   kthread_should_stop());
+		if (kthread_should_stop())
+			break;
+
+		do {
+			atomic_dec_if_positive(&pending_print_out);
+		} while (pd_dbg_print_out() && !kthread_should_stop());
+	}
+
+	return 0;
+}
+
+int pd_dbg_info(const char *fmt, ...)
+{
+	unsigned int index;
+	va_list args;
+	int r;
+	int used;
+	u64 ts;
+	unsigned long rem_usec;
+	int remaining;
+
+	ts = local_clock();
+	rem_usec = do_div(ts, 1000000000) / 1000 / 1000;
+
+	va_start(args, fmt);
+	mutex_lock(&buff_lock);
+	index = using_buf;
+	used = pd_dbg_buffer[index].used;
+
+	remaining = PD_INFO_BUF_SIZE - used - 1;
+	if (remaining <= 0) {
+		mutex_unlock(&buff_lock);
+		va_end(args);
+		return -ENOSPC;
+	}
+
+	r = snprintf(pd_dbg_buffer[index].buf + used, remaining + 1,
+		     "<%5lu.%03lu>",
+		     (unsigned long)ts, rem_usec);
+	if (r > 0) {
+		if (r > remaining)
+			r = remaining;
+		used += r;
+		remaining -= r;
+	} else
+		r = 0;
+
+	r = vsnprintf(pd_dbg_buffer[index].buf + used, remaining + 1, fmt, args);
+	if (r > 0) {
+		if (r > remaining)
+			r = remaining;
+		used += r;
+	}
+
+	if (pd_dbg_buffer[index].used == 0) {
+		atomic_inc(&pending_print_out);
+		wake_up(&print_out_wait_que);
+	}
+
+	if (used >= PD_INFO_BUF_SIZE)
+		used = PD_INFO_BUF_SIZE - 1;
+	pd_dbg_buffer[index].used = used;
+
+	mutex_unlock(&buff_lock);
+	va_end(args);
+	return r;
+}
+
+int pd_dbg_info_init(void)
+{
+	mutex_init(&buff_lock);
+	init_waitqueue_head(&print_out_wait_que);
+	atomic_set(&pending_print_out, 0);
+	atomic_set(&busy, 0);
+
+	print_out_task = kthread_run(print_out_thread_fn, NULL, "pd_dbg_info");
+	if (IS_ERR(print_out_task)) {
+		print_out_task = NULL;
+		pr_err("pd_dbg_info: failed to create print thread\n");
+		return PTR_ERR(print_out_task);
+	}
+
+	return 0;
+}
+
+void pd_dbg_info_exit(void)
+{
+	if (print_out_task) {
+		kthread_stop(print_out_task);
+		print_out_task = NULL;
+	}
+	mutex_destroy(&buff_lock);
+}
+
+/*static inline bool pd_dbg_print_out(void)
+{
 	char temp;
 	int used;
 	unsigned int index, i;
 
 	mutex_lock(&buff_lock);
 	index = using_buf;
-	using_buf ^= 0x01; /* exchange buffer */
+	using_buf ^= 0x01;
 	mutex_unlock(&buff_lock);
 
 	used = pd_dbg_buffer[index].used;
@@ -76,11 +215,10 @@ static inline bool pd_dbg_print_out(void)
 		while (atomic_read(&busy))
 			usleep_range(1000, 2000);
 
-		pr_notice("%s\n", pd_dbg_buffer[index].buf + i);
+		pr_notice("%s", pd_dbg_buffer[index].buf + i);
 		pd_dbg_buffer[index].buf[OUT_BUF_MAX + i] = temp;
 	}
 
-	/* pr_info("PD dbg info///\n"); */
 	pd_dbg_buffer[index].used = 0;
 	msleep(MSG_POLLING_MS);
 	return true;
@@ -90,8 +228,8 @@ static int print_out_thread_fn(void *data)
 {
 	while (true) {
 		wait_event(print_out_wait_que,
-				atomic_read(&pending_print_out) ||
-				kthread_should_stop());
+			   atomic_read(&pending_print_out) ||
+			   kthread_should_stop());
 		if (kthread_should_stop())
 			break;
 		do {
@@ -142,7 +280,6 @@ static struct task_struct *print_out_task;
 
 int pd_dbg_info_init(void)
 {
-	pr_info("%s: start.\n", __func__);
 	mutex_init(&buff_lock);
 	init_waitqueue_head(&print_out_wait_que);
 	atomic_set(&pending_print_out, 0);
@@ -155,7 +292,7 @@ void pd_dbg_info_exit(void)
 {
 	kthread_stop(print_out_task);
 	mutex_destroy(&buff_lock);
-}
+}*/
 
 subsys_initcall(pd_dbg_info_init);
 module_exit(pd_dbg_info_exit);

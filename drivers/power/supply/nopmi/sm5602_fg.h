@@ -16,9 +16,9 @@
 
 #define FG_PARAM_UNLOCK_CODE		0x3700
 #define FG_PARAM_LOCK_CODE		0x0000
-#define FG_TABLE_LEN			0x18 //real table length -1
-#define FG_ADD_TABLE_LEN		0x8 //real table length -1
-#define FG_INIT_B_LEN			0x7 //real table length -1
+#define FG_TABLE_LEN			0x18
+#define FG_ADD_TABLE_LEN		0x8
+#define FG_INIT_B_LEN			0x7
 
 #define ENABLE_EN_TEMP_IN		0x0200
 #define ENABLE_EN_TEMP_EX		0x0400
@@ -69,6 +69,4 @@ enum {
 	BATTERY_VENDOR_UNKNOWN = 3
 };
 
-//2021.09.06 wsy edit for remove irq
-#define FG_REMOVE_IRQ	1
 #endif /* SM5602_FG_H */

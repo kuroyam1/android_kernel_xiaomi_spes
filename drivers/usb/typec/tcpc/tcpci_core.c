@@ -195,7 +195,7 @@ static ssize_t tcpc_show_property(struct device *dev,
 		break;
 #endif
 	case TCPC_DESC_VENDOR_ID:
-		//pr_info("%s: cc_vendor_id = %x \n", __func__, cc_vendor_pid);
+		pr_info("%s: cc_vendor_id = %x\n", __func__, cc_vendor_pid);
 		if (0x1711 == cc_vendor_pid) {
 			snprintf(buf, 256, "cc_vendor: 1\n");
 		} else {
@@ -226,7 +226,8 @@ static int get_parameters(char *buf, long int *param1, int num_of_par)
 				return -EINVAL;
 
 			token = strsep(&buf, " ");
-		} else
+			}
+		else
 			return -EINVAL;
 	}
 	return 0;
@@ -249,7 +250,7 @@ static ssize_t tcpc_store_property(struct device *dev,
 	case TCPC_DESC_ROLE_DEF:
 		ret = get_parameters((char *)buf, &val, 1);
 		if (ret < 0) {
-			dev_err(dev, "get parameters fail\n");
+			dev_err(dev, "%s: get parameters fail\n", __func__);
 			return -EINVAL;
 		}
 
@@ -258,7 +259,7 @@ static ssize_t tcpc_store_property(struct device *dev,
 	case TCPC_DESC_TIMER:
 		ret = get_parameters((char *)buf, &val, 1);
 		if (ret < 0) {
-			dev_err(dev, "get parameters fail\n");
+			dev_err(dev, "%s: get parameters fail\n", __func__);
 			return -EINVAL;
 		}
 #ifdef CONFIG_USB_POWER_DELIVERY
@@ -275,7 +276,7 @@ static ssize_t tcpc_store_property(struct device *dev,
 	case TCPC_DESC_PD_TEST:
 		ret = get_parameters((char *)buf, &val, 1);
 		if (ret < 0) {
-			dev_err(dev, "get parameters fail\n");
+			dev_err(dev, "%s: get parameters fail\n", __func__);
 			return -EINVAL;
 		}
 		switch (val) {
@@ -351,7 +352,7 @@ static void tcpc_device_release(struct device *dev)
 {
 	struct tcpc_device *tcpc = to_tcpc_device(dev);
 
-	pr_info("%s: %s device release\n", __func__, dev_name(dev));
+	dev_info(dev, "%s: entry\n", __func__);
 	PD_BUG_ON(tcpc == NULL);
 	/* Un-init pe thread */
 #ifdef CONFIG_USB_POWER_DELIVERY
@@ -411,7 +412,7 @@ struct tcpc_device *tcpc_device_register(struct device *parent,
 
 	ret = device_register(&tcpc->dev);
 	if (ret) {
-		kfree(tcpc);
+		devm_kfree(parent, tcpc);
 		return ERR_PTR(ret);
 	}
 
@@ -434,9 +435,9 @@ struct tcpc_device *tcpc_device_register(struct device *parent,
 #ifdef CONFIG_DUAL_ROLE_USB_INTF
 	ret = tcpc_dual_role_phy_init(tcpc);
 	if (ret < 0)
-		dev_err(&tcpc->dev, "dual role usb init fail\n");
+		pr_err("%s: dual role usb init fail\n", __func__);
 	else
-		dev_err(&tcpc->dev, "dual role usb init OK\n");
+		pr_err("%s: dual role usb init OK\n", __func__);
 #endif /* CONFIG_DUAL_ROLE_USB_INTF */
 
 	return tcpc;
@@ -470,7 +471,7 @@ static int tcpc_device_irq_enable(struct tcpc_device *tcpc)
 
 	schedule_delayed_work(&tcpc->event_init_work, 0);
 
-	pr_info("%s: tcpc irq enable OK!\n", __func__);
+	pr_info("%s: tcpc irq enable OK\n", __func__);
 	return 0;
 }
 
@@ -482,13 +483,21 @@ static int bat_nb_call_func(
 	struct power_supply *psy = (struct power_supply *)v;
 
 	if (!tcpc) {
-		TCPC_ERR("%s: tcpc is null\n", __func__);
+		TCPC_ERR("tcpc is null\n");
+		return NOTIFY_OK;
+	}
+
+	if (!psy || !psy->desc) {
+		TCPC_ERR("power_supply event with null psy or desc\n");
 		return NOTIFY_OK;
 	}
 
 	if (val == PSY_EVENT_PROP_CHANGED &&
-		strcmp(psy->desc->name, "battery") == 0)
+	    strcmp(psy->desc->name, "battery") == 0 &&
+	    tcpc->bat_work_inited) {
 		schedule_delayed_work(&tcpc->bat_update_work, 0);
+	}
+
 	return NOTIFY_OK;
 }
 
@@ -499,20 +508,36 @@ static void bat_update_work_func(struct work_struct *work)
 	union power_supply_propval value;
 	int ret;
 
-	if (!tcpc->bat_psy) {
+	if (!tcpc) {
+		TCPC_ERR("bat_update_work_func: tcpc is NULL\n");
+		return;
+	}
+
+	if (!tcpc->bat_psy_got) {
 		tcpc->bat_psy = power_supply_get_by_name("battery");
 		if (!tcpc->bat_psy) {
 			TCPC_ERR("get battery psy fail\n");
+			tcpc->bat_psy_got = false;
 			tcpc->bat_soc = 15;
 			tcpc->charging_status = BSDO_BAT_INFO_DISCHARGING;
 			goto out;
-		} else {
-			tcpc->bat_nb.notifier_call = bat_nb_call_func;
-			tcpc->bat_nb.priority = 0;
-			ret = power_supply_reg_notifier(&tcpc->bat_nb);
-			if (ret < 0)
-				TCPC_ERR("register power supply notifier fail\n");
 		}
+		tcpc->bat_psy_got = true;
+		tcpc->bat_nb.notifier_call = bat_nb_call_func;
+		tcpc->bat_nb.priority = 0;
+		ret = power_supply_reg_notifier(&tcpc->bat_nb);
+		if (ret < 0) {
+			TCPC_ERR("register power supply notifier fail: %d\n", ret);
+			tcpc->bat_nb_registered = false;
+		} else {
+			tcpc->bat_nb_registered = true;
+		}
+	}
+
+	if (!tcpc->bat_psy_got || !tcpc->bat_psy) {
+		tcpc->bat_soc = 15;
+		tcpc->charging_status = BSDO_BAT_INFO_DISCHARGING;
+		goto out;
 	}
 
 	ret = power_supply_get_property(tcpc->bat_psy,
@@ -520,9 +545,9 @@ static void bat_update_work_func(struct work_struct *work)
 	if (ret == 0) {
 		TCPC_INFO("battery update soc = %d\n", value.intval);
 		tcpc->bat_soc = value.intval;
-	}
-	if (ret < 0)
+	} else {
 		TCPC_ERR("get battery capacity fail\n");
+	}
 
 	ret = power_supply_get_property(tcpc->bat_psy,
 			POWER_SUPPLY_PROP_STATUS, &value);
@@ -537,15 +562,14 @@ static void bat_update_work_func(struct work_struct *work)
 			TCPC_INFO("Battery Idle\n");
 			tcpc->charging_status = BSDO_BAT_INFO_IDLE;
 		}
+	} else {
+		TCPC_ERR("get battery charger now fail\n");
 	}
-	if (ret < 0)
-		TCPC_ERR("get battery charging status fail\n");
 
 out:
 	tcpm_update_bat_status_soc(tcpc,
 		PD_BAT_REF_FIXED0, tcpc->charging_status, tcpc->bat_soc * 10);
 }
-
 #endif /* CONFIG_USB_PD_REV30 */
 
 static void tcpc_event_init_work(struct work_struct *work)
@@ -559,37 +583,47 @@ static void tcpc_event_init_work(struct work_struct *work)
 
 	tcpci_lock_typec(tcpc);
 	tcpci_event_init(tcpc);
+
 #ifdef CONFIG_USB_PD_WAIT_BC12
 	tcpc->usb_psy = power_supply_get_by_name("usb");
-	if (!tcpc->usb_psy) {
-		tcpci_unlock_typec(tcpc);
+	if (tcpc->usb_psy) {
+		tcpc->usb_psy_got = true;
+	} else {
+		tcpc->usb_psy_got = false;
 		TCPC_ERR("get usb psy fail\n");
+		tcpci_unlock_typec(tcpc);
 		return;
 	}
 #endif /* CONFIG_USB_PD_WAIT_BC12 */
+
 	tcpc->pd_inited_flag = 1;
-	pr_info("%s typec attach new = %d\n",
-			__func__, tcpc->typec_attach_new);
+	TCPC_INFO("typec attach new = %d\n", tcpc->typec_attach_new);
 	if (tcpc->typec_attach_new)
 		pd_put_cc_attached_event(tcpc, tcpc->typec_attach_new);
 	tcpci_unlock_typec(tcpc);
 
 #ifdef CONFIG_USB_PD_REV30
 	INIT_DELAYED_WORK(&tcpc->bat_update_work, bat_update_work_func);
+	tcpc->bat_work_inited = true;
+
 	tcpc->bat_psy = power_supply_get_by_name("battery");
 	if (!tcpc->bat_psy) {
 		TCPC_ERR("get battery psy fail\n");
-		return;
+		tcpc->bat_psy_got = false;
+		tcpc->bat_nb_registered = false;
+	} else {
+		tcpc->bat_psy_got = true;
+		tcpc->bat_nb.notifier_call = bat_nb_call_func;
+		tcpc->bat_nb.priority = 0;
+		retval = power_supply_reg_notifier(&tcpc->bat_nb);
+		if (retval < 0) {
+			TCPC_ERR("register power supply notifier fail: %d\n", retval);
+			tcpc->bat_nb_registered = false;
+		} else {
+			tcpc->bat_nb_registered = true;
+		}
 	}
-	tcpc->charging_status = BSDO_BAT_INFO_IDLE;
-	tcpc->bat_soc = 0;
-	tcpc->bat_nb.notifier_call = bat_nb_call_func;
-	tcpc->bat_nb.priority = 0;
-	retval = power_supply_reg_notifier(&tcpc->bat_nb);
-	if (retval < 0)
-		TCPC_ERR("register power supply notifier fail\n");
 #endif /* CONFIG_USB_PD_REV30 */
-
 #endif /* CONFIG_USB_POWER_DELIVERY */
 }
 
@@ -602,7 +636,7 @@ static void tcpc_init_work(struct work_struct *work)
 	if (tcpc->desc.notifier_supply_num == 0)
 		return;
 #endif
-	pr_info("%s force start\n", __func__);
+	TCPC_INFO("force start\n");
 
 	tcpc->desc.notifier_supply_num = 0;
 	tcpc_device_irq_enable(tcpc);
@@ -614,9 +648,10 @@ int tcpc_schedule_init_work(struct tcpc_device *tcpc)
 	if (tcpc->desc.notifier_supply_num == 0)
 		return tcpc_device_irq_enable(tcpc);
 
-	pr_info("%s wait %d num\n", __func__, tcpc->desc.notifier_supply_num);
+	TCPC_INFO("wait %d num\n", tcpc->desc.notifier_supply_num);
 
-	schedule_delayed_work(&tcpc->init_work, msecs_to_jiffies(30*1000));
+	schedule_delayed_work(
+		&tcpc->init_work, msecs_to_jiffies(30 * 1000));
 #endif
 	return 0;
 }
@@ -691,7 +726,7 @@ static int __register_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 				tcp_dev, nb_wrapper, nb, idx);
 	if (retval < 0)
 		dev_warn(&tcp_dev->dev,
-			"Failed to add resource to manager(%d)\n", retval);
+			"%s: Failed to add resource to manager(%d)\n", __func__, retval);
 
 	return 0;
 }
@@ -732,12 +767,12 @@ int register_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 
 #ifndef CONFIG_TCPC_NOTIFIER_LATE_SYNC
 	if (tcp_dev->desc.notifier_supply_num == 0) {
-		pr_info("%s already started\n", __func__);
+		dev_info(&tcp_dev->dev, "%s: already started\n", __func__);
 		return 0;
 	}
 
 	tcp_dev->desc.notifier_supply_num--;
-	pr_info("%s supply_num = %d\n", __func__,
+	dev_info(&tcp_dev->dev, "%s: supply_num = %d\n", __func__,
 		tcp_dev->desc.notifier_supply_num);
 
 	if (tcp_dev->desc.notifier_supply_num == 0) {
@@ -748,7 +783,6 @@ int register_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 	return ret;
 }
 EXPORT_SYMBOL(register_tcp_dev_notifier);
-
 
 static void *__remove_wrapper_from_managed_res_list(
 	struct tcpc_device *tcp_dev, void *key, int prv_id)
@@ -814,13 +848,36 @@ int unregister_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 }
 EXPORT_SYMBOL(unregister_tcp_dev_notifier);
 
-
 void tcpc_device_unregister(struct device *dev, struct tcpc_device *tcpc)
 {
 	if (!tcpc)
 		return;
 
 	tcpc_typec_deinit(tcpc);
+
+#ifdef CONFIG_USB_PD_REV30
+	if (tcpc->bat_work_inited)
+		cancel_delayed_work_sync(&tcpc->bat_update_work);
+
+	if (tcpc->bat_nb_registered)
+		power_supply_unreg_notifier(&tcpc->bat_nb);
+
+	if (tcpc->bat_psy_got && tcpc->bat_psy) {
+		power_supply_put(tcpc->bat_psy);
+		tcpc->bat_psy = NULL;
+		tcpc->bat_psy_got = false;
+		tcpc->bat_nb_registered = false;
+		tcpc->bat_work_inited = false;
+	}
+
+#ifdef CONFIG_USB_PD_WAIT_BC12
+	if (tcpc->usb_psy_got && tcpc->usb_psy) {
+		power_supply_put(tcpc->usb_psy);
+		tcpc->usb_psy = NULL;
+		tcpc->usb_psy_got = false;
+	}
+#endif /* CONFIG_USB_PD_WAIT_BC12 */
+#endif /* CONFIG_USB_PD_REV30 */
 
 #ifdef CONFIG_USB_PD_REV30
 	wakeup_source_unregister(tcpc->pd_port.pps_request_wake_lock);
@@ -864,7 +921,7 @@ static void tcpc_init_attrs(struct device_type *dev_type)
 
 static int __init tcpc_class_init(void)
 {
-	pr_info("%s (%s)\n", __func__, TCPC_CORE_VERSION);
+	pr_info("%s: entry, (%s)\n", __func__, TCPC_CORE_VERSION);
 
 #ifdef CONFIG_USB_POWER_DELIVERY
 	dpm_check_supported_modes();
@@ -872,25 +929,24 @@ static int __init tcpc_class_init(void)
 
 	tcpc_class = class_create(THIS_MODULE, "tcpc");
 	if (IS_ERR(tcpc_class)) {
-		pr_info("Unable to create tcpc class; errno = %ld\n",
-		       PTR_ERR(tcpc_class));
+		pr_info("%s: Unable to create tcpc class, errno = %ld\n",
+			__func__, PTR_ERR(tcpc_class));
 		return PTR_ERR(tcpc_class);
 	}
 	tcpc_init_attrs(&tcpc_dev_type);
 
-	pr_info("%s OK\n", __func__);
+	pr_info("%s: success\n", __func__);
 	return 0;
 }
 
 static void __exit tcpc_class_exit(void)
 {
 	class_destroy(tcpc_class);
-	pr_info("%s OK\n", __func__);
+	pr_info("%s: success\n", __func__);
 }
 
 subsys_initcall(tcpc_class_init);
 module_exit(tcpc_class_exit);
-
 
 #ifdef CONFIG_USB_POWER_DELIVERY
 #ifdef CONFIG_TCPC_NOTIFIER_LATE_SYNC
@@ -927,7 +983,7 @@ static int __tcpc_class_complete_work(struct device *dev, void *data)
 #endif /* CONFIG_USB_POWER_DELIVERY */
 
 	if (tcpc != NULL) {
-		pr_info("%s = %s\n", __func__, dev_name(dev));
+		pr_info("%s = %s\n", dev_name(dev), __func__);
 #if 1
 		tcpc_device_irq_enable(tcpc);
 #else
@@ -938,9 +994,8 @@ static int __tcpc_class_complete_work(struct device *dev, void *data)
 #ifdef CONFIG_USB_POWER_DELIVERY
 #ifdef CONFIG_RECV_BAT_ABSENT_NOTIFY
 		fg_bat_nb->notifier_call = fg_bat_notifier_call;
-#if 0 /* CONFIG_MTK_GAUGE_VERSION == 30 */
+		/* CONFIG_MTK_GAUGE_VERSION == 30 */
 		ret = register_battery_notifier(fg_bat_nb);
-#endif
 		if (ret < 0) {
 			pr_notice("%s: register bat notifier fail\n", __func__);
 			return -EINVAL;

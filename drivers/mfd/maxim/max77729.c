@@ -56,8 +56,6 @@ static struct mfd_cell max77729_devs[] = {
 	{ .name = "max77729-charger", },
 };
 
-extern char nopmi_set_charger_ic_type(NOPMI_CHARGER_IC_TYPE nopmi_type);
-
 int max77729_read_reg(struct i2c_client *i2c, u8 reg, u8 *dest)
 {
 	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
@@ -142,7 +140,7 @@ int max77729_write_reg(struct i2c_client *i2c, u8 reg, u8 value)
 		mutex_unlock(&max77729->i2c_lock);
 
 		if (ret < 0) {
-			pr_info("%s: %s: reg(0x%x), ret(%d), timeout %d\n",
+			pr_info("[%s]: %s: reg(0x%x), ret(%d), timeout %d\n",
 					MFD_DEV_NAME, __func__, reg, ret, timeout);
 
 			if (timeout < 0)
@@ -166,7 +164,7 @@ int max77729_write_reg_nolock(struct i2c_client *i2c, u8 reg, u8 value)
 		ret = i2c_smbus_write_byte_data(i2c, reg, value);
 
 		if (ret < 0) {
-			pr_info("%s: %s: reg(0x%x), ret(%d), timeout %d\n",
+			pr_info("[%s]: %s: reg(0x%x), ret(%d), timeout %d\n",
 					MFD_DEV_NAME, __func__, reg, ret, timeout);
 
 			if (timeout < 0)
@@ -199,7 +197,7 @@ int max77729_bulk_write(struct i2c_client *i2c, u8 reg, int count, u8 *buf)
 		mutex_unlock(&max77729->i2c_lock);
 
 		if (ret < 0) {
-			pr_info("%s: %s: reg(0x%x), ret(%d), timeout %d\n",
+			pr_info("[%s]: %s: reg(0x%x), ret(%d), timeout %d\n",
 					MFD_DEV_NAME, __func__, reg, ret, timeout);
 
 			if (timeout < 0)
@@ -305,18 +303,21 @@ static int of_max77729_dt(struct device *dev, struct max77729_platform_data *pda
 
 	np_battery = of_find_node_by_name(NULL, "mfc-charger");
 	if (!np_battery) {
-		pr_info("%s: np_battery NULL\n", __func__);
+		pr_info("[%s]: %s: np_battery NULL\n", MFD_DEV_NAME, __func__);
 	} else {
 		pdata->wpc_en = of_get_named_gpio(np_battery, "battery,wpc_en", 0);
 		if (pdata->wpc_en < 0) {
-			pr_info("%s: can't get wpc_en (%d)\n", __func__, pdata->wpc_en);
+			pr_info("[%s]: %s: can't get wpc_en (%d)\n", MFD_DEV_NAME, __func__, pdata->wpc_en);
 			pdata->wpc_en = 0;
 		}
 
 		ret = of_property_read_string(np_battery,
 				"battery,wireless_charger_name", (char const **)&pdata->wireless_charger_name);
 		if (ret)
-			pr_info("%s: Wireless charger name is Empty\n", __func__);
+			pr_info("[%s]: %s: Wireless charger name is Empty\n", MFD_DEV_NAME, __func__);
+
+		/* release the reference returned by of_find_node_by_name */
+		of_node_put(np_battery);
 	}
 	pdata->support_audio = of_property_read_bool(np_max77729, "max77729,support-audio");
 	/* pr_info("%s: support_audio %d\n", __func__, pdata->support_audio); */
@@ -324,9 +325,10 @@ static int of_max77729_dt(struct device *dev, struct max77729_platform_data *pda
 	return 0;
 }
 #endif /* CONFIG_OF */
+
 static void max77729_reset_ic(struct max77729_dev *max77729)
 {
-	pr_info("%s: Reset!!\n", __func__);
+	pr_info("[%s]: %s: Reset!!\n", MFD_DEV_NAME, __func__);
 	max77729_write_reg(max77729->muic, 0x80, 0x0F);
 	msleep(100);
 }
@@ -365,7 +367,7 @@ static int max77729_usbc_wait_response(struct max77729_dev *max77729)
 	max77729->fw_update_state = FW_UPDATE_WAIT_RESP_STOP;
 
 	if (!time_remaining) {
-		pr_info("%s: Failed to update due to timeout\n", __func__);
+		pr_info("[%s]: %s: Failed to update due to timeout\n", MFD_DEV_NAME, __func__);
 		cancel_work_sync(&max77729->fw_work);
 		return FW_UPDATE_TIMEOUT_FAIL;
 	}
@@ -373,8 +375,7 @@ static int max77729_usbc_wait_response(struct max77729_dev *max77729)
 	return 0;
 }
 
-static int __max77729_usbc_fw_update(
-		struct max77729_dev *max77729, const u8 *fw_bin)
+static int __max77729_usbc_fw_update(struct max77729_dev *max77729, const u8 *fw_bin)
 {
 	u8 fw_cmd = FW_CMD_END;
 	u8 fw_len = 0;
@@ -469,7 +470,8 @@ static int __max77729_usbc_fw_update(
 		 * It should be increased from 1 step by step.
 		 */
 		if (memcmp(verify_data, &fw_data[1], 2)) {
-			pr_info("[0x%02x 0x%02x], [0x%02x, 0x%02x], [0x%02x, 0x%02x]",
+			pr_info("[%s]: %s: [0x%02x 0x%02x], [0x%02x, 0x%02x], [0x%02x, 0x%02x]\n",
+					MFD_DEV_NAME, __func__,
 					verify_data[0], fw_data[0],
 					verify_data[1], fw_data[1],
 					verify_data[2], fw_data[2]);
@@ -479,7 +481,7 @@ static int __max77729_usbc_fw_update(
 		return FW_CMD_READ_SIZE;
 	}
 
-	pr_info("%s: Command error\n", __func__);
+	pr_info("[%s]: %s: Command error\n", MFD_DEV_NAME, __func__);
 
 	return ret;
 }
@@ -493,7 +495,7 @@ static int max77729_fuelgauge_read_vcell(struct max77729_dev *max77729)
 	u32 temp2;
 
 	if (max77729_bulk_read(max77729->fuelgauge, VCELL_REG, 2, data) < 0) {
-		pr_err("%s: Failed to read VCELL\n", __func__);
+		pr_err("[%s]: %s: Failed to read VCELL\n", MFD_DEV_NAME, __func__);
 		return -1;
 	}
 
@@ -528,14 +530,14 @@ int max77729_usbc_fw_update(struct max77729_dev *max77729,
 
 	max77729->fw_size = fw_bin_len;
 	fw_header = (max77729_fw_header *)fw_bin;
-	pr_info("%s: magic/%x/ major/%x/ minor/%x/ product_id/%x/ rev/%x/ id/%x/\n",
-			__func__, fw_header->magic, fw_header->major, fw_header->minor, fw_header->product_id, fw_header->rev, fw_header->id);
+	pr_info("[%s]: %s: magic/%x/ major/%x/ minor/%x/ product_id/%x/ rev/%x/ id/%x/\n",
+			MFD_DEV_NAME, __func__, fw_header->magic, fw_header->major, fw_header->minor, fw_header->product_id, fw_header->rev, fw_header->id);
 	/* if(max77729->device_product_id != fw_header->product_id) { */
 		/* pr_info("product indicator mismatch"); */
 		/* return 0; */
 	/* } */
 	if (fw_header->magic == MAX77729_SIGN)
-		pr_info("%s: matched\n", __func__);
+		pr_info("[%s]: %s: matched\n", MFD_DEV_NAME, __func__);
 
 	max77729_read_reg(max77729->charger, MAX77729_CHG_REG_CNFG_00, &chg_cnfg_00);
 retry:
@@ -554,7 +556,7 @@ retry:
 	ret = max77729_read_reg(max77729->muic, REG_UIC_FW_REV, &max77729->FW_Revision);
 	ret = max77729_read_reg(max77729->muic, REG_UIC_FW_MINOR, &max77729->FW_Minor_Revision);
 	if (ret < 0 && (try_count == 0 && try_command == 0)) {
-		pr_info("%s: Failed to read FW_REV\n", __func__);
+		pr_info("[%s]: %s: Failed to read FW_REV\n", MFD_DEV_NAME, __func__);
 		error = -EIO;
 		goto out;
 	}
@@ -563,7 +565,7 @@ retry:
 
 	max77729->FW_Product_ID = max77729->FW_Minor_Revision;
 	max77729->FW_Minor_Revision &= MINOR_VERSION_MASK;
-	pr_info("%s: chip = %02X.%02X(PID 0x%x), FW = %02X.%02X(PID 0x%x)\n", __func__,
+	pr_info("[%s]: %s: chip = %02X.%02X(PID 0x%x), FW = %02X.%02X(PID 0x%x)\n", MFD_DEV_NAME, __func__,
 			max77729->FW_Revision, max77729->FW_Minor_Revision, max77729->FW_Product_ID,
 			fw_header->major, fw_header->minor, fw_header->product_id);
 
@@ -573,8 +575,8 @@ retry:
 			vcell = max77729_fuelgauge_read_vcell(max77729);
 
 			if (vcell < 3600) {
-				pr_info("%s: keep chg_mode(0x%x), vcell(%dmv)\n",
-						__func__, chg_cnfg_00 & 0x0F, vcell);
+				pr_info("[%s]: %s: keep chg_mode(0x%x), vcell(%dmv)\n",
+						MFD_DEV_NAME, __func__, chg_cnfg_00 & 0x0F, vcell);
 				error = -EAGAIN;
 				goto out;
 			}
@@ -648,17 +650,17 @@ retry:
 		max77729_read_reg(max77729->muic, REG_UIC_FW_REV, &max77729->FW_Revision);
 		max77729_read_reg(max77729->muic, REG_UIC_FW_MINOR, &max77729->FW_Minor_Revision);
 		max77729->FW_Minor_Revision &= MINOR_VERSION_MASK;
-		pr_info("%s: Start FW updating (%02X.%02X)\n", __func__, max77729->FW_Revision, max77729->FW_Minor_Revision);
+		pr_info("[%s]: %s: Start FW updating (%02X.%02X)\n", MFD_DEV_NAME, __func__, max77729->FW_Revision, max77729->FW_Minor_Revision);
 
 		if (max77729->FW_Revision != 0xFF) {
 			if (++try_command < FW_SECURE_MODE_TRY_COUNT) {
-				pr_info("%s: the Fail to enter secure mode %d\n",
-						__func__, try_command);
+				pr_info("[%s]: %s: the Fail to enter secure mode %d\n",
+						MFD_DEV_NAME, __func__, try_command);
 				max77729_reset_ic(max77729);
 				msleep(1000);
 				goto retry;
 			} else {
-				pr_info("%s: the Secure Update Fail!!\n", __func__);
+				pr_info("[%s]: %s: the Secure Update Fail!!\n", MFD_DEV_NAME, __func__);
 				error = -EIO;
 				goto out;
 			}
@@ -680,22 +682,22 @@ retry:
 				 * Retry FW updating
 				 */
 				if (++try_count < FW_VERIFY_TRY_COUNT) {
-					pr_info("%s: Retry fw write. ret %d, count %d, offset %d\n",
-							__func__, size, try_count, offset);
+					pr_info("[%s]: %s: Retry fw write. ret %d, count %d, offset %d\n",
+							MFD_DEV_NAME, __func__, size, try_count, offset);
 					max77729_reset_ic(max77729);
 					msleep(1000);
 					goto retry;
 				} else {
-					pr_info("%s: Failed to update FW. ret %d, offset %d\n",
-							__func__, size, (offset + size));
+					pr_info("[%s]: %s: Failed to update FW. ret %d, offset %d\n",
+							MFD_DEV_NAME, __func__, size, (offset + size));
 					error = -EIO;
 					goto out;
 				}
 				break;
 			case FW_UPDATE_CMD_FAIL:
 			case FW_UPDATE_MAX_LENGTH_FAIL:
-				pr_info("%s: Failed to update FW. ret %d, offset %d\n",
-						__func__, size, (offset + size));
+				pr_info("[%s]: %s: Failed to update FW. ret %d, offset %d\n",
+						MFD_DEV_NAME, __func__, size, (offset + size));
 				error = -EIO;
 				goto out;
 			case FW_UPDATE_END: /* 0x00 */
@@ -705,10 +707,11 @@ retry:
 				max77729_read_reg(max77729->muic,
 						REG_UIC_FW_MINOR, &max77729->FW_Minor_Revision);
 				max77729->FW_Minor_Revision &= MINOR_VERSION_MASK;
-				pr_info("%s: chip = %02X.%02X, FW = %02X.%02X\n", __func__,
+				pr_info("[%s]: %s: chip = %02X.%02X, FW = %02X.%02X\n",
+						MFD_DEV_NAME, __func__,
 						max77729->FW_Revision, max77729->FW_Minor_Revision,
 						fw_header->major, fw_header->minor);
-				pr_info("%s: Completed\n", __func__);
+				pr_info("[%s]: %s: Completed\n", MFD_DEV_NAME, __func__);
 				break;
 			default:
 				offset += size;
@@ -721,14 +724,14 @@ retry:
 				max77729_read_reg(max77729->muic,
 						REG_UIC_FW_MINOR, &max77729->FW_Minor_Revision);
 				max77729->FW_Minor_Revision &= MINOR_VERSION_MASK;
-				pr_info("%s: chip = %02X.%02X, FW = %02X.%02X\n", __func__,
+				pr_info("[%s]: %s: chip = %02X.%02X, FW = %02X.%02X\n", MFD_DEV_NAME, __func__,
 						max77729->FW_Revision, max77729->FW_Minor_Revision,
 						fw_header->major, fw_header->minor);
-				pr_info("%s: Completed via SYS path\n", __func__);
+				pr_info("[%s]: %s: Completed via SYS path\n", MFD_DEV_NAME, __func__);
 			}
 		}
 	} else {
-		pr_info("%s: Don't need to update!\n", __func__);
+		pr_info("[%s]: %s: Don't need to update!\n", MFD_DEV_NAME, __func__);
 		goto out;
 	}
 
@@ -740,29 +743,29 @@ out:
 		/* Auto skip mode */
 		max77729_update_reg(max77729->charger,
 			MAX77729_CHG_REG_CNFG_12, 0x0, 0x1);
-		pr_info("%s: -set Auto skip mode\n", __func__);
+		pr_info("[%s]: %s: -set Auto skip mode\n", MFD_DEV_NAME, __func__);
 
 		max77729_update_reg(max77729->charger,
 			MAX77729_CHG_REG_CNFG_12, 0x0, 0x20);
-		pr_info("%s: -disable CHGINSEL\n", __func__);
+		pr_info("[%s]: %s: -disable CHGINSEL\n", MFD_DEV_NAME, __func__);
 
 		max77729_update_reg(max77729->charger,
 			MAX77729_CHG_REG_CNFG_00, 0x4, 0x0F);
-		pr_info("%s: -set chg_mode(0x4)\n", __func__);
+		pr_info("[%s]: %s: -set chg_mode(0x4)\n", MFD_DEV_NAME, __func__);
 
 		max77729_update_reg(max77729->charger,
 			MAX77729_CHG_REG_CNFG_12, 0x20, 0x20);
-		pr_info("%s: -enable CHGINSEL\n", __func__);
+		pr_info("[%s]: %s: -enable CHGINSEL\n", MFD_DEV_NAME, __func__);
 
 		max77729_update_reg(max77729->charger,
 			MAX77729_CHG_REG_CNFG_00, chg_cnfg_00, 0x0F);
-		pr_info("%s: -recover chg_mode(0x%x), vcell(%dmv)\n",
-			__func__, chg_cnfg_00 & 0x0F, vcell);
+		pr_info("[%s]: %s: -recover chg_mode(0x%x), vcell(%dmv)\n",
+			MFD_DEV_NAME, __func__, chg_cnfg_00 & 0x0F, vcell);
 
 		/* Switching Frequency : 1.5MHz */
 		max77729_update_reg(max77729->charger,
 			MAX77729_CHG_REG_CNFG_08, 0x02, 0x3);
-		pr_info("%s: -set Switching Frequency 1.5MHz\n", __func__);
+		pr_info("[%s]: %s: -set Switching Frequency 1.5MHz\n", MFD_DEV_NAME, __func__);
 	}
 
 	enable_irq(max77729->irq);
@@ -970,7 +973,7 @@ static int max77729_i2c_probe(struct i2c_client *i2c,
 	struct pinctrl *max_pinctrl = NULL;
 	struct pinctrl_state *max_gpio_default = NULL;
 
-	pr_info("%s: %s: start\n", MFD_DEV_NAME, __func__);
+	pr_info("[%s]: %s: start\n", MFD_DEV_NAME, __func__);
 	max77729 = kzalloc(sizeof(*max77729), GFP_KERNEL);
 	if (!max77729)
 		return -ENOMEM;
@@ -1002,7 +1005,7 @@ static int max77729_i2c_probe(struct i2c_client *i2c,
 
 		pdata->irq_base = irq_alloc_descs(-1, 0, MAX77729_IRQ_NR, -1);
 		if (pdata->irq_base < 0) {
-			pr_err("%s: %s: irq_alloc_descs Fail! ret(%d)\n",
+			pr_err("[%s]: %s: irq_alloc_descs Fail! ret(%d)\n",
 					MFD_DEV_NAME, __func__, pdata->irq_base);
 			ret = -EINVAL;
 			goto err_free;
@@ -1042,8 +1045,6 @@ static int max77729_i2c_probe(struct i2c_client *i2c,
 		goto err_free_irq;
 	}
 	max77729->pmic_ver = ((pmic_rev & 0xF8) >> 3);
-
-	nopmi_set_charger_ic_type(NOPMI_CHARGER_IC_MAXIM);
 
 	init_completion(&max77729->fw_completion);
 	max77729->fw_workqueue = create_singlethread_workqueue("fw_update");
@@ -1127,12 +1128,12 @@ static int max77729_i2c_probe(struct i2c_client *i2c,
 		goto err_irq_init;
 
 	ret = mfd_add_devices(max77729->dev, -1, max77729_devs,
-			      ARRAY_SIZE(max77729_devs), NULL, 0, NULL);
+				ARRAY_SIZE(max77729_devs), NULL, 0, NULL);
 	if (ret < 0)
 		goto err_mfd;
 
 	device_init_wakeup(max77729->dev, pdata->wakeup);
-	pr_info("%s: %s: success\n", MFD_DEV_NAME, __func__);
+	pr_info("[%s]: %s: success\n", MFD_DEV_NAME, __func__);
 
 	return 0;
 
@@ -1167,7 +1168,7 @@ err_free_irq:
 err_free:
 	i2c_set_clientdata(i2c, NULL);
 	kfree(max77729);
-	pr_err("%s: %s: failed\n", MFD_DEV_NAME, __func__);
+	pr_err("[%s]: %s: failed\n", MFD_DEV_NAME, __func__);
 	return ret;
 }
 

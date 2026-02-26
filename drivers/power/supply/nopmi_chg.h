@@ -61,7 +61,7 @@ struct nopmi_chg {
 #endif
 	struct nopmi_dt_props dt;
 	struct delayed_work nopmi_chg_work;
-	struct delayed_work cvstep_monitor_work;
+	struct delayed_work cv_step_monitor_work;
 	int pd_active;
 	int real_type;
 	int pd_min_vol;
@@ -73,16 +73,19 @@ struct nopmi_chg {
 	int batt_health;
 	int input_suspend;
 	int mtbf_cur;
-	atomic_t batt_volt_m;
-	atomic_t batt_temp_c;
+	s32 batt_temp;
+	s32 batt_volt;
 	/*jeita config*/
 	struct nopmi_chg_jeita_st jeita_ctl;
 
 	/* thermal */
-	int *thermal_mitigation;
+	u32 *thermal_mitigation;
 	int thermal_levels;
 	int system_temp_level;
-	bool is_awake;
-};
+	bool last_thermal_icl_disabled;
+	bool last_thermal_icl_valid;
 
+	u8 is_awake;
+	s32 last_cc_cv_votfcc;
+};
 #endif

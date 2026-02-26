@@ -15,49 +15,57 @@
 
 #define pr_fmt(fmt)	"[sm5602_fg]: %s: " fmt, __func__
 
-#include <linux/atomic.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/init.h>
+#include <linux/types.h>
+#include <linux/errno.h>
+#include <linux/err.h>
+#include <linux/device.h>
+#include <linux/sysfs.h>
+#include <linux/i2c.h>
+#include <linux/slab.h>
+#include <linux/workqueue.h>
+#include <linux/mutex.h>
+#include <linux/ctype.h>
+#include <linux/atomic.h>
 #include <linux/param.h>
 #include <linux/ratelimit.h>
 #include <linux/printk.h>
 #include <linux/jiffies.h>
-#include <linux/workqueue.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/idr.h>
-#include <linux/i2c.h>
-#include <linux/slab.h>
 #include <linux/acpi.h>
-#include <asm/unaligned.h>
 #include <linux/uaccess.h>
 #include <linux/interrupt.h>
 #include <linux/of_gpio.h>
 #include <linux/gpio.h>
 #include <linux/gpio/consumer.h>
 #include <linux/debugfs.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/regmap.h>
 #include <linux/random.h>
 #include <linux/ktime.h>
-#include <linux/types.h>
-#include "sm5602_fg.h"
-#include <linux/pmic-voter.h> //"pmic-voter.h"
+#include <linux/math64.h>
+#include <linux/pmic-voter.h>
+//"pmic-voter.h"
+#include <asm/unaligned.h>
 //#include "step-chg-jeita.h"
+#include "sm5602_fg.h"
 
 #define INVALID_REG_ADDR	0xFF
 #define RET_ERR			-1
 
 //#define ENABLE_MIX_COMP
+//#define ENABLE_VLCM_MODE
 #define ENABLE_TEMBASE_ZDSCON
-//#define ENABLE_MIX_NTC_BATTDET
 #define ENABLE_IOCV_ADJ
 #define ENABLE_NTC_COMPENSATION
 #define ENABLE_TEMP_AVG
+#define ENABLE_CURRENT_AVG
 
 #ifdef ENABLE_TEMBASE_ZDSCON
-//#define ENABLE_TEM_RATE_CONTROL
 #define ZDSCON_ACT_TEMP_GAP	15
 #define T_GAP_DENOM		5
 #define HMINMAN_T_VALUE_FACT	125
@@ -82,8 +90,8 @@
 #define MONITOR_WORK_1S		1
 
 /* After tracking, > 98.5% occurring >= 4445mV */
-#define SM_RAW_SOC_FULL		985 //100.0% -> 98.5%
-#define SM_RECHARGE_SOC		971 //97.1%
+#define SM_RAW_SOC_FULL		990 // 100.0% -> 99.0%
+#define SM_RECHARGE_SOC		971 // 97.1%
 
 #define BMS_FG_VERIFY		"BMS_FG_VERIFY"
 #define BMS_FC_VOTER		"BMS_FC_VOTER"
@@ -121,7 +129,7 @@ enum sm_fg_reg_idx {
 	NUM_REGS,
 };
 
-static u8 sm5602_regs[NUM_REGS] = {
+static const u8 sm5602_regs[NUM_REGS] = {
 	0x00, /* DEVICE_ID */
 	0x01, /* CNTL */
 	0x02, /* INT */
@@ -173,47 +181,187 @@ enum battery_table_type {
 	BATTERY_TABLE_MAX,
 };
 
+enum fg_update_idx {
+	FG_UPDATE_SOC = 0,
+	FG_UPDATE_VOLT,
+	FG_UPDATE_TEMP,
+	FG_UPDATE_CYCLE,
+	FG_UPDATE_CURRENT,
+	FG_UPDATE_OCV,
+	FG_UPDATE_FCC,
+	FG_UPDATE_RMC,
+	FG_UPDATE_COUNT,
+};
+
 #define BATT_MA_AVG_SAMPLES	8
+#define BATT_TEMP_AVG_SAMPLES	8
 struct batt_params {
 	bool	update_now;
+	/* SOC */
 	int		batt_raw_soc;
 	int		batt_soc;
-	int		samples_num;
-	int		samples_index;
+	/* Current */
+	int		batt_ma_samples_num;
+	int		batt_ma_samples_index;
 	int		batt_ma_avg_samples[BATT_MA_AVG_SAMPLES];
 	int		batt_ma_avg;
 	int		batt_ma_prev;
 	int		batt_ma;
-	int		batt_mv;
-	int		batt_temp;
-	//struct timespec	last_soc_change_time;
-};
-
-#ifdef ENABLE_TEMP_AVG
-#define BATT_TEMP_AVG_SAMPLES	8
-struct batt_temp_params {
-	bool	update_now;
-	int		batt_raw_temp;
-	int		batt_temp;
-	int		samples_num;
-	int		samples_index;
+	/* Temperature */
+	int		batt_temp_samples_num;
+	int		batt_temp_samples_index;
 	int		batt_temp_avg_samples[BATT_TEMP_AVG_SAMPLES];
 	int		batt_temp_avg;
 	int		batt_temp_prev;
+	int		batt_temp;
 };
-#endif
 
-struct sm_fg_chip;
+#ifdef ENABLE_NTC_COMPENSATION
+static const int32_t LUT_SIM_UV[43] = {
+	0, 270, 480, 510, 910,
+	1180, 1330, 2120, 2220, 2400,
+	2660, 3290, 4000, 4790, 5910,
+	6650, 7440, 8000, 11670, 11940,
+	13260, 13350, 14370, 16040, 20930,
+	23760, 26370, 28720, 42490, 47060,
+	64860, 75410, 87080, 114290, 126320,
+	152320, 218180, 229150, 383190, 508830,
+	783080, 1024200, 1374360
+};
+
+static const int16_t LUT_SIM_ADC[43] = {
+	0x8001, 0x8D10, 0x8D1B, 0x8D1C, 0x8D30,
+	0x8D3E, 0x8D45, 0x8D6B, 0x8D70, 0x8D78,
+	0x8D86, 0x8DA5, 0x8DC8, 0x8DEE, 0x8E25,
+	0x8E4A, 0x8E70, 0x8E8B, 0x8F40, 0x8F4D,
+	0x8F8F, 0x8F93, 0x8FC4, 0x9018, 0x9106,
+	0x9192, 0x9213, 0x9288, 0x9530, 0x960B,
+	0x997E, 0x9B85, 0x9DD5, 0xA2FB, 0xA573,
+	0xAA5F, 0xB70C, 0xB9E2, 0xD720, 0xEFF9,
+	0x222B, 0x452A, 0x7FC0
+};
+
+static const int32_t LUT_UV[249] = {
+	0, 5000, 10000, 15000, 20000,
+	25000, 30000, 35000, 40000, 45000,
+	50000, 55000, 60000, 65000, 70000,
+	75000, 80000, 85000, 90000, 95000,
+	100000, 105000, 110000, 115000, 120000,
+	125000, 130000, 135000, 140000, 145000,
+	150000, 155000, 160000, 165000, 170000,
+	175000, 180000, 185000, 190000, 195000,
+	200000, 205000, 210000, 215000, 220000,
+	225000, 230000, 235000, 240000, 245000,
+	250000, 255000, 260000, 265000, 270000,
+	275000, 280000, 285000, 290000, 295000,
+	300000, 305000, 310000, 315000, 320000,
+	325000, 330000, 335000, 340000, 345000,
+	350000, 355000, 360000, 365000, 370000,
+	375000, 380000, 385000, 390000, 395000,
+	400000, 405000, 410000, 415000, 420000,
+	425000, 430000, 435000, 440000, 445000,
+	450000, 455000, 460000, 465000, 470000,
+	475000, 480000, 485000, 490000, 495000,
+	500000, 505000, 510000, 515000, 520000,
+	525000, 530000, 535000, 540000, 545000,
+	550000, 555000, 560000, 565000, 570000,
+	575000, 580000, 585000, 590000, 595000,
+	600000, 605000, 610000, 615000, 620000,
+	625000, 630000, 635000, 640000, 645000,
+	650000, 655000, 660000, 665000, 670000,
+	675000, 680000, 685000, 690000, 695000,
+	700000, 705000, 710000, 715000, 720000,
+	725000, 730000, 735000, 740000, 745000,
+	750000, 755000, 760000, 765000, 770000,
+	775000, 780000, 785000, 790000, 795000,
+	800000, 805000, 810000, 815000, 820000,
+	825000, 830000, 835000, 840000, 845000,
+	850000, 855000, 860000, 865000, 870000,
+	875000, 880000, 885000, 890000, 895000,
+	900000, 905000, 910000, 915000, 920000,
+	925000, 930000, 935000, 940000, 945000,
+	950000, 955000, 960000, 965000, 970000,
+	975000, 980000, 985000, 990000, 995000,
+	1000000, 1005000, 1010000, 1015000, 1020000,
+	1025000, 1030000, 1035000, 1040000, 1045000,
+	1050000, 1055000, 1060000, 1065000, 1070000,
+	1075000, 1080000, 1085000, 1090000, 1095000,
+	1100000, 1105000, 1110000, 1115000, 1120000,
+	1125000, 1130000, 1135000, 1140000, 1145000,
+	1150000, 1155000, 1160000, 1165000, 1170000,
+	1175000, 1180000, 1185000, 1190000, 1195000,
+	1200000, 1205000, 1210000, 1215000, 1220000,
+	1225000, 1230000, 1235000, 1240000
+};
+
+static const int16_t LUT_ADC[249] = {
+	0x8D18, 0x8DEF, 0x8ED4, 0x8FB5, 0x909C,
+	0x917F, 0x9267, 0x9348, 0x9430, 0x9516,
+	0x95FC, 0x96DF, 0x97C2, 0x98AA, 0x998B,
+	0x9A70, 0x9B54, 0x9C3C, 0x9D1F, 0x9E02,
+	0x9EEC, 0x9FD1, 0xA0B2, 0xA198, 0xA27D,
+	0xA35E, 0xA448, 0xA529, 0xA610, 0xA6F0,
+	0xA7DF, 0xA8C0, 0xA9A7, 0xAA8B, 0xAB6D,
+	0xAC53, 0xAD39, 0xAE20, 0xAF04, 0xAFEA,
+	0xB0CB, 0xB1B3, 0xB298, 0xB37E, 0xB461,
+	0xB547, 0xB62C, 0xB712, 0xB7F5, 0xB8D9,
+	0xB9C1, 0xBAA5, 0xBB88, 0xBC6F, 0xBD51,
+	0xBE3B, 0xBF1E, 0xC003, 0xC0E8, 0xC1CE,
+	0xC2B1, 0xC397, 0xC47C, 0xC562, 0xC644,
+	0xC72C, 0xC811, 0xC8F3, 0xC9D6, 0xCABE,
+	0xCB9F, 0xCC88, 0xCD6B, 0xCE52, 0xCF36,
+	0xD01A, 0xD101, 0xD1E6, 0xD2CB, 0xD3AE,
+	0xD492, 0xD578, 0xD65A, 0xD745, 0xD826,
+	0xD90D, 0xD9F2, 0xDAD9, 0xDBBE, 0xDCA1,
+	0xDD85, 0xDE6B, 0xDF4E, 0xE036, 0xE118,
+	0xE1FB, 0xE2E4, 0xE3C5, 0xE4AB, 0xE591,
+	0xE678, 0xE75C, 0xE840, 0xE925, 0xEA0B,
+	0xEAEC, 0xEBD1, 0xECBA, 0xED9E, 0xEE85,
+	0xEF85, 0xF061, 0xF148, 0xF22F, 0xF30A,
+	0xF3F6, 0xF4D9, 0xF5B0, 0xF6A1, 0xF78B,
+	0x9F, 0x17D, 0x26A, 0x34C, 0x43B,
+	0x520, 0x5F5, 0x6E0, 0x7C5, 0x8B5,
+	0x997, 0xA76, 0xB5B, 0xC3D, 0xD23,
+	0xE08, 0xEF4, 0xFDA, 0x10C0, 0x11A2,
+	0x128F, 0x1371, 0x142A, 0x150C, 0x15F7,
+	0x16D4, 0x17BD, 0x189E, 0x1950, 0x1A6A,
+	0x1B4F, 0x1C31, 0x1D1B, 0x1DFB, 0x1EDB,
+	0x1FBF, 0x20AE, 0x2191, 0x2273, 0x235B,
+	0x2445, 0x2530, 0x261B, 0x26FA, 0x27E5,
+	0x28BB, 0x29A4, 0x2A9F, 0x2B6F, 0x2C5C,
+	0x2D38, 0x2E11, 0x2F2A, 0x2FE9, 0x30D7,
+	0x31B9, 0x3296, 0x3381, 0x3467, 0x3553,
+	0x3637, 0x3717, 0x3802, 0x38E4, 0x39CA,
+	0x3AAD, 0x3B91, 0x3C79, 0x3D5B, 0x3E47,
+	0x3F20, 0x400B, 0x40F0, 0x41DB, 0x42C5,
+	0x43A0, 0x447F, 0x4566, 0x4653, 0x472D,
+	0x4815, 0x48F0, 0x49E1, 0x4ACA, 0x4BA8,
+	0x4C8D, 0x4D76, 0x4E5E, 0x4F36, 0x5021,
+	0x5110, 0x51F2, 0x52D3, 0x53BB, 0x54AA,
+	0x558D, 0x5671, 0x5759, 0x583B, 0x5926,
+	0x5A0E, 0x5AEF, 0x5BD5, 0x5CBD, 0x5D9C,
+	0x5E7E, 0x5F67, 0x604B, 0x612D, 0x6210,
+	0x62FB, 0x63E2, 0x64CE, 0x65A5, 0x668E,
+	0x6775, 0x6858, 0x6935, 0x6A22, 0x6B05,
+	0x6BEF, 0x6CCB, 0x6DD5, 0x6E9E, 0x6F6F,
+	0x7050, 0x7127, 0x7208, 0x72E7
+};
+
+#define OVERHEAT_TH_DEG	50
+#define COLD_TH_DEG	0
+#endif
 
 struct sm_fg_chip {
 	struct device *dev;
 	struct i2c_client *client;
 	struct mutex i2c_rw_lock; /* I2C Read/Write Lock */
 	struct mutex data_lock; /* Data Lock */
+	struct mutex update_lock; /* Update Lock */
 	u8 chip;
 	u8 regs[NUM_REGS];
 	int batt_id;
 	int gpio_int;
+	unsigned long last_update_jiffies[FG_UPDATE_COUNT]; /* Update Timestamp */
 
 	struct notifier_block nb;
 
@@ -280,7 +428,8 @@ struct sm_fg_chip {
 
 	/* Battery Data */
 	int battery_table[BATTERY_TABLE_MAX][FG_TABLE_LEN];
-	signed short battery_temp_table[FG_TEMP_TABLE_CNT_MAX]; /* -20~80 Degree */
+	//signed short battery_temp_table[FG_TEMP_TABLE_CNT_MAX]; /* -20~80 Degree */
+	int16_t battery_temp_table[FG_TEMP_TABLE_CNT_MAX]; /* -20~80 Degree, ADC codes (signed 16-bit) */
 	int alpha;
 	int beta;
 	int rs;
@@ -356,171 +505,33 @@ struct sm_fg_chip {
 	struct power_supply_desc fg_psy_d;
 
 	struct batt_params param;
-#ifdef ENABLE_TEMP_AVG
-	struct batt_temp_params temp_param;
-#endif
 	//struct delayed_work soc_monitor_work;
 	struct delayed_work overtemp_delay_work; //20220108 : W/A for over 60degree
 	bool overtemp_delay_on; //20220108 : W/A for over 60degree
 	bool overtemp_allow_restart; //20220108 : W/A for over 60degree
-	struct delayed_work LowBatteryCheckWork;
+	struct delayed_work low_battery_check_work;
 	bool low_battery_power;
 	bool start_low_battery_check;
 	bool cp_work_flag;
 };
 
-#ifdef ENABLE_NTC_COMPENSATION
-int tex_sim_uV[43] = {
-	0, 270, 480, 510, 910,
-	1180, 1330, 2120, 2220, 2400,
-	2660, 3290, 4000, 4790, 5910,
-	6650, 7440, 8000, 11670, 11940,
-	13260, 13350, 14370, 16040, 20930,
-	23760, 26370, 28720, 42490, 47060,
-	64860, 75410, 87080, 114290, 126320,
-	152320, 218180, 229150, 383190, 508830,
-	783080, 1024200, 1374360
-};
-
-short tex_sim_adc_code[43] = {
-	0x8001, 0x8D10, 0x8D1B, 0x8D1C, 0x8D30,
-	0x8D3E, 0x8D45, 0x8D6B, 0x8D70, 0x8D78,
-	0x8D86, 0x8DA5, 0x8DC8, 0x8DEE, 0x8E25,
-	0x8E4A, 0x8E70, 0x8E8B, 0x8F40, 0x8F4D,
-	0x8F8F, 0x8F93, 0x8FC4, 0x9018, 0x9106,
-	0x9192, 0x9213, 0x9288, 0x9530, 0x960B,
-	0x997E, 0x9B85, 0x9DD5, 0xA2FB, 0xA573,
-	0xAA5F, 0xB70C, 0xB9E2, 0xD720, 0xEFF9,
-	0x222B, 0x452A, 0x7FC0
-};
-
-int tex_meas_uV[249] = {
-	0, 5000, 10000, 15000, 20000,
-	25000, 30000, 35000, 40000, 45000,
-	50000, 55000, 60000, 65000, 70000,
-	75000, 80000, 85000, 90000, 95000,
-	100000, 105000, 110000, 115000, 120000,
-	125000, 130000, 135000, 140000, 145000,
-	150000, 155000, 160000, 165000, 170000,
-	175000, 180000, 185000, 190000, 195000,
-	200000, 205000, 210000, 215000, 220000,
-	225000, 230000, 235000, 240000, 245000,
-	250000, 255000, 260000, 265000, 270000,
-	275000, 280000, 285000, 290000, 295000,
-	300000, 305000, 310000, 315000, 320000,
-	325000, 330000, 335000, 340000, 345000,
-	350000, 355000, 360000, 365000, 370000,
-	375000, 380000, 385000, 390000, 395000,
-	400000, 405000, 410000, 415000, 420000,
-	425000, 430000, 435000, 440000, 445000,
-	450000, 455000, 460000, 465000, 470000,
-	475000, 480000, 485000, 490000, 495000,
-	500000, 505000, 510000, 515000, 520000,
-	525000, 530000, 535000, 540000, 545000,
-	550000, 555000, 560000, 565000, 570000,
-	575000, 580000, 585000, 590000, 595000,
-	600000, 605000, 610000, 615000, 620000,
-	625000, 630000, 635000, 640000, 645000,
-	650000, 655000, 660000, 665000, 670000,
-	675000, 680000, 685000, 690000, 695000,
-	700000, 705000, 710000, 715000, 720000,
-	725000, 730000, 735000, 740000, 745000,
-	750000, 755000, 760000, 765000, 770000,
-	775000, 780000, 785000, 790000, 795000,
-	800000, 805000, 810000, 815000, 820000,
-	825000, 830000, 835000, 840000, 845000,
-	850000, 855000, 860000, 865000, 870000,
-	875000, 880000, 885000, 890000, 895000,
-	900000, 905000, 910000, 915000, 920000,
-	925000, 930000, 935000, 940000, 945000,
-	950000, 955000, 960000, 965000, 970000,
-	975000, 980000, 985000, 990000, 995000,
-	1000000, 1005000, 1010000, 1015000, 1020000,
-	1025000, 1030000, 1035000, 1040000, 1045000,
-	1050000, 1055000, 1060000, 1065000, 1070000,
-	1075000, 1080000, 1085000, 1090000, 1095000,
-	1100000, 1105000, 1110000, 1115000, 1120000,
-	1125000, 1130000, 1135000, 1140000, 1145000,
-	1150000, 1155000, 1160000, 1165000, 1170000,
-	1175000, 1180000, 1185000, 1190000, 1195000,
-	1200000, 1205000, 1210000, 1215000, 1220000,
-	1225000, 1230000, 1235000, 1240000
-};
-
-short tex_meas_adc_code[249] = {
-	0x8D18, 0x8DEF, 0x8ED4, 0x8FB5, 0x909C,
-	0x917F, 0x9267, 0x9348, 0x9430, 0x9516,
-	0x95FC, 0x96DF, 0x97C2, 0x98AA, 0x998B,
-	0x9A70, 0x9B54, 0x9C3C, 0x9D1F, 0x9E02,
-	0x9EEC, 0x9FD1, 0xA0B2, 0xA198, 0xA27D,
-	0xA35E, 0xA448, 0xA529, 0xA610, 0xA6F0,
-	0xA7DF, 0xA8C0, 0xA9A7, 0xAA8B, 0xAB6D,
-	0xAC53, 0xAD39, 0xAE20, 0xAF04, 0xAFEA,
-	0xB0CB, 0xB1B3, 0xB298, 0xB37E, 0xB461,
-	0xB547, 0xB62C, 0xB712, 0xB7F5, 0xB8D9,
-	0xB9C1, 0xBAA5, 0xBB88, 0xBC6F, 0xBD51,
-	0xBE3B, 0xBF1E, 0xC003, 0xC0E8, 0xC1CE,
-	0xC2B1, 0xC397, 0xC47C, 0xC562, 0xC644,
-	0xC72C, 0xC811, 0xC8F3, 0xC9D6, 0xCABE,
-	0xCB9F, 0xCC88, 0xCD6B, 0xCE52, 0xCF36,
-	0xD01A, 0xD101, 0xD1E6, 0xD2CB, 0xD3AE,
-	0xD492, 0xD578, 0xD65A, 0xD745, 0xD826,
-	0xD90D, 0xD9F2, 0xDAD9, 0xDBBE, 0xDCA1,
-	0xDD85, 0xDE6B, 0xDF4E, 0xE036, 0xE118,
-	0xE1FB, 0xE2E4, 0xE3C5, 0xE4AB, 0xE591,
-	0xE678, 0xE75C, 0xE840, 0xE925, 0xEA0B,
-	0xEAEC, 0xEBD1, 0xECBA, 0xED9E, 0xEE85,
-	0xEF85, 0xF061, 0xF148, 0xF22F, 0xF30A,
-	0xF3F6, 0xF4D9, 0xF5B0, 0xF6A1, 0xF78B,
-	0x9F, 0x17D, 0x26A, 0x34C, 0x43B,
-	0x520, 0x5F5, 0x6E0, 0x7C5, 0x8B5,
-	0x997, 0xA76, 0xB5B, 0xC3D, 0xD23,
-	0xE08, 0xEF4, 0xFDA, 0x10C0, 0x11A2,
-	0x128F, 0x1371, 0x142A, 0x150C, 0x15F7,
-	0x16D4, 0x17BD, 0x189E, 0x1950, 0x1A6A,
-	0x1B4F, 0x1C31, 0x1D1B, 0x1DFB, 0x1EDB,
-	0x1FBF, 0x20AE, 0x2191, 0x2273, 0x235B,
-	0x2445, 0x2530, 0x261B, 0x26FA, 0x27E5,
-	0x28BB, 0x29A4, 0x2A9F, 0x2B6F, 0x2C5C,
-	0x2D38, 0x2E11, 0x2F2A, 0x2FE9, 0x30D7,
-	0x31B9, 0x3296, 0x3381, 0x3467, 0x3553,
-	0x3637, 0x3717, 0x3802, 0x38E4, 0x39CA,
-	0x3AAD, 0x3B91, 0x3C79, 0x3D5B, 0x3E47,
-	0x3F20, 0x400B, 0x40F0, 0x41DB, 0x42C5,
-	0x43A0, 0x447F, 0x4566, 0x4653, 0x472D,
-	0x4815, 0x48F0, 0x49E1, 0x4ACA, 0x4BA8,
-	0x4C8D, 0x4D76, 0x4E5E, 0x4F36, 0x5021,
-	0x5110, 0x51F2, 0x52D3, 0x53BB, 0x54AA,
-	0x558D, 0x5671, 0x5759, 0x583B, 0x5926,
-	0x5A0E, 0x5AEF, 0x5BD5, 0x5CBD, 0x5D9C,
-	0x5E7E, 0x5F67, 0x604B, 0x612D, 0x6210,
-	0x62FB, 0x63E2, 0x64CE, 0x65A5, 0x668E,
-	0x6775, 0x6858, 0x6935, 0x6A22, 0x6B05,
-	0x6BEF, 0x6CCB, 0x6DD5, 0x6E9E, 0x6F6F,
-	0x7050, 0x7127, 0x7208, 0x72E7
-};
-
-#define OVERHEAT_TH_DEG	50
-#define COLD_TH_DEG	0
-#endif
-
 #define _SM_RAW(a, b) a##b
-#define _SM_RATE(a, b) _SM_RAW(a, b)
+#define _SM_NAME(a, b) _SM_RAW(a, b)
 
 #if defined(__COUNTER__)
-#define _SM_FALLBACK() _SM_RATE(sm_rl_, __COUNTER__)
+#define _SM_ID() __COUNTER__
 #else
-#define _SM_FALLBACK() _SM_RATE(sm_rl_, __LINE__)
+#define _SM_ID() __LINE__
 #endif
 
-#define _SM_LOG_WRAPPER(name, fmt, ...)			\
-do {							\
-	static DEFINE_RATELIMIT_STATE(name, 5 * HZ, 1);	\
-	if (__ratelimit(&name))				\
-		pr_info(fmt, ##__VA_ARGS__);		\
+#define _SM_WRAPPER_ID(id, fmt, ...)					\
+do {									\
+	static DEFINE_RATELIMIT_STATE(_SM_NAME(sm_rl_, id), 5 * HZ, 1);	\
+	if (__ratelimit(&_SM_NAME(sm_rl_, id)))				\
+		pr_info(fmt, ##__VA_ARGS__);				\
 } while (0)
 
-#define sm_log(fmt, ...)	_SM_LOG_WRAPPER(_SM_FALLBACK(), fmt, ##__VA_ARGS__)
+#define sm_log(fmt, ...)	_SM_WRAPPER_ID(_SM_ID(), fmt, ##__VA_ARGS__)
 #define sm_err(fmt, ...)	do { pr_err(fmt, ##__VA_ARGS__); } while (0)
 #define sm_dbg(fmt, ...)	do { pr_debug(fmt, ##__VA_ARGS__); } while (0)
 #define sm_info(fmt, ...)	do { pr_info(fmt, ##__VA_ARGS__); } while (0)
@@ -625,10 +636,6 @@ static int fg_read_status(struct sm_fg_chip *sm)
 {
 	int ret;
 	u16 flags1, flags2;
-#ifdef ENABLE_MIX_NTC_BATTDET
-	u16 data = 0;
-	int uval = 0;
-#endif
 
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_STATUS], &flags1);
 	if (ret < 0)
@@ -638,33 +645,8 @@ static int fg_read_status(struct sm_fg_chip *sm)
 	if (ret < 0)
 		return ret;
 
-#ifdef ENABLE_MIX_NTC_BATTDET
-	if (sm->en_temp_ex) {
-		ret = fg_read_word(sm, sm->regs[SM_FG_REG_TEMPERATURE_EX], &data);
-		if (ret < 0) {
-			sm_err("Couldn't read temperature ex, ret=%d\n", ret);
-			return ret;
-		} else {
-			uval = data;
-		}
-	}
-#endif
-
 	mutex_lock(&sm->data_lock);
-	if (sm->en_batt_det) {
-#if defined(ENABLE_MIX_NTC_BATTDET)
-		// Present Case
-		// - FG_STATUS_BATT_PRESENT
-		// - Out of 0x7700~0x77FF range
-		sm->batt_present = (!!(flags1 & FG_STATUS_BATT_PRESENT) ||
-				(!!!(flags1 & FG_STATUS_BATT_PRESENT) && (!(0x7700 <= uval && 0x77FF >= uval))));
-		sm_dbg("ENABLE_MIX_NTC_BATTDET, uval = %d\n", uval);
-#else
-		sm->batt_present = !!(flags1 & FG_STATUS_BATT_PRESENT);
-#endif
-	} else {
-		sm->batt_present = true; //Always battery presented
-	}
+	sm->batt_present	= !!(flags1 & FG_STATUS_BATT_PRESENT);
 	sm->batt_ot		= !!(flags1 & FG_STATUS_HIGH_TEMPERATURE);
 	sm->batt_ut		= !!(flags1 & FG_STATUS_LOW_TEMPERATURE);
 	sm->batt_fc		= !!(flags1 & FG_STATUS_TOPOFF);
@@ -676,236 +658,318 @@ static int fg_read_status(struct sm_fg_chip *sm)
 	return 0;
 }
 
-#if (FG_REMOVE_IRQ == 0)
-static int fg_status_changed(struct sm_fg_chip *sm)
+static inline bool do_update(struct sm_fg_chip *sm,
+		enum fg_update_idx idx,
+		unsigned long interval)
 {
-	cancel_delayed_work_sync(&sm->monitor_work);
-	schedule_delayed_work(&sm->monitor_work, 0);
-	power_supply_changed(sm->fg_psy);
+	unsigned long now = jiffies;
+	bool update = false;
 
-	return IRQ_HANDLED;
+	mutex_lock(&sm->update_lock);
+	if (time_after(now, sm->last_update_jiffies[idx] + interval)) {
+		sm->last_update_jiffies[idx] = now;
+		update = true;
+	}
+	mutex_unlock(&sm->update_lock);
+
+	return update;
 }
 
-static irqreturn_t fg_irq_thread(int irq, void *dev_id)
+#define STEP_TENTHS 10
+static void fg_read_scale_soc(struct sm_fg_chip *sm)
 {
-	struct sm_fg_chip *sm = dev_id;
-	int ret;
-	u16 data_int, data_int_mask;
+	int raw_soc = sm->param.batt_raw_soc;
+	int orig_soc = (raw_soc <= 0) ? 0 : (raw_soc * 100 + 960) / 97;
+	int target_soc, delta_soc, bucket_soc;
+	int curr_soc, delta_tenths, new_soc;
 
-	/* Read INT */
-	ret = fg_read_word(sm, sm->regs[SM_FG_REG_INT_MASK], &data_int_mask);
-	if (ret < 0) {
-		sm_err("Failed to read INT_MASK, ret=%d\n", ret);
-		return ret;
-	}
-
-	ret = fg_write_word(sm, sm->regs[SM_FG_REG_INT_MASK], 0x8000 | data_int_mask);
-	if (ret < 0) {
-		sm_err("Failed to write 0x8000 | INIT_MARK, ret=%d\n", ret);
-		return ret;
-	}
-
-	ret = fg_read_word(sm, sm->regs[SM_FG_REG_INT], &data_int);
-	if (ret < 0) {
-		sm_err("Failed to write REG_INT, ret=%d\n", ret);
-		return ret;
-	}
-
-	ret = fg_write_word(sm, sm->regs[SM_FG_REG_INT_MASK], 0x03FF & data_int_mask);
-	if (ret < 0) {
-		sm_err("Failed to write INIT_MARK, ret=%d\n", ret);
-		return ret;
-	}
-
-	fg_status_changed(sm);
-	sm_info("fg_read_int = 0x%x\n", data_int);
-
-	return 0;
-}
-#endif
-
-/*static int fg_read_soc(struct sm_fg_chip *sm)
-{
-	int ret;
-	int soc = 0;
-	u16 data = 0;
-	static int pre_soc = 0;
-
-	ret = fg_read_word(sm, sm->regs[SM_FG_REG_SOC], &data);
-	if (ret < 0) {
-		sm_err("Couldn't read SOC, ret=%d\n", ret);
-		return pre_soc;
+	if (raw_soc >= 970) {
+		target_soc = 1000;
+	} else if (orig_soc <= 990) {
+		target_soc = orig_soc;
 	} else {
-		soc = ((data & 0x7f00) >> 8) * 10;
-		soc = soc + (((data & 0x00ff) * 10) / 256);
-		if (data & 0x8000) {
-			sm_dbg("data: %d\n", data);
-			soc *= -1;
-		}
+		delta_soc = orig_soc - 990;
+		bucket_soc = delta_soc >> 1;
+		target_soc = 990 + bucket_soc;
 	}
-	//sm_info("fg_read_soc soc=%d\n",soc);
-	//return soc/10;
 
-	pre_soc = soc;
-	return soc;
-}*/
+	if (!sm->soc_smooth_initialized) {
+		sm->param.batt_soc = target_soc;
+		sm->soc_smooth_initialized = true;
+		return;
+	}
+
+	curr_soc = sm->param.batt_soc;
+	delta_tenths = target_soc - curr_soc;
+	if (delta_tenths == 0)
+		return;
+
+	if (delta_tenths > 0)
+		new_soc = curr_soc + (delta_tenths > STEP_TENTHS ? STEP_TENTHS : delta_tenths);
+	else
+		new_soc = curr_soc - ((-delta_tenths) > STEP_TENTHS ? STEP_TENTHS : -delta_tenths);
+
+	sm_info("soc: %d.%d, raw: %d.%d, delta_tenths: %d\n",
+		new_soc / 10, new_soc % 10, raw_soc / 10, raw_soc % 10, delta_tenths);
+
+	sm->param.batt_soc = new_soc;
+}
 
 static int fg_read_soc(struct sm_fg_chip *sm)
 {
-	int ret, msb, lsb;
-	int soc = 0;
-	u16 data = 0;
-	static int pre_soc = 0;
+	int ret, soc;
+	int32_t raw_soc;
+	uint32_t raw;
+	uint16_t data = 0;
+
+	if (!do_update(sm, FG_UPDATE_SOC, HZ))
+		return 0;
 
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_SOC], &data);
 	if (ret < 0) {
 		sm_err("Couldn't read SOC, ret=%d\n", ret);
-		return pre_soc;
+		return ret;
 	}
 
-	/* integer bit */
-	msb = (data & 0x7f00) >> 8;
-	/* fractional byte */
-	lsb = data & 0x00ff;
+	raw = data & 0x7FFFU;
+	raw_soc = (raw * 10U) >> 8;
 
-	/* msb * 10 => (msb<<3) + (msb<<1) (lsb * 10) / 256 => (((lsb<<3) + (lsb<<1)) >> 8) */
-	soc = ((msb << 3) + (msb << 1)) + ((((lsb << 3) + (lsb << 1)) >> 8));
-
-	if (data & 0x8000) {
-		sm_dbg("data: 0x%04x\n", (unsigned int)data);
-		soc = -soc;
+	if (data & 0x8000U) {
+		sm_err("data: 0x%04x, raw_soc: %d\n", (unsigned int)data, raw_soc);
+		raw_soc = -raw_soc;
 	}
 
-	pre_soc = soc;
-	return soc;
+	soc = clamp(raw_soc, 0, 1000);
+
+	mutex_lock(&sm->data_lock);
+	sm->batt_soc = soc;
+	sm->param.batt_raw_soc = soc;
+	fg_read_scale_soc(sm);
+	mutex_unlock(&sm->data_lock);
+
+	return 0;
 }
 
 static int fg_get_soc_decimal(struct sm_fg_chip *sm)
 {
-	int raw_soc;
-
-	raw_soc = fg_read_soc(sm);
-
-	return raw_soc % 100;
+	return sm->batt_soc % 100;
 }
 
 static int fg_get_soc_decimal_rate(struct sm_fg_chip *sm)
 {
-	int raw_soc, soc, i;
-	u32 threshold, rate;
+	int soc, i;
 
 	if (!sm->dec_rate_seq || sm->dec_rate_len < 2)
 		return 0;
 
-	raw_soc = fg_read_soc(sm);
-	raw_soc = clamp(raw_soc, 0, 1000);
-	soc = clamp(DIV_ROUND_CLOSEST(raw_soc, 10), 0, 100);
+	soc = sm->batt_soc / 10;
 
-	for (i = 0; i + 2 < sm->dec_rate_len; i += 2) {
-		rate = sm->dec_rate_seq[i + 1];
-		threshold = sm->dec_rate_seq[i + 2];
+	for (i = 0; i < sm->dec_rate_len; i += 2) {
+		if (i >= sm->dec_rate_len)
+			break;
 
-		if (soc <= (int)threshold)
-			return (int)rate;
+		if (i == 0) {
+			if (soc < (int)sm->dec_rate_seq[0]) {
+				if (1 < sm->dec_rate_len)
+					return (int)sm->dec_rate_seq[1];
+				break;
+			}
+		} else {
+			if (soc < (int)sm->dec_rate_seq[i])
+				return (int)sm->dec_rate_seq[i - 1];
+		}
 	}
 
 	return (int)sm->dec_rate_seq[sm->dec_rate_len - 1];
 }
 
-/*static unsigned int fg_read_ocv(struct sm_fg_chip *sm)
-{
-	int ret;
-	u16 data = 0;
-	unsigned int ocv; // = 3500; 3500 means 3500mV
-
-	ret = fg_read_word(sm, sm->regs[SM_FG_REG_OCV], &data);
-	if (ret < 0) {
-		sm_err("Couldn't read OCV, ret=%d\n", ret);
-		ocv = 4000;
-	} else {
-		ocv = (((data & 0x0fff) * 1000) / 2048) + (((data & 0xf000) >> 11) * 1000);
-	}
-
-	return ocv; //mV
-}*/
-
 static unsigned int fg_read_ocv(struct sm_fg_chip *sm)
 {
-	int ret, low, high;
-	u16 data = 0;
-	unsigned int ocv; /* mV */
+	int ret;
+	uint32_t low, high;
+	uint16_t data = 0;
+	uint32_t ocv; /* mV */
+
+	if (!do_update(sm, FG_UPDATE_OCV, HZ))
+		return 0;
 
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_OCV], &data);
 	if (ret < 0) {
 		sm_err("Couldn't read OCV, ret=%d\n", ret);
-		ocv = 4000;
-	} else {
-		low = data & 0x0fff;	/* 12-bit fractional part */
-		high = data >> 12;	/* top 4 bits */
-
-		ocv = ((low * 1000) >> 11) + (high * 2000);
+		return ret;
 	}
 
-	return ocv; /* mV */
+	low = data & 0x0FFFU;
+	high = data >> 12;
+	ocv = ((low * 1000u) >> 11) + (high * 2000u);
+
+	mutex_lock(&sm->data_lock);
+	sm->batt_ocv = ocv;
+	mutex_unlock(&sm->data_lock);
+
+	return ocv;
 }
 
 #ifdef ENABLE_NTC_COMPENSATION
-short interp_meas_to_adc(int len, int X, int *pX, short *pY)
+static int adc_to_uv(int len, int16_t adc_code, const int16_t *adc_table, const int32_t *uv_table)
 {
 	int i;
-	s64 slope, tmp;
-	short new_y;
+	int64_t num, den, tmp, res;
+	int32_t out_uv;
 
-	if (X < pX[0])
-		return pY[0];
-	else if (X > pX[len - 1])
-		return pY[len - 1];
+	if (adc_code < adc_table[0])
+		return uv_table[0];
+	if (adc_code > adc_table[len - 1])
+		return uv_table[len - 1];
 
 	for (i = 0; i < len - 1; i++) {
-		if (X >= pX[i] && X <= pX[i + 1])
+		if (adc_code >= adc_table[i] && adc_code <= adc_table[i + 1])
 			break;
 	}
 
-	slope = (s64)(pY[i + 1] - pY[i]) * 100000;
-	slope = div_s64(slope, (s64)(pX[i + 1] - pX[i]));
-	tmp = div_s64(slope * (X - pX[i]), 100000) + pY[i];
-	new_y = (short)tmp;
+	if (i >= len - 1)
+		return uv_table[len - 1];
+	if (adc_table[i + 1] == adc_table[i])
+		return uv_table[i];
 
-	return new_y;
+	num = (int64_t)(uv_table[i + 1] - uv_table[i]) * (int64_t)(adc_code - adc_table[i]);
+	den = (int64_t)adc_table[i + 1] - adc_table[i];
+	tmp = div_s64(num, den);
+	res = (int64_t)uv_table[i] + tmp;
+
+	out_uv = (int32_t)res;
+	return out_uv;
 }
 
-int interp_adc_to_meas(int len, short X, short *pX, int *pY)
+static int16_t uv_to_adc(int len, int32_t meas_uv, const int32_t *uv_table, const int16_t *adc_table)
 {
 	int i;
-	s64 slope, tmp;
-	int new_y;
+	int64_t num, den, tmp, res;
+	int16_t out_adc;
 
-	if (X < pX[0])
-		return pY[0];
-	else if (X > pX[len - 1])
-		return pY[len - 1];
+	if (meas_uv < uv_table[0])
+		return adc_table[0];
+	if (meas_uv > uv_table[len - 1])
+		return adc_table[len - 1];
 
 	for (i = 0; i < len - 1; i++) {
-		if (X >= pX[i] && X <= pX[i + 1])
+		if (meas_uv >= uv_table[i] && meas_uv <= uv_table[i + 1])
 			break;
 	}
 
-	slope = (s64)(pY[i + 1] - pY[i]) * 100000;
-	slope = div_s64(slope, (s64)(pX[i + 1] - pX[i]));
-	tmp = div_s64(slope * (X - pX[i]), 100000) + pY[i];
-	new_y = (int)tmp;
+	if (i >= len - 1)
+		return adc_table[len - 1];
+	if (uv_table[i + 1] == uv_table[i])
+		return adc_table[i];
 
-	return new_y;
+	num = (int64_t)(adc_table[i + 1] - adc_table[i]) * (int64_t)(meas_uv - uv_table[i]);
+	den = (int64_t)uv_table[i + 1] - uv_table[i];
+	tmp = div_s64(num, den);
+	res = (int64_t)adc_table[i] + tmp;
+
+	out_adc = (int16_t)res;
+	return out_adc;
+}
+
+static int64_t ir_drop_uv(int curr_mA, int rtrace_uOhm)
+{
+	int64_t corr = div_s64((int64_t)curr_mA * (int64_t)rtrace_uOhm, 1000LL);
+	return corr;
+}
+
+static int16_t compensate_ntc(struct sm_fg_chip *sm, int16_t raw_adc)
+{
+	int len = sizeof(LUT_UV) / sizeof(int32_t);
+	int32_t meas_uv;
+	int32_t corrected_uv;
+	int16_t corrected_adc;
+	int curr = sm->batt_curr;
+	int rtrace = sm->rtrace;
+	int64_t corr;
+
+	meas_uv = adc_to_uv(len, raw_adc, LUT_ADC, LUT_UV);
+	sm_info("DBG_COMP: raw_adc=0x%04x, raw_adc_dec=%d, meas_uV=%d, curr_ma=%d, rtrace_uohm=%d\n",
+			(unsigned)(uint16_t)raw_adc, (int)raw_adc, meas_uv, curr, rtrace);
+
+	corr = 0;
+	corrected_uv = meas_uv;
+
+	if (curr > 0) {
+		corr = ir_drop_uv(curr, rtrace);
+		corrected_uv = (int32_t)((int64_t)meas_uv - corr);
+		sm_info("DBG_COMP: corr_uv=%lld, temp_uV_after_corr=%d, corr_mV_approx=%lld\n",
+				(long long)corr, (int)corrected_uv, (long long)(corr / 1000LL));
+	}
+
+	corrected_adc = uv_to_adc(len, corrected_uv, LUT_UV, LUT_ADC);
+	sm_info("DBG_COMP: code_adc_after=0x%04x, val_for_map=0x%04x\n",
+			(unsigned)(uint16_t)corrected_adc, (unsigned)(uint16_t)corrected_adc);
+
+	return corrected_adc;
 }
 #endif
 
+static int __calculate_battery_temp_ex(struct sm_fg_chip *sm, u16 uval)
+{
+	int i, temp;
+	int16_t val = 0;
+#ifdef ENABLE_NTC_COMPENSATION
+	int16_t new_adc = 0;
+	int curr = sm->batt_curr;
+#endif
+
+	if ((uval >= 0x8001U) && (uval <= 0x823BU)) {
+		sm_err("sp_range uval = 0x%x\n", uval);
+		uval = 0x0000U;
+	}
+
+	val = (int16_t)uval;
+
+#ifdef ENABLE_NTC_COMPENSATION
+	sm_info("DBG_COMP: NTC_COMP=ON, batt_curr=%d, rtrace_cfg=%d\n", sm->batt_curr, sm->rtrace);
+
+	if (curr > 0) {
+		new_adc = compensate_ntc(sm, val);
+		val = new_adc;
+	}
+#else
+	sm_info("DBG_COMP: NTC_COMP=OFF, batt_curr=%d\n", sm->batt_curr);
+#endif
+
+	if (val >= sm->battery_temp_table[0]) {
+		temp = EX_TEMP_MIN;
+	} else if (val <= sm->battery_temp_table[FG_TEMP_TABLE_CNT_MAX - 1]) {
+		temp = EX_TEMP_MAX;
+	} else {
+		for (i = 0; i < FG_TEMP_TABLE_CNT_MAX; i++) {
+			if (val >= sm->battery_temp_table[i]) {
+				temp = EX_TEMP_MIN + i;
+				if ((temp >= 1) && (val != sm->battery_temp_table[i]))
+					temp = temp - 1;
+				break;
+			}
+		}
+	}
+
+#ifdef ENABLE_NTC_COMPENSATION
+	sm_info("DBG_COMP: raw_uval=0x%04x, final_val=0x%04x, temp=%d\n",
+			(unsigned)uval, (unsigned)(uint16_t)val, temp);
+#else
+	sm_info("DBG_COMP: (NTC OFF) raw_uval=0x%04x, final_val=0x%04x, temp=%d\n",
+			(unsigned)uval, (unsigned)(uint16_t)val, temp);
+#endif
+
+	return temp;
+}
+
 #ifdef ENABLE_TEMP_AVG
-#define MIN_SAMPLE_WINDOW	4
-#define MAX_SAMPLE_WINDOW	BATT_TEMP_AVG_SAMPLES
+#define MIN_TEMP_SAMPLE_WINDOW	3
+#define AVG_TEMP_SAMPLE_WINDOW	5
+#define MAX_TEMP_SAMPLE_WINDOW	BATT_TEMP_AVG_SAMPLES
 static void calculate_average_temperature(struct sm_fg_chip *sm)
 {
-	int curr = sm->temp_param.batt_temp;
-	int prev = sm->temp_param.batt_temp_prev;
+	int curr = sm->param.batt_temp;
+	int prev = sm->param.batt_temp_prev;
 	int delta, abs_delta;
 	int sum = 0, count = 0;
 	int i, idx;
@@ -913,118 +977,72 @@ static void calculate_average_temperature(struct sm_fg_chip *sm)
 	if (curr == -EINVAL)
 		return;
 
-	if (sm->temp_param.batt_temp_avg == -EINVAL) {
-		sm->temp_param.batt_temp_avg = curr;
-		sm->temp_param.batt_temp_prev = curr;
-		sm->temp_param.samples_index = 0;
-		sm->temp_param.samples_num = 1;
-		sm->temp_param.batt_temp_avg_samples[0] = curr;
+	if (sm->param.batt_temp_avg == -EINVAL) {
+		sm->param.batt_temp_avg = curr;
+		sm->param.batt_temp_prev = curr;
+		sm->param.batt_temp_samples_index = 0;
+		sm->param.batt_temp_samples_num = 1;
+		sm->param.batt_temp_avg_samples[0] = curr;
 		return;
 	}
 
 	delta = curr - prev;
 	abs_delta = abs(delta);
-	sm->temp_param.batt_temp_prev = curr;
+	sm->param.batt_temp_prev = curr;
 
-	sm->temp_param.batt_temp_avg_samples[sm->temp_param.samples_index] = curr;
-	sm->temp_param.samples_index = (sm->temp_param.samples_index + 1) % BATT_TEMP_AVG_SAMPLES;
+	sm->param.batt_temp_avg_samples[sm->param.batt_temp_samples_index] = curr;
+	sm->param.batt_temp_samples_index = (sm->param.batt_temp_samples_index + 1) % BATT_TEMP_AVG_SAMPLES;
 
-	if (sm->temp_param.samples_num < BATT_TEMP_AVG_SAMPLES)
-		sm->temp_param.samples_num++;
+	if (sm->param.batt_temp_samples_num < BATT_TEMP_AVG_SAMPLES)
+		sm->param.batt_temp_samples_num++;
+
+	if (sm->param.batt_temp_samples_num < MIN_TEMP_SAMPLE_WINDOW) {
+		sm->param.batt_temp_avg = curr;
+		return;
+	}
 
 	if (abs_delta <= 1)
-		count = MIN_SAMPLE_WINDOW;
+		count = MIN_TEMP_SAMPLE_WINDOW;
+	else if (abs_delta == 2)
+		count = AVG_TEMP_SAMPLE_WINDOW;
 	else
-		count = MAX_SAMPLE_WINDOW;
+		count = MAX_TEMP_SAMPLE_WINDOW;
 
-	if (count > sm->temp_param.samples_num)
-		count = sm->temp_param.samples_num;
+	if (count > sm->param.batt_temp_samples_num)
+		count = sm->param.batt_temp_samples_num;
 
 	for (i = 0; i < count; i++) {
-		idx = (sm->temp_param.samples_index - 1 - i + BATT_TEMP_AVG_SAMPLES) % BATT_TEMP_AVG_SAMPLES;
-		sum += sm->temp_param.batt_temp_avg_samples[idx];
+		idx = (sm->param.batt_temp_samples_index - 1 - i + BATT_TEMP_AVG_SAMPLES) % BATT_TEMP_AVG_SAMPLES;
+		sum += sm->param.batt_temp_avg_samples[idx];
 	}
 
-	sm->temp_param.batt_temp_avg = DIV_ROUND_CLOSEST(sum, count);
+	sm->param.batt_temp_avg = DIV_ROUND_CLOSEST(sum, count);
 
-	/*sm_dbg("raw_temp: %d, avg_temp: %d, delta: %d, abs: %d, count: %d\n",
-			curr, sm->temp_param.batt_temp_avg, delta, abs_delta, count);*/
+	sm_log("raw_temp: %d, avg_temp: %d, delta: %d, abs: %d, count: %d\n",
+			curr, sm->param.batt_temp_avg, delta, abs_delta, count);
 }
 #endif
 
-static int __calculate_battery_temp_ex(struct sm_fg_chip *sm, u16 uval)
+static int fg_read_temperature(struct sm_fg_chip *sm,
+		enum sm_fg_temperature_type temperature_type)
 {
-	int i = 0, temp = 0;
-	signed short val = 0;
-#ifdef ENABLE_NTC_COMPENSATION
-	int len_meas_data;
-	signed short code_adc = 0;
-	int code_meas, temp_mv = 0;
-	int rtrace, curr = sm->batt_curr;
-#endif
+	int ret;
+	int temp;
+	uint16_t data = 0;
 
-	if ((uval >= 0x8001) && (uval <= 0x823B)) {
-		sm_err("sp_range uval = 0x%x\n", uval);
-		uval = 0x0000;
-	}
-
-	val = uval;
-
-#ifdef ENABLE_NTC_COMPENSATION
-	/* only apply NTC compensation if current > 0. */
-	/* Use global sm->batt_curr instead */
-	//curr = fg_read_current(sm); // must return mA
-	if (curr > 0) {
-		/* rtrace: uohm: 7300uohm = 7.3mohm */
-		rtrace = sm->rtrace;
-		len_meas_data = sizeof(tex_meas_uV) / sizeof(int);
-		code_meas = interp_adc_to_meas(len_meas_data, val, tex_meas_adc_code, tex_meas_uV);
-		/*
-		 * Charging: Vthem = Vntc - I * Rtrace
-		 * Discharging: Vthem = Vntc + I * Rtrace
-		*/
-		temp_mv = (code_meas) - (curr * rtrace) / 1000;
-		code_adc = interp_meas_to_adc(len_meas_data, temp_mv, tex_meas_uV, tex_meas_adc_code);
-		val = code_adc;
-	}
-#endif
-
-	if (val >= sm->battery_temp_table[0]) {
-		temp = EX_TEMP_MIN; //Min : -20
-	} else if (val <= sm->battery_temp_table[FG_TEMP_TABLE_CNT_MAX - 1]) {
-		temp = EX_TEMP_MAX; //Max : 80
-	} else {
-		for (i = 0; i < FG_TEMP_TABLE_CNT_MAX; i++) {
-			if (val >= sm->battery_temp_table[i]) {
-				temp = EX_TEMP_MIN + i; //[ex] ~-20 : -20(skip), -19.9~-19.0 : 19, -18.9~-18 : 18, .., -0.9~0 : 0
-				if ((temp >= 1) && (val != sm->battery_temp_table[i])) //+ range 0~79 degree. In same value case, no needed (temp-1)
-					temp = temp - 1; //[ex] 0.1~0.9 : 0, 1.1~1.9 : 1, .., 79.1~79.9 : 79
-				break;
-			}
-		}
-	}
-
-	//sm_debug("uval: 0x%x, val: 0x%x, temp: %d\n", uval, val, temp);
-	return temp;
-}
-
-static int fg_read_temperature(struct sm_fg_chip *sm, enum sm_fg_temperature_type temperature_type)
-{
-	int ret, temp = 0;
-	u16 data = 0;
-	static int pre_temp = 0;
+	if (!do_update(sm, FG_UPDATE_TEMP, HZ))
+		return 0;
 
 	switch (temperature_type) {
 	case TEMPERATURE_IN:
 		ret = fg_read_word(sm, sm->regs[SM_FG_REG_TEMPERATURE_IN], &data);
 		if (ret < 0) {
-			sm_err("Couldn't read temperature in, ret=%d\n", ret);
-			return pre_temp;
+			sm_err("Couldn't read TEMP_IN, ret=%d\n", ret);
+			return ret;
 		}
 
-		/* integer bit; bit15 as negatif */
-		temp = data & 0x00FF;
-		if (data & 0x8000)
+		temp = data & 0x00FFU;
+		if (data & 0x8000U)
 			temp = -temp;
 
 		sm_log("temp_in: %d\n", temp);
@@ -1032,15 +1050,13 @@ static int fg_read_temperature(struct sm_fg_chip *sm, enum sm_fg_temperature_typ
 	case TEMPERATURE_EX:
 		ret = fg_read_word(sm, sm->regs[SM_FG_REG_TEMPERATURE_EX], &data);
 		if (ret < 0) {
-			sm_err("Couldn't read temperature ex, ret=%d\n", ret);
-			return pre_temp;
+			sm_err("Couldn't read TEMP_EX, ret=%d\n", ret);
+			return ret;
 		}
 
+		mutex_lock(&sm->data_lock);
 		temp = __calculate_battery_temp_ex(sm, data);
-#ifdef ENABLE_TEMP_AVG
-		sm->temp_param.batt_temp = temp;
-		calculate_average_temperature(sm);
-#endif
+		mutex_unlock(&sm->data_lock);
 		/* W/A >= 60°C */
 		if (temp >= 60) {
 			sm_err("temp >= 60 exceeded, schedule overtemp delay\n");
@@ -1048,97 +1064,85 @@ static int fg_read_temperature(struct sm_fg_chip *sm, enum sm_fg_temperature_typ
 				temp = 60;
 				if (!sm->overtemp_delay_on) {
 					sm->overtemp_delay_on = true;
-					schedule_delayed_work(&sm->overtemp_delay_work, msecs_to_jiffies(20000)); // keep 60°C for 20s
+					schedule_delayed_work(&sm->overtemp_delay_work, msecs_to_jiffies(20000)); /* keep 60°C for 20s */
 				}
 			}
 		} else if (temp < 60 && sm->overtemp_delay_on) {
-			/* if <61°C, reset W/A state */
 			sm_err("temp is < 60, cleanup overtemp delay work\n");
 			cancel_delayed_work_sync(&sm->overtemp_delay_work);
 			sm->overtemp_delay_on = false;
 			sm->overtemp_allow_restart = false;
 		}
 
-		sm_log("raw_temp_ex: %d, avg_temp_ex: %d\n", temp, sm->temp_param.batt_temp_avg);
+		sm_log("temp_ex: %d\n", temp);
 		break;
 	default:
-		return -EINVAL;
+		return -ENODATA;
 	}
 
-	pre_temp = temp;
-	return temp;
+	mutex_lock(&sm->data_lock);
+	sm->batt_temp = temp;
+#ifdef ENABLE_TEMP_AVG
+	sm->param.batt_temp = temp;
+	calculate_average_temperature(sm);
+#endif
+	mutex_unlock(&sm->data_lock);
+
+	return 0;
 }
-
-/*
- * Return : mV
- */
-/*static int fg_read_volt(struct sm_fg_chip *sm)
-{
-	int ret = 0;
-	int volt = 0;
-	u16 data = 0;
-	static int pre_volt = 0;
-
-	ret = fg_read_word(sm, sm->regs[SM_FG_REG_VOLTAGE], &data);
-	if (ret < 0) {
-		sm_err("Couldn't read voltage, ret=%d\n", ret);
-		return pre_volt;
-	} else {
-		volt = 1800 * (data & 0x7FFF) / 19622;
-		if (data & 0x8000)
-			volt *= -1;
-
-		volt += 2700;
-	}
-
-	sm->aver_batt_volt = (((sm->aver_batt_volt) * 4) + volt) / 5;
-	pre_volt = volt;
-	return volt;
-}*/
 
 static int fg_read_volt(struct sm_fg_chip *sm)
 {
-	int ret, raw, scaled;
-	int volt = 0;
-	u16 data = 0;
-	static int pre_volt = 0;
+	int ret, volt;
+	int32_t scaled;
+	uint32_t raw;
+	uint16_t data = 0;
+
+	if (!do_update(sm, FG_UPDATE_VOLT, HZ))
+		return 0;
 
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_VOLTAGE], &data);
 	if (ret < 0) {
-		sm_err("Couldn't read voltage, ret=%d\n", ret);
-		return pre_volt;
-	} else {
-		raw = data & 0x7FFF;
-		scaled = (raw * 1800) / 19622;
-
-		if (data & 0x8000)
-			scaled = -scaled;
-
-		volt = scaled + 2700;
+		sm_err("Couldn't read VOLT, ret=%d\n", ret);
+		return ret;
 	}
 
-	//sm->aver_batt_volt = (((sm->aver_batt_volt) * 4) + volt) / 5;
-	pre_volt = volt;
-	return volt;
+	raw = data & 0x7FFFU;
+	scaled = (raw * 94U) >> 10;
+
+	if (data & 0x8000U)
+		scaled = -scaled;
+
+	volt = scaled + 2700;
+
+	mutex_lock(&sm->data_lock);
+	sm->batt_volt = volt;
+	mutex_unlock(&sm->data_lock);
+
+	return 0;
 }
 
 static int fg_get_cycle(struct sm_fg_chip *sm)
 {
-	int ret;
-	int cycle = 0;
-	u16 data = 0;
-	static int pre_cycle = 0;
+	int ret, cycle;
+	uint16_t data = 0;
+
+	if (!do_update(sm, FG_UPDATE_CYCLE, HZ))
+		return 0;
 
 	ret = fg_read_word(sm, FG_REG_SOC_CYCLE, &data);
 	if (ret < 0) {
-		sm_err("Couldn't read cycle, ret=%d\n", ret);
-		cycle = pre_cycle;
-	} else {
-		cycle = data & 0x01FF;
+		sm_err("Couldn't read CYCLE, ret=%d\n", ret);
+		return ret;
 	}
 
-	pre_cycle = cycle;
-	return cycle;
+	cycle = data & 0x01FFU;
+
+	mutex_lock(&sm->data_lock);
+	sm->batt_soc_cycle = cycle;
+	mutex_unlock(&sm->data_lock);
+
+	return 0;
 }
 
 /*static int fg_read_current(struct sm_fg_chip *sm)
@@ -1174,89 +1178,165 @@ static int fg_get_cycle(struct sm_fg_chip *sm)
 	return curr;
 }*/
 
+#ifdef ENABLE_CURRENT_AVG
+#define MIN_CURRENT_SAMPLE_WINDOW	3
+#define AVG_CURRENT_SAMPLE_WINDOW	5
+#define MAX_CURRENT_SAMPLE_WINDOW	BATT_MA_AVG_SAMPLES
+#define CURRENT_THRESHOLD_HIGH	3500
+static void calculate_average_current(struct sm_fg_chip *sm)
+{
+	int curr = sm->param.batt_ma;
+	int prev = sm->param.batt_ma_prev;
+	int delta, abs_delta;
+	int sum = 0;
+	int count = 0;
+	int i, idx;
+
+	if (sm->param.batt_ma_avg == -EINVAL) {
+		sm->param.batt_ma_avg = curr;
+		sm->param.batt_ma_prev = curr;
+		sm->param.batt_ma_samples_index = 0;
+		sm->param.batt_ma_samples_num = 1;
+		sm->param.batt_ma_avg_samples[0] = curr;
+		return;
+	}
+
+	delta = curr - prev;
+	abs_delta = abs(delta);
+	sm->param.batt_ma_prev = curr;
+
+	sm->param.batt_ma_avg_samples[sm->param.batt_ma_samples_index] = curr;
+	sm->param.batt_ma_samples_index = (sm->param.batt_ma_samples_index + 1) % BATT_MA_AVG_SAMPLES;
+
+	if (sm->param.batt_ma_samples_num < BATT_MA_AVG_SAMPLES)
+		sm->param.batt_ma_samples_num++;
+
+	if (sm->param.batt_ma_samples_num < MIN_CURRENT_SAMPLE_WINDOW) {
+		sm->param.batt_ma_avg = curr;
+		return;
+	}
+
+	if (curr < 0)
+		count = MIN_CURRENT_SAMPLE_WINDOW;
+	else if (curr <= CURRENT_THRESHOLD_HIGH)
+		count = AVG_CURRENT_SAMPLE_WINDOW;
+	else
+		count = MAX_CURRENT_SAMPLE_WINDOW;
+
+	if (count > sm->param.batt_ma_samples_num)
+		count = sm->param.batt_ma_samples_num;
+
+	if (count <= 0)
+		return;
+
+	for (i = 0; i < count; i++) {
+		idx = (sm->param.batt_ma_samples_index - 1 - i + BATT_MA_AVG_SAMPLES) % BATT_MA_AVG_SAMPLES;
+		sum += sm->param.batt_ma_avg_samples[idx];
+	}
+
+	if (sum >= 0)
+		sm->param.batt_ma_avg = (sum + count / 2) / count;
+	else
+		sm->param.batt_ma_avg = (sum - count / 2) / count;
+
+	sm_log("raw_ma: %d, avg_ma: %d, delta: %d, abs: %d, count: %d\n",
+			curr, sm->param.batt_ma_avg, delta, abs_delta, count);
+}
+#endif
+
 static int fg_read_current(struct sm_fg_chip *sm)
 {
-	int ret, rsns, raw;
-	u16 data = 0;
-	int curr = 0;
-	int64_t temp;
-	int64_t denom;
+	int ret, curr;
+	unsigned int rsns;
+	uint16_t data = 0;
+	uint32_t raw;
+
+	if (!do_update(sm, FG_UPDATE_CURRENT, HZ))
+		return 0;
 
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_CURRENT], &data);
 	if (ret < 0) {
-		sm_err("Couldn't read current, ret=%d\n", ret);
+		sm_err("Couldn't read CURRENT, ret=%d\n", ret);
 		return ret;
-	} else {
-		if (sm->batt_rsns == -EINVAL) {
-			sm_err("Couldn't read batt_rsns, force 10 mohm\n");
-			rsns = 10;
-		} else {
-			if (sm->batt_rsns == 0)
-				rsns = 5;
-			else
-				rsns = sm->batt_rsns * 10;
-		}
-
-		if (rsns <= 0) {
-			sm_err("invalid shunt (%d mohm)\n", rsns);
-			return -EINVAL;
-		}
-
-		raw = data & 0x7FFF;
-
-		/* follow commented float type from old func */
-		temp = (int64_t)raw * 10000LL;
-		denom = (int64_t)4088 * rsns;
-
-		temp = div_s64(temp, denom);
-		curr = (int)temp;
-
-		if (data & 0x8000)
-			curr = -curr;
 	}
 
-	return curr;
+	if (sm->batt_rsns == -EINVAL) {
+		sm_err("Couldn't read batt_rsns, force 10 mohm\n");
+		rsns = 10;
+	} else {
+		rsns = (sm->batt_rsns == 0) ? 5 : (unsigned int)(sm->batt_rsns * 10);
+	}
+
+	if (rsns == 0) {
+		sm_err("invalid shunt (%u mohm)\n", rsns);
+		return -EINVAL;
+	}
+
+	raw = data & 0x7FFFU;
+	curr = (int)((((raw * 10000u) + 2048u) >> 12) / rsns);
+
+	if (data & 0x8000U)
+		curr = -curr;
+
+	mutex_lock(&sm->data_lock);
+	sm->batt_curr = curr;
+#ifdef ENABLE_CURRENT_AVG
+	sm->param.batt_ma = curr;
+	calculate_average_current(sm);
+#endif
+	mutex_unlock(&sm->data_lock);
+
+	return 0;
 }
 
-/*static int fg_read_fcc(struct sm_fg_chip *sm)
+static int fg_read_fcc(struct sm_fg_chip *sm)
 {
-	int ret = 0;
-	int fcc = 0;
-	u16 data = 0;
-	int64_t temp = 0;
+	int ret, fcc;
+	uint32_t raw;
+	uint16_t data = 0;
+
+	if (!do_update(sm, FG_UPDATE_FCC, HZ))
+		return 0;
 
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_BAT_CAP], &data);
 	if (ret < 0) {
 		sm_err("Couldn't read FCC, ret=%d\n", ret);
 		return ret;
-	} else {
-		temp = div_s64((data & 0x7FFF) * 1000, 2048);
-		fcc = temp;
 	}
 
-	return fcc;
-}*/
+	raw = data & 0x7FFFU;
+	fcc = (raw * 125u) >> 8;
 
-static int fg_read_fcc(struct sm_fg_chip *sm)
+	mutex_lock(&sm->data_lock);
+	sm->batt_fcc = fcc;
+	mutex_unlock(&sm->data_lock);
+
+	return 0;
+}
+
+static int fg_read_rmc(struct sm_fg_chip *sm)
 {
-	int ret, raw;
-	int fcc = 0;
-	u16 data = 0;
-	int64_t temp;
-	const int64_t denom = 2048LL;
+	int ret, rmc;
+	uint32_t raw;
+	uint16_t data = 0;
 
-	ret = fg_read_word(sm, sm->regs[SM_FG_REG_BAT_CAP], &data);
+	if (!do_update(sm, FG_UPDATE_RMC, HZ))
+		return 0;
+
+	ret = fg_read_word(sm, FG_REG_RMC, &data);
 	if (ret < 0) {
-		sm_err("Couldn't read fcc, ret=%d\n", ret);
+		sm_err("Couldn't read RMC, ret=%d\n", ret);
 		return ret;
-	} else {
-		raw = data & 0x7FFF;
-		temp = (int64_t)raw * 1000LL;
-		temp = div_s64(temp, denom);
-		fcc = (int)temp;
 	}
 
-	return fcc;
+	raw = data & 0x7FFFU;
+	rmc = (raw * 125u) >> 8;
+
+	mutex_lock(&sm->data_lock);
+	sm->batt_rmc = rmc;
+	mutex_unlock(&sm->data_lock);
+
+	return 0;
 }
 
 #define FG_SOFT_RESET	0xA6
@@ -1272,47 +1352,6 @@ static int fg_reset(struct sm_fg_chip *sm)
 	msleep(600);
 
 	return 0;
-}
-
-/*static int fg_read_rmc(struct sm_fg_chip *sm)
-{
-	int ret = 0;
-	int rmc = 0;
-	u16 data = 0;
-	int64_t temp = 0;
-
-	ret = fg_read_word(sm, FG_REG_RMC, &data);
-	if (ret < 0) {
-		sm_err("Couldn't read RMC, ret=%d\n", ret);
-		return ret;
-	} else {
-		temp = div_s64((data & 0x7FFF) * 1000, 2048);
-		rmc = temp;
-	}
-
-	return rmc;
-}*/
-
-static int fg_read_rmc(struct sm_fg_chip *sm)
-{
-	int ret, raw;
-	int rmc = 0;
-	u16 data = 0;
-	int64_t temp;
-	const int64_t denom = 2048LL;
-
-	ret = fg_read_word(sm, FG_REG_RMC, &data);
-	if (ret < 0) {
-		sm_err("Couldn't read rmc, ret=%d\n", ret);
-		return ret;
-	} else {
-		raw = data & 0x7FFF;
-		temp = (int64_t)raw * 1000LL;
-		temp = div_s64(temp, denom);
-		rmc = (int)temp;
-	}
-
-	return rmc;
 }
 
 static int get_battery_status(struct sm_fg_chip *sm)
@@ -1349,68 +1388,78 @@ static void fg_tembase_zdscon(struct sm_fg_chip *sm)
 	u16 data = 0;
 	int hminman_value = 0, ret = 0;
 	int fg_temp_gap = sm->batt_temp - sm->temp_std;
+	int abs_gap;
+	int tmp;
 
-#ifdef ENABLE_TEM_RATE_CONTROL
-	if (fg_temp_gap > -5) {
-		ret = fg_read_word(sm, FG_REG_AGING_CTRL, &data);
-		if (data != (sm->aging_ctrl | 0x0C)) {
-			sm_info("last rate control data 0x%x change to fast rate\n", data);
-			ret = fg_write_word(sm, FG_REG_AGING_CTRL, sm->aging_ctrl | 0x0C);
-		}
-	} else {
-		ret = fg_read_word(sm, FG_REG_AGING_CTRL, &data);
-		if (data != sm->aging_ctrl) {
-			sm_info("last rate control data 0x%x change to normal rate\n", data);
-			ret = fg_write_word(sm, FG_REG_AGING_CTRL, sm->aging_ctrl);
-		}
-	}
+	if (fg_temp_gap >= 0)
+		return;
 
-	if (ret < 0) {
-		sm_err("Couldn't control 0x%x, fg_temp_gap=%d, ret=%d, data=0x%x\n",
-				FG_REG_AGING_CTRL, fg_temp_gap, ret, data);
-	}
-#endif
-
-	if (fg_temp_gap < 0 && !sm->is_charging) {
-		fg_temp_gap = abs(fg_temp_gap);
-		if (fg_temp_gap > ZDSCON_ACT_TEMP_GAP) {
-			hminman_value = sm->rs_value[3] + (((fg_temp_gap - ZDSCON_ACT_TEMP_GAP) * HMINMAN_T_VALUE_FACT) / T_GAP_DENOM);
-			hminman_value = hminman_value - ((abs(sm->batt_curr) * HMINMAN_I_VALUE_FACT) / I_GAP_DENOM);
-			if (hminman_value < sm->rs_value[3]) {
-				hminman_value = sm->rs_value[3];
-			}
-			ret = fg_read_word(sm, FG_REG_RS_3, &data);
-			if (ret < 0) {
-				sm_err("Couldn't read rs_3 reg, ret=%d\n", ret);
-			} else {
-				if (data != hminman_value) {
-					fg_write_word(sm, FG_REG_RS_3, hminman_value);
-					fg_write_word(sm, FG_REG_RS_0, hminman_value + 2);
-					sm_info("hminman value set 0x%x, temp(%d) curr(%d)\n", hminman_value, sm->batt_temp, sm->batt_curr);
-				}
-			}
-		} else {
-			ret = fg_read_word(sm, FG_REG_RS_3, &data);
-			if (ret < 0) {
-				sm_err("Couldn't read rs_3 reg, ret=%d\n", ret);
-			} else {
-				if (data != sm->rs_value[3]) {
-					fg_write_word(sm, FG_REG_RS_3, sm->rs_value[3]);
-					fg_write_word(sm, FG_REG_RS_0, sm->rs_value[0]);
-					sm_info("hminman value restore 0x%x -> 0x%x, temp(%d)\n", data, sm->rs_value[3], sm->batt_temp);
-				}
-			}
-		}
-	} else {
+	abs_gap = -fg_temp_gap;
+	if (abs_gap <= ZDSCON_ACT_TEMP_GAP || sm->is_charging) {
 		ret = fg_read_word(sm, FG_REG_RS_3, &data);
 		if (ret < 0) {
 			sm_err("Couldn't read rs_3 reg, ret=%d\n", ret);
-		} else {
-			if (data != sm->rs_value[3]) {
-				fg_write_word(sm, FG_REG_RS_3, sm->rs_value[3]);
-				fg_write_word(sm, FG_REG_RS_0, sm->rs_value[0]);
-				sm_info("hminman value restore 0x%x -> 0x%x, temp(%d)\n", data, sm->rs_value[3], sm->batt_temp);
+			return;
+		}
+		if (data != sm->rs_value[3]) {
+			ret = fg_write_word(sm, FG_REG_RS_3, sm->rs_value[3]);
+			if (ret < 0)
+				sm_err("Couldn't write rs_3 reg, ret=%d\n", ret);
+
+			ret = fg_read_word(sm, FG_REG_RS_0, &data);
+			if (ret < 0) {
+				ret = fg_write_word(sm, FG_REG_RS_0, sm->rs_value[0]);
+				if (ret < 0)
+					sm_err("Couldn't write rs_0 reg (fallback), ret=%d\n", ret);
+			} else {
+				if (data != sm->rs_value[0]) {
+					ret = fg_write_word(sm, FG_REG_RS_0, sm->rs_value[0]);
+					if (ret < 0)
+						sm_err("Couldn't write rs_0 reg, ret=%d\n", ret);
+				}
 			}
+
+			sm_info("hminman value restore 0x%x -> 0x%x, temp(%d)\n",
+					data, sm->rs_value[3], sm->batt_temp);
+		}
+		return;
+	}
+
+	ret = fg_read_word(sm, FG_REG_RS_3, &data);
+	if (ret < 0) {
+		sm_err("Couldn't read rs_3 reg, ret=%d\n", ret);
+		return;
+	}
+
+	tmp = (int)sm->rs_value[3] + ((int)(abs_gap - ZDSCON_ACT_TEMP_GAP) * HMINMAN_T_VALUE_FACT) / T_GAP_DENOM;
+	tmp -= ((int)abs(sm->batt_curr) * HMINMAN_I_VALUE_FACT) / I_GAP_DENOM;
+
+	if (tmp < sm->rs_value[3])
+		tmp = sm->rs_value[3];
+	if (tmp > 0xFFFF)
+		tmp = 0xFFFF;
+
+	hminman_value = (int)tmp;
+	if (data != (u16)hminman_value) {
+		ret = fg_write_word(sm, FG_REG_RS_3, (u16)hminman_value);
+		if (ret < 0) {
+			sm_err("Couldn't write rs_3 reg, ret=%d\n", ret);
+		} else {
+			ret = fg_read_word(sm, FG_REG_RS_0, &data);
+			if (ret < 0) {
+				ret = fg_write_word(sm, FG_REG_RS_0, (u16)(hminman_value + 2));
+				if (ret < 0)
+					sm_err("Couldn't write rs_0 reg (fallback), ret=%d\n", ret);
+			} else {
+				if (data != (u16)(hminman_value + 2)) {
+					ret = fg_write_word(sm, FG_REG_RS_0, (u16)(hminman_value + 2));
+					if (ret < 0)
+						sm_err("Couldn't write rs_0 reg, ret=%d\n", ret);
+				}
+			}
+
+			sm_info("hminman value set 0x%x -> 0x%x, temp(%d) curr(%d)\n",
+					data, hminman_value, sm->batt_temp, sm->batt_curr);
 		}
 	}
 
@@ -1423,8 +1472,8 @@ static void fg_vbatocv_check(struct sm_fg_chip *sm)
 	int topoff = sm->topoff;
 	int topoff_margin = sm->topoff_margin;
 	int high_bound, low_bound;
-	int ret = 0;
-	u16 data = 0;
+	int rs0 = 0, rs2 = 0;
+	u16 data0 = 0, data2 = 0;
 
 	/*sm_info("sm->batt_curr (%d), sm->is_charging (%d), sm->topoff (%d), sm->topoff (%d), sm->batt_soc (%d)\n",
 			sm->batt_curr, sm->is_charging, sm->topoff, sm->topoff_margin, sm->batt_soc);*/
@@ -1439,9 +1488,14 @@ static void fg_vbatocv_check(struct sm_fg_chip *sm)
 
 	sm_info("fast_mode: %d, high_bound: %d, low_bound: %d\n", sm->fast_mode, high_bound, low_bound);
 
-	ret = fg_read_word(sm, FG_REG_RS_0, &data);
-	if (ret < 0) {
-		sm_err("Couldn't read rs_0 reg, ret=%d\n", ret);
+	rs0 = fg_read_word(sm, FG_REG_RS_0, &data0);
+	if (rs0 < 0) {
+		sm_err("Couldn't read rs_0 reg (%d)\n", rs0);
+	}
+
+	rs2 = fg_read_word(sm, FG_REG_RS_2, &data2);
+	if (rs2 < 0) {
+		sm_err("Couldn't read rs_2 reg (%d)\n", rs2);
 	}
 
 #ifdef ENABLE_VLCM_MODE
@@ -1457,7 +1511,7 @@ static void fg_vbatocv_check(struct sm_fg_chip *sm)
 			sm->iocv_error_count++;
 		}
 
-		sm_info("sm5602 FG iocv_error_count: %d\n", sm->iocv_error_count);
+		sm_info("iocv_error_count: %d\n", sm->iocv_error_count);
 		if (sm->iocv_error_count > 5)
 			sm->iocv_error_count = 6;
 	} else {
@@ -1469,8 +1523,13 @@ static void fg_vbatocv_check(struct sm_fg_chip *sm)
 		if (abs(sm->p_batt_voltage - sm->batt_volt) > 15) {
 			sm->iocv_error_count = 0;
 		} else {
-			fg_write_word(sm, FG_REG_RS_2, data);
-			sm_info("mode change to RS m mode 0x%x\n", data);
+			if (rs2 < 0) {
+				fg_write_word(sm, FG_REG_RS_2, data0);
+				sm_info("mode change to RS m mode 0x%x (fallback)\n", data0);
+			} else if (data2 != data0) {
+				fg_write_word(sm, FG_REG_RS_2, data0);
+				sm_info("mode change to RS m mode 0x%x\n", data0);
+			}
 		}
 	} else {
 		if ((sm->p_batt_voltage < sm->n_tempoff) &&
@@ -1478,21 +1537,36 @@ static void fg_vbatocv_check(struct sm_fg_chip *sm)
 				(!sm->is_charging)) {
 			if ((sm->p_batt_voltage < (sm->n_tempoff - sm->n_tempoff_offset)) &&
 					(sm->batt_volt < (sm->n_tempoff - sm->n_tempoff_offset))) {
-				fg_write_word(sm, FG_REG_RS_2, data >> 1);
-				sm_info("mode change to normal tem RS m mode >> 1 0x%x\n", data >> 1);
+				if (rs2 < 0) {
+					fg_write_word(sm, FG_REG_RS_2, (u16)(data0 >> 1));
+					sm_info("mode change to normal temp RS m mode >> 1 0x%x (fallback)\n", data0 >> 1);
+				} else if (data2 != (u16)(data0 >> 1)) {
+					fg_write_word(sm, FG_REG_RS_2, (u16)(data0 >> 1));
+					sm_info("mode change to normal temp RS m mode >> 1 0x%x\n", data0 >> 1);
+				}
 			} else {
-				fg_write_word(sm, FG_REG_RS_2, data);
-				sm_info("mode change to normal tem RS m mode 0x%x\n", data);
+				if (rs2 < 0) {
+					fg_write_word(sm, FG_REG_RS_2, data0);
+					sm_info("mode change to normal temp RS m mode 0x%x (fallback)\n", data0);
+				} else if (data2 != data0) {
+					fg_write_word(sm, FG_REG_RS_2, data0);
+					sm_info("mode change to normal temp RS m mode 0x%x\n", data0);
+				}
 			}
 		} else {
-			sm_info("mode change to RS a mode\n");
-			fg_write_word(sm, FG_REG_RS_2, sm->rs_value[2]);
+			if (rs2 < 0) {
+				fg_write_word(sm, FG_REG_RS_2, sm->rs_value[2]);
+				sm_info("mode change to RS a mode (fallback)\n");
+			} else if (data2 != sm->rs_value[2]) {
+				fg_write_word(sm, FG_REG_RS_2, sm->rs_value[2]);
+				sm_info("mode change to RS a mode\n");
+			}
 		}
 	}
 
 	sm->p_batt_voltage = sm->batt_volt;
 	sm->p_batt_current = sm->batt_curr;
-	// iocv error case cover end
+	/* iocv error case cover end */
 }
 
 static int fg_cal_carc(struct sm_fg_chip *sm)
@@ -1558,7 +1632,7 @@ static int fg_cal_carc(struct sm_fg_chip *sm)
 		sm_err("Failed to write CURR_IN_OFFSET, ret=%d\n", ret);
 		return ret;
 	} else {
-		sm_info("CURR_IN_OFFSET [0x%x] = 0x%x\n", FG_REG_CURR_IN_OFFSET, temp_curr_offset);
+		sm_dbg("CURR_IN_OFFSET [0x%x] = 0x%x\n", FG_REG_CURR_IN_OFFSET, temp_curr_offset);
 	}
 
 	n_curr_cal = (sm->curr_slope & 0xFF00) >> 8;
@@ -1599,7 +1673,7 @@ static int fg_cal_carc(struct sm_fg_chip *sm)
 		sm_err("Failed to write CURR_IN_SLOPE, ret=%d\n", ret);
 		return ret;
 	} else {
-		sm_info("write CURR_IN_SLOPE [0x%x] = 0x%x\n", FG_REG_CURR_IN_SLOPE, curr_cal);
+		sm_dbg("CURR_IN_SLOPE [0x%x] = 0x%x\n", FG_REG_CURR_IN_SLOPE, curr_cal);
 	}
 
 #ifdef ENABLE_MIX_COMP
@@ -1624,7 +1698,7 @@ static int fg_cal_carc(struct sm_fg_chip *sm)
 			}
 		}
 	}
-	sm_info("0x9C=0x%x\n", temp_aging_ctrl);
+	sm_dbg("0x9C=0x%x\n", temp_aging_ctrl);
 #endif
 
 	ret = fg_read_word(sm, 0x06, &data[0]);
@@ -1683,7 +1757,7 @@ static int fg_cal_carc(struct sm_fg_chip *sm)
 		sm_err("Couldn't read 0x82, ret=%d\n", ret);
 		return ret;
 	} else {
-		sm_info("0x82=0x%x\n", data[0]);
+		sm_dbg("0x82=0x%x\n", data[0]);
 	}
 
 	return 0;
@@ -1693,16 +1767,17 @@ extern bool bq2589x_is_charge_done(void);
 static int fg_get_batt_status(struct sm_fg_chip *sm)
 {
 	bool charge_done = 0;
+	int soc = 0;
 
 	if (sm->batt_fc) {
 		charge_done = bq2589x_is_charge_done();
 	}
 
+	soc = clamp(DIV_ROUND_CLOSEST(sm->batt_soc, 10), 0, 100);
+
 	if (!sm->batt_present)
 		return POWER_SUPPLY_STATUS_UNKNOWN;
-	// now we are using smooth_tracking
-	// else if (sm->batt_fc && charge_done && (sm->batt_soc / 10 > 95))
-	else if (sm->batt_fc && charge_done && (sm->param.batt_soc / 10 > 95))
+	else if (sm->batt_fc && charge_done && (soc > 95))
 		return POWER_SUPPLY_STATUS_FULL;
 	else if (sm->batt_dsg)
 		return POWER_SUPPLY_STATUS_DISCHARGING;
@@ -1774,9 +1849,9 @@ static int get_battery_id(struct sm_fg_chip *sm)
 		} else {
 			memcpy(page0_buf, pval.arrayval, 16);
 			sm_dbg("PAGE0 raw: %*ph\n", 16, page0_buf);
-			if (page0_buf[0] == 0xFF || page0_buf[0] == 'N') {
+			if (page0_buf[0] == 'N') {
 				battery_id = BATTERY_VENDOR_NVT;
-			} else if (page0_buf[0] == 'C' || page0_buf[0] == 'V') {
+			} else if (page0_buf[0] == 0xFF || page0_buf[0] == 'C' || page0_buf[0] == 'V') {
 				battery_id = BATTERY_VENDOR_GY;
 			} else if (page0_buf[0] == 'L' || page0_buf[0] == 'X' || page0_buf[0] == 'S') {
 				battery_id = BATTERY_VENDOR_XWD;
@@ -1823,7 +1898,8 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_SOH,
 };
 
-#define SHUTDOWN_DELAY_VOL	3300
+#define SHUTDOWN_DELAY_VOL	3400
+#define SHUTDOWN_VOL	3300
 static int fg_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
@@ -1831,7 +1907,9 @@ static int fg_get_property(struct power_supply *psy,
 	struct sm_fg_chip *sm = power_supply_get_drvdata(psy);
 	union power_supply_propval b_val = {0, };
 	int ret;
-	int vbat_uv;
+	int vbat_mv;
+	int vbat_curr;
+	int vbat_soc;
 	static bool last_shutdown_delay;
 	//u16 flags;
 
@@ -1879,23 +1957,20 @@ static int fg_get_property(struct power_supply *psy,
 		}
 
 		ret = fg_read_volt(sm);
-		mutex_lock(&sm->data_lock);
-		if (ret >= 0)
-			sm->batt_volt = ret;
 		val->intval = sm->batt_volt * 1000;
-		mutex_unlock(&sm->data_lock);
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = sm->batt_present;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		ret = fg_read_current(sm);
-		mutex_lock(&sm->data_lock);
-		sm->batt_curr = ret;
 		//sm_err("zhushaoan: real batt_curr:%d\n", sm->batt_curr);
-		val->intval = sm->batt_curr * 1000;
-		val->intval = val->intval; //fix xts issue the current shouled be positive when charging
-		mutex_unlock(&sm->data_lock);
+#ifdef ENABLE_CURRENT_AVG
+		vbat_curr = sm->param.batt_ma_avg * 1000;
+#else
+		vbat_curr = sm->batt_curr * 1000;
+#endif
+		val->intval = clamp(vbat_curr, -10000000, 10000000); //fix xts issue the current shouled be positive when charging
 		/*
 		pval.intval = fg_get_batt_status(sm);
 		if ((pval.intval == POWER_SUPPLY_STATUS_DISCHARGING) ||
@@ -1911,41 +1986,36 @@ static int fg_get_property(struct power_supply *psy,
 		}
 
 		ret = fg_read_soc(sm);
-		mutex_lock(&sm->data_lock);
-		if (ret >= 0)
-			sm->batt_soc = ret;
 		if (sm->param.batt_soc >= 0)
-			val->intval = sm->param.batt_soc / 10;
-		else if ((ret >= 0) && (sm->param.batt_soc == -EINVAL))
-			val->intval = (sm->batt_soc >= 970) ? 100 : DIV_ROUND_CLOSEST(sm->batt_soc * 1000, 970) / 10;
+			vbat_soc = sm->param.batt_soc / 10;
+		else if ((ret == 0) && (sm->param.batt_soc == -EINVAL))
+			vbat_soc = (sm->batt_soc >= 970) ? 100 : (sm->batt_soc * 10 + 96) / 97;
 		else
-			val->intval = 50;
+			vbat_soc = 50;
+
 		// makesure always valid range
-		val->intval = clamp(val->intval, 0, 100);
-		mutex_unlock(&sm->data_lock);
+		val->intval = clamp(vbat_soc, 0, 100);
 
 		if (sm->shutdown_delay_enable) {
 			if (val->intval == 0) {
 				sm->is_charging = is_battery_charging(sm);
-				vbat_uv = fg_read_volt(sm);
+				vbat_mv = sm->batt_volt;
 
-				if (sm->is_charging && sm->shutdown_delay) {
-					sm->shutdown_delay = false;
+				if (vbat_mv > SHUTDOWN_DELAY_VOL) {
 					val->intval = 1;
-				} else {
-					/* When the vbat is greater than 3400mv, SOC still reported 1 to avoid high shutdown volt */
-					if (vbat_uv > 3400) {
+					if (sm->is_charging)
 						sm->shutdown_delay = false;
-						val->intval = 1;
-					} else if (vbat_uv > 3300) {
-						if (!sm->is_charging) {
-							sm->shutdown_delay = true;
-						}
+				} else if (vbat_mv > SHUTDOWN_VOL) {
+					if (!sm->is_charging) {
+						sm->shutdown_delay = true;
 						val->intval = 1;
 					} else {
 						sm->shutdown_delay = false;
-						val->intval = 0;
+						val->intval = 1;
 					}
+				} else {
+					sm->shutdown_delay = false;
+					val->intval = 0;
 				}
 			} else {
 				sm->shutdown_delay = false;
@@ -1977,20 +2047,14 @@ static int fg_get_property(struct power_supply *psy,
 		else
 			ret = -ENODATA;
 
-		mutex_lock(&sm->data_lock);
-		if (ret > 0)
-			sm->batt_temp = ret;
+		if (ret == -ENODATA)
+			val->intval = 25 * 10; //1.0degree = 10
 #ifdef ENABLE_TEMP_AVG
-		if (sm->temp_param.batt_temp >= EX_TEMP_MIN && sm->temp_param.batt_temp <= EX_TEMP_MAX)
-			val->intval = sm->temp_param.batt_temp_avg * 10; //1.0degree = 10
-		else if (sm->temp_param.batt_temp == -EINVAL)
-			val->intval = sm->batt_temp * 10; //1.0degree = 10
-		else
-			val->intval = 25 * 10;
-#else
-		val->intval = sm->batt_temp * 10; //1.0degree = 10
+		else if (sm->param.batt_temp >= EX_TEMP_MIN && sm->param.batt_temp <= EX_TEMP_MAX)
+			val->intval = sm->param.batt_temp_avg * 10; //1.0degree = 10
 #endif
-		mutex_unlock(&sm->data_lock);
+		else
+			val->intval = sm->batt_temp * 10; //1.0degree = 10
 		break;
 	case POWER_SUPPLY_PROP_RESISTANCE_ID:
 		if (sm->battery_id == BATTERY_VENDOR_UNKNOWN) {
@@ -2000,11 +2064,7 @@ static int fg_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 		ret = fg_read_fcc(sm);
-		mutex_lock(&sm->data_lock);
-		if (ret > 0)
-			sm->batt_fcc = ret;
 		val->intval = sm->batt_fcc * 1000;
-		mutex_unlock(&sm->data_lock);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		val->intval = 5000000;
@@ -2025,7 +2085,10 @@ static int fg_get_property(struct power_supply *psy,
 		val->intval = sm->fast_mode;
 		break;
 	case POWER_SUPPLY_PROP_BATTERY_TYPE:
-		switch (get_battery_id(sm)) {
+		if (sm->battery_id == BATTERY_VENDOR_UNKNOWN) {
+			sm->battery_id = get_battery_id(sm);
+		}
+		switch (sm->battery_id) {
 		case BATTERY_VENDOR_NVT:
 			val->strval = "M376-NVT-5000mAh";
 			break;
@@ -2044,17 +2107,12 @@ static int fg_get_property(struct power_supply *psy,
 		val->intval = 0;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		ret = fg_get_cycle(sm);
 		val->intval = sm->batt_soc_cycle;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
 		ret = fg_read_rmc(sm);
-		mutex_lock(&sm->data_lock);
-		if (ret >= 0)
-			sm->batt_rmc = ret;
-		else
-			sm->batt_rmc = 2500; //Fixed 2500mAh
 		val->intval = sm->batt_rmc * 1000; //uAh
-		mutex_unlock(&sm->data_lock);
 		break;
 	case POWER_SUPPLY_PROP_SOH:
 		val->intval = 100;
@@ -2136,7 +2194,6 @@ static int fg_psy_register(struct sm_fg_chip *sm)
 {
 	struct power_supply_config fg_psy_cfg = {};
 
-	//sm->fg_psy.name = "sm_bms";
 	sm->fg_psy_d.name = "bms";
 	sm->fg_psy_d.type = POWER_SUPPLY_TYPE_BMS;
 	sm->fg_psy_d.properties = fg_props;
@@ -2147,13 +2204,17 @@ static int fg_psy_register(struct sm_fg_chip *sm)
 	sm->fg_psy_d.property_is_writeable = fg_prop_is_writeable;
 
 	fg_psy_cfg.drv_data = sm;
+	fg_psy_cfg.of_node = sm->dev->of_node;
 	fg_psy_cfg.num_supplicants = 0;
 
-	sm->fg_psy = devm_power_supply_register(sm->dev, &sm->fg_psy_d, &fg_psy_cfg);
+	sm->fg_psy = devm_power_supply_register(sm->dev,
+			&sm->fg_psy_d, &fg_psy_cfg);
 	if (IS_ERR(sm->fg_psy)) {
 		sm_err("failed to register fg_psy\n");
 		return PTR_ERR(sm->fg_psy);
 	}
+
+	sm_info("%s power supply register successfully\n", sm->fg_psy_d.name);
 
 	return 0;
 }
@@ -2239,124 +2300,200 @@ static void create_debugfs_entry(struct sm_fg_chip *sm)
 	}
 }
 
-#if 1
-static int fg_show_registers(struct sm_fg_chip *sm)
+static ssize_t fg_show_registers(struct device *dev,
+			struct device_attribute *attr, char *buf)
 {
-	int i;
-	int ret;
+	struct i2c_client *client = to_i2c_client(dev);
+	struct sm_fg_chip *sm = i2c_get_clientdata(client);
+	int i, ret, idx = 0;
 	u16 val = 0;
+	u8 reg;
 
-	sm_dbg("show_registers:\n");
+	if (IS_ERR_OR_NULL(sm))
+		return -ENODEV;
+
+	idx += scnprintf(buf + idx, PAGE_SIZE - idx, "FG registers:\n");
+
 	for (i = 0; i < ARRAY_SIZE(fg_dump_regs); i++) {
-		ret = fg_read_word(sm, fg_dump_regs[i], &val);
-		if (!ret)
-			sm_dbg("Reg[0x%02X] = 0x%04X\n", fg_dump_regs[i], val);
+		reg = fg_dump_regs[i];
+
+		ret = fg_read_word(sm, reg, &val);
+		if (ret) {
+			dev_warn(sm->dev, "read reg 0x%02x failed: %d\n", reg, ret);
+			idx += scnprintf(buf + idx, PAGE_SIZE - idx, "Reg[0x%02x] = <err %d>\n", reg, ret);
+		} else {
+			idx += scnprintf(buf + idx, PAGE_SIZE - idx, "Reg[0x%02x] = 0x%04X\n", reg, val);
+		}
+
+		if (idx >= PAGE_SIZE)
+			break;
 	}
 
-	return 0;
+	return idx;
 }
-#endif
 
-static ssize_t fg_attr_show_rm(struct device *dev,
-				struct device_attribute *attr, char *buf)
+static ssize_t fg_store_registers(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t count)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct sm_fg_chip *sm = i2c_get_clientdata(client);
-	int rm, len;
+	char tmp[48];
+	unsigned long reg_ul = 0, val_ul = 0;
+	char *p;
+	int ret, i;
+	bool ok = false;
 
-	rm = fg_read_rmc(sm);
-	len = snprintf(buf, 1024, "%d\n", rm);
+	if (IS_ERR_OR_NULL(sm))
+		return -ENODEV;
 
-	return len;
+	if (count == 0 || count >= sizeof(tmp))
+		return -EINVAL;
+
+	memcpy(tmp, buf, count);
+	tmp[count] = '\0';
+
+	ret = kstrtoul(tmp, 0, &reg_ul);
+	if (ret)
+		return -EINVAL;
+
+	p = tmp;
+	while (*p && !isspace(*p))
+		p++;
+	while (*p && isspace(*p))
+		p++;
+	if (!*p)
+		return -EINVAL;
+
+	ret = kstrtoul(p, 0, &val_ul);
+	if (ret)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(fg_dump_regs); i++) {
+		if (reg_ul == fg_dump_regs[i]) {
+			ok = true;
+			break;
+		}
+	}
+	if (!ok) {
+		dev_err(sm->dev, "invalid reg: 0x%lx not in dump list\n", reg_ul);
+		return -EINVAL;
+	}
+
+	if (val_ul > 0xffff) {
+		dev_err(sm->dev, "invalid val: 0x%lx\n", val_ul);
+		return -EINVAL;
+	}
+
+	ret = fg_write_word(sm, (u16)reg_ul, (u16)val_ul);
+	if (ret) {
+		dev_err(sm->dev, "write reg 0x%04lx failed: %d\n", reg_ul, ret);
+		return ret;
+	}
+
+	dev_info(sm->dev, "wrote 0x%04lx to reg 0x%04lx\n", val_ul, reg_ul);
+	return count;
 }
 
-static ssize_t fg_attr_show_fcc(struct device *dev,
-				struct device_attribute *attr, char *buf)
+static ssize_t fg_attr_show_batt_rmc(struct device *dev,
+			struct device_attribute *attr, char *buf)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct sm_fg_chip *sm = i2c_get_clientdata(client);
-	int fcc, len;
+	int rmc;
 
-	fcc = fg_read_fcc(sm);
-	len = snprintf(buf, 1024, "%d\n", fcc);
+	if (IS_ERR_OR_NULL(sm))
+		return -ENODEV;
 
-	return len;
+	fg_read_rmc(sm);
+	rmc = sm->batt_rmc;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", rmc);
+}
+
+static ssize_t fg_attr_show_batt_fcc(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct sm_fg_chip *sm = i2c_get_clientdata(client);
+	int fcc;
+
+	if (IS_ERR_OR_NULL(sm))
+		return -ENODEV;
+
+	fg_read_fcc(sm);
+	fcc = sm->batt_fcc;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", fcc);
 }
 
 static ssize_t fg_attr_show_batt_volt(struct device *dev,
-				struct device_attribute *attr, char *buf)
+			struct device_attribute *attr, char *buf)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct sm_fg_chip *sm = i2c_get_clientdata(client);
-	int fcc, len;
+	int volt;
 
-	fcc = fg_read_volt(sm);
-	len = snprintf(buf, 1024, "%d\n", fcc);
+	if (IS_ERR_OR_NULL(sm))
+		return -ENODEV;
 
-	return len;
+	fg_read_volt(sm);
+	volt = sm->batt_volt;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", volt);
 }
 
-static DEVICE_ATTR(rm, S_IRUGO, fg_attr_show_rm, NULL);
-static DEVICE_ATTR(fcc, S_IRUGO, fg_attr_show_fcc, NULL);
+static ssize_t fg_attr_show_batt_curr(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct sm_fg_chip *sm = i2c_get_clientdata(client);
+	int curr;
+
+	if (IS_ERR_OR_NULL(sm))
+		return -ENODEV;
+
+	fg_read_current(sm);
+#ifdef ENABLE_CURRENT_AVG
+	curr = sm->param.batt_ma_avg;
+#else
+	curr = sm->batt_curr;
+#endif
+	return scnprintf(buf, PAGE_SIZE, "%d\n", curr);
+}
+
+static ssize_t fg_attr_show_batt_cycle(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct sm_fg_chip *sm = i2c_get_clientdata(client);
+	int cycle;
+
+	if (IS_ERR_OR_NULL(sm))
+		return -ENODEV;
+
+	fg_get_cycle(sm);
+	cycle = sm->batt_soc_cycle;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", cycle);
+}
+
+static DEVICE_ATTR(batt_rmc, S_IRUGO, fg_attr_show_batt_rmc, NULL);
+static DEVICE_ATTR(batt_fcc, S_IRUGO, fg_attr_show_batt_fcc, NULL);
 static DEVICE_ATTR(batt_volt, S_IRUGO, fg_attr_show_batt_volt, NULL);
+static DEVICE_ATTR(batt_curr, S_IRUGO, fg_attr_show_batt_curr, NULL);
+static DEVICE_ATTR(batt_cycle, S_IRUGO, fg_attr_show_batt_cycle, NULL);
+static DEVICE_ATTR(registers, S_IRUGO | S_IWUSR, fg_show_registers, fg_store_registers);
 
 static struct attribute *fg_attributes[] = {
-	&dev_attr_rm.attr,
-	&dev_attr_fcc.attr,
+	&dev_attr_batt_rmc.attr,
+	&dev_attr_batt_fcc.attr,
 	&dev_attr_batt_volt.attr,
+	&dev_attr_batt_curr.attr,
+	&dev_attr_batt_cycle.attr,
+	&dev_attr_registers.attr,
 	NULL,
 };
 
 static const struct attribute_group fg_attr_group = {
 	.attrs = fg_attributes,
 };
-
-#define MAX_RAW_SOC	970
-#define SOC_UPDATE_STEP	1
-static void battery_soc_smooth_tracking_new(struct sm_fg_chip *sm)
-{
-	static bool initialized;
-	int raw_soc, new_soc, delta_soc;
-	int step = 0;
-
-	if (!sm->soc_smooth_initialized && initialized) {
-		sm_info("smoothing reset by probe/reinit\n");
-		initialized = false;
-	}
-
-	raw_soc = clamp(sm->param.batt_raw_soc, 0, 1000);
-	if (raw_soc >= MAX_RAW_SOC)
-		new_soc = 100;
-	else
-		new_soc = DIV_ROUND_CLOSEST(raw_soc * 1000, MAX_RAW_SOC) / 10;
-
-	/* first init */
-	if (!initialized) {
-		sm->param.batt_soc = new_soc * 10;
-		initialized = true;
-		sm->soc_smooth_initialized = true;
-		return;
-	}
-
-	delta_soc = new_soc - (sm->param.batt_soc / 10);
-
-	/* smooth towards target */
-	if (abs(delta_soc) >= SOC_UPDATE_STEP) {
-		step = min(abs(SOC_UPDATE_STEP), abs(delta_soc));
-
-		if (delta_soc > 0)
-			new_soc = (sm->param.batt_soc / 10) + step;
-		else
-			new_soc = (sm->param.batt_soc / 10) - step;
-	} else {
-		new_soc = sm->param.batt_soc / 10;
-	}
-
-	sm->param.batt_soc = new_soc * 10;
-
-	sm_info("soc: %d, raw: %d.%d, delta: %d, step: %d\n",
-			new_soc, raw_soc / 10, raw_soc % 10, delta_soc, step);
-}
 
 #define MONITOR_SOC_WAIT_MS		1000
 #define MONITOR_SOC_WAIT_PER_MS		10000
@@ -2406,24 +2543,19 @@ static void fg_refresh_status(struct sm_fg_chip *sm)
 		power_supply_changed(sm->fg_psy);
 
 	if (sm->batt_present) {
-		mutex_lock(&sm->data_lock);
-		sm->batt_soc = fg_read_soc(sm);
-		sm->batt_ocv = fg_read_ocv(sm);
-		sm->batt_fcc = fg_read_fcc(sm);
-		sm->batt_volt = fg_read_volt(sm);
-		sm->batt_curr = fg_read_current(sm);
-		sm->batt_soc_cycle = fg_get_cycle(sm);
-		sm->batt_rmc = fg_read_rmc(sm);
+		fg_read_soc(sm);
+		fg_read_ocv(sm);
+		fg_read_fcc(sm);
+		fg_read_volt(sm);
+		fg_read_current(sm);
+		fg_get_cycle(sm);
+		fg_read_rmc(sm);
 		if (sm->en_temp_in)
-			sm->batt_temp = fg_read_temperature(sm, TEMPERATURE_IN);
+			fg_read_temperature(sm, TEMPERATURE_IN);
 		else if (sm->en_temp_ex)
-			sm->batt_temp = fg_read_temperature(sm, TEMPERATURE_EX);
-		else
-			sm->batt_temp = -ENODATA;
+			fg_read_temperature(sm, TEMPERATURE_EX);
+
 		/* Update battery information */
-		//sm->param.batt_ma = sm->batt_curr;
-		sm->param.batt_raw_soc = sm->batt_soc;
-		mutex_unlock(&sm->data_lock);
 		fg_cal_carc(sm);
 
 		if (sm->usb_present && sm->cp_work_flag) {
@@ -2464,23 +2596,21 @@ static void fg_refresh_status(struct sm_fg_chip *sm)
 			if ((sm->batt_soc < 10 && sm->batt_volt < 3400) && !sm->low_battery_power) {
 				if (!sm->start_low_battery_check) {
 					sm->start_low_battery_check = true;
-					schedule_delayed_work(&sm->LowBatteryCheckWork, 0);
+					schedule_delayed_work(&sm->low_battery_check_work, 0);
 				}
 			} else if ((sm->batt_soc >= 10 && sm->batt_volt >= 3400) &&
 					(sm->low_battery_power || sm->start_low_battery_check)) {
-				cancel_delayed_work_sync(&sm->LowBatteryCheckWork);
+				cancel_delayed_work_sync(&sm->low_battery_check_work);
 				sm->low_battery_power = false;
 				sm->start_low_battery_check = false;
 			}
 		} else if (u_val.intval && (sm->low_battery_power || sm->start_low_battery_check)) {
-			cancel_delayed_work_sync(&sm->LowBatteryCheckWork);
+			cancel_delayed_work_sync(&sm->low_battery_check_work);
 			sm->start_low_battery_check = false;
 			sm->low_battery_power = false;
 		}
 		sm_log("low_battery_check: %d, low_battery_power: %d\n",
 				sm->start_low_battery_check, sm->low_battery_power);
-
-		sm->soc_reporting_ready = true;
 	}
 	//sm->last_update = jiffies;
 }
@@ -2576,8 +2706,6 @@ static void fg_monitor_workfunc(struct work_struct *work)
 	mutex_unlock(&sm->data_lock);
 
 	fg_refresh_status(sm);
-	if (sm->soc_reporting_ready)
-		battery_soc_smooth_tracking_new(sm);
 
 	interval = fg_check_full_status(sm);
 	fg_check_recharge_status(sm);
@@ -2609,62 +2737,38 @@ EXPORT_SYMBOL(stop_fg_monitor_work);
 #define COMMON_PARAM_MASK	0xFF00
 #define COMMON_PARAM_SHIFT	8
 #define BATTERY_PARAM_MASK	0x00FF
-static bool fg_check_reg_init_need(struct i2c_client *client)
+static int fg_check_reg_init_need(struct i2c_client *client)
 {
 	struct sm_fg_chip *sm = i2c_get_clientdata(client);
-	int i, ret;
+	int ret;
 	u16 data = 0;
 	u16 param_ver = 0;
 
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_FG_OP_STATUS], &data);
 	if (ret < 0) {
-		sm_err("Failed to read param_ctrl unlock, ret=%d\n", ret);
-		return false;
+		sm_err("Failed to read FG_OP_STATUS(%d)\n", ret);
+		return ret;
 	}
-
-	sm_info("FG_OP_STATUS = 0x%x\n", data);
+	sm_dbg("FG_OP_STATUS = 0x%x\n", data);
 
 	ret = fg_read_word(sm, FG_PARAM_VERION, &param_ver);
 	if (ret < 0) {
-		sm_err("Failed to read FG_PARAM_VERION, ret=%d\n", ret);
-		return false;
+		sm_err("Failed to read FG_PARAM_VERION(%d)\n", ret);
+		return ret;
 	}
 
-	sm_info("param_ver = 0x%x, common_param_version = 0x%x, battery_param_version = 0x%x\n",
+	sm_dbg("param_version = 0x%x, common_param_version = 0x%x, battery_param_version = 0x%x\n",
 			param_ver, sm->common_param_version, sm->battery_param_version);
 
-	if ((((param_ver & COMMON_PARAM_MASK) >> COMMON_PARAM_SHIFT) >= sm->common_param_version) &&
+	if (((data & INIT_CHECK_MASK) == DISABLE_RE_INIT) &&
+			(((param_ver & COMMON_PARAM_MASK) >> COMMON_PARAM_SHIFT) >= sm->common_param_version) &&
 			((param_ver & BATTERY_PARAM_MASK) >= sm->battery_param_version)) {
-		if ((data & INIT_CHECK_MASK) == DISABLE_RE_INIT) {
-			sm_info("SM_FG_REG_FG_OP_STATUS: 0x%x, return FALSE NO init need\n", data);
-			return false;
-		} else {
-			sm_err("SM_FG_REG_FG_OP_STATUS: 0x%x, return TRUE init need!!!!\n", data);
-			return true;
-		}
+		sm_dbg("SM_FG_REG_FG_OP_STATUS: 0x%x, return FALSE, no init need\n", data);
+		return 0; /* no init */
+	} else {
+		sm_err("SM_FG_REG_FG_OP_STATUS: 0x%x, return TRUE, init need\n", data);
+		return 1; /* need init */
 	}
-
-	if ((data & INIT_CHECK_MASK) == DISABLE_RE_INIT) {
-		// Step1. Turn off charger
-		// Step2. FG Reset
-		for (i = 0; i < 3; i++) {
-			ret = fg_reset(sm);
-			if (ret == 0)
-				break;
-			sm_err("fail to do reset(%d), retry %d\n", ret, i+1);
-		}
-
-		if (ret < 0) {
-			sm_err("reset fail 3 times!!!, return FALSE!!!\n");
-			return false;
-		}
-
-		sm_err("SM_FG_REG_FG_OP_STATUS: 0x%x, return TRUE init need because diff_ver SW reset!!!\n", data);
-		return true;
-	}
-
-	sm_err("SM_FG_REG_FG_OP_STATUS: 0x%x, return TRUE init need!!!\n", data);
-	return true;
 }
 
 #define MINVAL(a, b) ((a <= b) ? a : b)
@@ -3034,6 +3138,28 @@ static bool fg_reg_init(struct i2c_client *client)
 
 	sm_info("start\n");
 
+	/* Temperature/Batt Det - control register set */
+	ret = fg_read_word(sm, sm->regs[SM_FG_REG_CNTL], &data);
+	if (ret < 0) {
+		sm_err("Failed to read CNTL, ret=%d\n", ret);
+		return ret;
+	}
+
+	if (sm->en_temp_in)
+		data |= ENABLE_EN_TEMP_IN;
+	if (sm->en_temp_ex)
+		data |= ENABLE_EN_TEMP_EX;
+	if (sm->en_batt_det)
+		data |= ENABLE_EN_BATT_DET;
+
+	ret = fg_write_word(sm, sm->regs[SM_FG_REG_CNTL], data);
+	if (ret < 0) {
+		sm_err("Failed to write CNTL, ret=%d\n", ret);
+		return ret;
+	} else {
+		sm_info("CNTL = 0x%x:0x%x\n", sm->regs[SM_FG_REG_CNTL], data);
+	}
+
 	/* Init mark */
 	if (sm->fg_irq_set == -EINVAL) {
 		sm_err("fg_irq_set is invalid\n");
@@ -3202,7 +3328,7 @@ static bool fg_reg_init(struct i2c_client *client)
 		sm_info("Write FG_REG_SOC_CYCLE_CFG = 0x%x:0x%x\n", FG_REG_SOC_CYCLE_CFG, sm->cycle_cfg);
 	}
 
-	/*RSNS write */
+	/* RSNS write */
 	ret = fg_write_word(sm, sm->regs[SM_FG_REG_RSNS_SEL], sm->batt_rsns);
 	if (ret < 0) {
 		sm_err("Failed to write SM_FG_REG_RSNS_SEL, ret=%d\n", ret);
@@ -3265,7 +3391,7 @@ static bool fg_reg_init(struct i2c_client *client)
 		sm_info("BETA = 0x%x:0x%x\n", FG_REG_BETA, sm->beta);
 	}
 
-	/* RS write */
+	/* RS_* write */
 	ret = fg_write_word(sm, FG_REG_RS_0, sm->rs_value[0]);
 	if (ret < 0) {
 		sm_err("Failed to write RS_0, ret=%d\n", ret);
@@ -3318,7 +3444,7 @@ static bool fg_reg_init(struct i2c_client *client)
 		sm_info("FG_REG_VOLT_CAL = 0x%x:0x%x\n", FG_REG_VOLT_CAL, sm->volt_cal);
 	}
 
-	/* CAL write*/
+	/* CAL write */
 	ret = fg_write_word(sm, FG_REG_CURR_IN_OFFSET, sm->curr_offset);
 	if (ret < 0) {
 		sm_err("Failed to write CURR_IN_OFFSET, ret=%d\n", ret);
@@ -3362,19 +3488,13 @@ static bool fg_reg_init(struct i2c_client *client)
 		sm_info("SM_REG_TOPOFFSOC 0x%x:0x%x\n", sm->regs[SM_FG_REG_TOPOFFSOC], sm->topoff_soc);
 	}
 
-	/*INIT_last - control register set*/
+	/* INIT_last - control register set */
 	ret = fg_read_word(sm, sm->regs[SM_FG_REG_CNTL], &data);
 	if (ret < 0) {
 		sm_err("Failed to read CNTL, ret=%d\n", ret);
 		return ret;
 	}
 
-	if (sm->en_temp_in)
-		data |= ENABLE_EN_TEMP_IN;
-	if (sm->en_temp_ex)
-		data |= ENABLE_EN_TEMP_EX;
-	if (sm->en_batt_det)
-		data |= ENABLE_EN_BATT_DET;
 	if (sm->iocv_man_mode)
 		data |= ENABLE_IOCV_MAN_MODE;
 
@@ -3452,8 +3572,8 @@ static bool fg_reg_init(struct i2c_client *client)
 
 		sm_info("IOCV_MAN = 0x%x\n", value);
 	}
-
 	msleep(20);
+
 	ret = fg_write_word(sm, sm->regs[SM_FG_REG_PARAM_CTRL], ((FG_PARAM_LOCK_CODE | (sm->battery_table_num & 0x0003) << 6) | (FG_TABLE_LEN - 1)));
 	if (ret < 0) {
 		sm_err("Failed to write param_ctrl lock, ret=%d\n", ret);
@@ -3462,7 +3582,11 @@ static bool fg_reg_init(struct i2c_client *client)
 		sm_info("Param Lock\n");
 	}
 
-	msleep(160);
+	if (sm->en_temp_ex)
+		msleep(300);
+	else
+		msleep(160);
+
 	return 1;
 }
 
@@ -3501,32 +3625,40 @@ static bool fg_check_device_id(struct i2c_client *client)
 
 static bool fg_init(struct i2c_client *client)
 {
-	int ret;
-	//struct sm_fg_chip *sm = i2c_get_clientdata(client);
+	int ret, retry;
+	struct sm_fg_chip *sm = i2c_get_clientdata(client);
 
-	/*sm5602 i2c read check*/
+	/* sm5602 i2c read check */
 	ret = fg_get_device_id(client);
 	if (ret < 0) {
 		sm_err("fail to do i2c read(%d)\n", ret);
 		return false;
 	}
 
-	if (fg_check_reg_init_need(client)) {
-		/*ret = fg_reset(sm);
+	ret = fg_check_reg_init_need(client);
+	if (ret < 0) {
+		sm_err("fg_check_reg_init_need failed (%d)\n", ret);
+		return false;
+	} else if (ret == 0) {
+		sm_dbg("skip fg_reg_init (no init needed)\n");
+		return true;
+	} else {
+		for (retry = 0; retry < 3; retry++) {
+			ret = fg_reset(sm);
+			if (ret == 0)
+				break; /* success */
+			sm_err("fg_reset attempt %d failed (%d)\n", retry + 1, ret);
+			msleep(50);
+		}
 		if (ret < 0) {
-			sm_err("fail to do reset(%d)\n", ret);
+			sm_err("fg_reset failed after 3 attempts\n");
 			return false;
-		}*/
+		}
+
 		sm_info("performing fg_reg_init\n");
 		fg_reg_init(client);
-	} else {
-		sm_dbg("skip fg_reg_init (no init needed)\n");
+		return true;
 	}
-
-	//sm->is_charging = (sm->batt_current > 9) ? true : false;
-	//sm_err("is_charging = %dd\n",sm->is_charging);
-
-	return true;
 }
 
 #define PROPERTY_NAME_SIZE 128
@@ -3534,39 +3666,22 @@ static int fg_common_parse_dt(struct sm_fg_chip *sm)
 {
 	struct device *dev = &sm->client->dev;
 	struct device_node *np = dev->of_node;
-	//int rc, len;
-	//const u32 *p;
 	int rc, count;
 
-	BUG_ON(dev == 0);
-	BUG_ON(np == 0);
-#if (FG_REMOVE_IRQ == 0)
-	sm->gpio_int = of_get_named_gpio(np, "qcom,irq-gpio", 0);
-	sm_info("gpio_int: %d\n", sm->gpio_int);
-
-	if (!gpio_is_valid(sm->gpio_int)) {
-		sm_err("gpio_int is not valid\n");
-		sm->gpio_int = -EINVAL;
+	if (!np) {
+		sm_err("No common device tree node found\n");
+		return -ENODEV;
 	}
-#endif
+
 	/* EN TEMP EX/IN */
-	if (of_property_read_bool(np, "sm,en_temp_ex"))
-		sm->en_temp_ex = true;
-	else
-		sm->en_temp_ex = 0;
+	sm->en_temp_ex = of_property_read_bool(np, "sm,en_temp_ex");
 	sm_info("Temperature EX enabled = %d\n", sm->en_temp_ex);
 
-	if (of_property_read_bool(np, "sm,en_temp_in"))
-		sm->en_temp_in = true;
-	else
-		sm->en_temp_in = 0;
+	sm->en_temp_in = of_property_read_bool(np, "sm,en_temp_in");
 	sm_info("Temperature IN enabled = %d\n", sm->en_temp_in);
 
 	/* EN BATT DET */
-	if (of_property_read_bool(np, "sm,en_batt_det"))
-		sm->en_batt_det = true;
-	else
-		sm->en_batt_det = 0;
+	sm->en_batt_det = of_property_read_bool(np, "sm,en_batt_det");
 	sm_info("Batt Det enabled = %d\n", sm->en_batt_det);
 
 	/* MISC */
@@ -3575,32 +3690,13 @@ static int fg_common_parse_dt(struct sm_fg_chip *sm)
 		sm->misc = 0x0800;
 
 	/* IOCV MAN MODE */
-	if (of_property_read_bool(np, "sm,iocv_man_mode"))
-		sm->iocv_man_mode = true;
-	else
-		sm->iocv_man_mode = 0;
+	sm->iocv_man_mode = of_property_read_bool(np, "sm,iocv_man_mode");
 	sm_info("IOCV_MAN_MODE = %d\n", sm->iocv_man_mode);
 
 	/* Aging */
 	rc = of_property_read_u32(np, "sm,aging_ctrl", &sm->aging_ctrl);
 	if (rc < 0)
 		sm->aging_ctrl = -EINVAL;
-
-	/*decimal rate*/
-	/*len = 0;
-	p = of_get_property(np, "sm,soc_decimal_rate", &len);
-	if (p) {
-		sm->dec_rate_seq = kzalloc(len, GFP_KERNEL);
-		sm->dec_rate_len = len / sizeof(*sm->dec_rate_seq);
-
-		rc = of_property_read_u32_array(np, "sm,soc_decimal_rate", sm->dec_rate_seq, sm->dec_rate_len);
-		if (rc) {
-			sm_err("failed to read dec_rate data: %d\n", rc);
-			kfree(sm->dec_rate_seq);
-		}
-	} else {
-		sm_err("there is no decimal data\n");
-	}*/
 
 	/* decimal rate: expect pairs threshold,rate,threshold,rate,... */
 	count = of_property_count_u32_elems(np, "sm,soc_decimal_rate");
@@ -3700,10 +3796,7 @@ static int fg_common_parse_dt(struct sm_fg_chip *sm)
 		sm->common_param_version = -EINVAL;
 
 	/* Shutdown feature */
-	if (of_property_read_bool(np, "sm,shutdown-delay-enable"))
-		sm->shutdown_delay_enable = true;
-	else
-		sm->shutdown_delay_enable = 0;
+	sm->shutdown_delay_enable = of_property_read_bool(np, "sm,shutdown-delay-enable");
 
 #ifdef ENABLE_NTC_COMPENSATION
 	/* Rtrace */
@@ -3718,295 +3811,340 @@ static int fg_common_parse_dt(struct sm_fg_chip *sm)
 static int fg_battery_parse_dt(struct sm_fg_chip *sm)
 {
 	struct device *dev = &sm->client->dev;
-	struct device_node *np = dev->of_node;
+	struct device_node *root = dev->of_node;
+	struct device_node *bp = NULL;
 	char prop_name[PROPERTY_NAME_SIZE];
 	int battery_id = BATTERY_VENDOR_UNKNOWN;
-	int battery_temp_table[FG_TEMP_TABLE_CNT_MAX];
-	int table[FG_TABLE_LEN];
-	int rs_value[4];
-	int topoff_soc[3];
-	int temp_offset[6];
-	int temp_cal[10];
-	int ext_temp_cal[10];
-	int battery_type[3];
-	int set_tempoff[4];
-	int ret;
+	int battery_temp_table[FG_TEMP_TABLE_CNT_MAX] = {0};
+	int table[FG_TABLE_LEN] = {0};
+	int rs_value[4] = {0};
+	int topoff_soc[3] = {0};
+	int temp_offset[6] = {0};
+	int temp_cal[10] = {0};
+	int ext_temp_cal[10] = {0};
+	int battery_type[3] = {0};
+	int set_tempoff[2] = {0};
+	int ret = 0;
 	int i, j;
 
-	BUG_ON(dev == 0);
-	BUG_ON(np == 0);
+	if (!root) {
+		sm_err("No battery device tree node found\n");
+		return -ENODEV;
+	}
 
-	/* battery_params node*/
-	np = of_find_node_by_name(of_node_get(np), "battery_params");
-	if (np == NULL) {
+	bp = of_get_child_by_name(root, "battery_params");
+	if (!bp) {
 		sm_err("couldn't find child node \"battery_params\"\n");
 		return -EINVAL;
 	}
 
-	/* battery_id*/
-	if (of_property_read_u32(np, "battery,id", &battery_id) < 0)
+	ret = of_property_read_u32(bp, "battery,id", &battery_id);
+	if (ret < 0)
 		sm_dbg("no battery_id property, get from authen\n");
-	if (battery_id == BATTERY_VENDOR_UNKNOWN)
-		battery_id = get_battery_id(sm);
-	sm_info("battery id = %d\n", battery_id);
 
-	/* battery_table*/
-	for (i = BATTERY_TABLE0; i < BATTERY_TABLE2; i++) {
-		snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s%d", battery_id, "battery_table", i);
-		ret = of_property_read_u32_array(np, prop_name, table, FG_TABLE_LEN);
-		if (ret < 0)
-			sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-		for (j = 0; j < FG_TABLE_LEN; j++) {
-			sm->battery_table[i][j] = table[j];
-			/*sm_info("%s = <table[%d][%d] 0x%x>\n",
-					prop_name, i, j, table[j]);*/
-		}
+	/* get battery_id from batt_verify */
+	for (i = 0; i < 3; i++) {
+		battery_id = get_battery_id(sm);
+
+		if (battery_id != BATTERY_VENDOR_UNKNOWN)
+			break;
+
+		sm_dbg("battery_id unknown on attempt %d, retrying...\n", i + 1);
+		usleep_range(5000, 6000);
 	}
 
+	if (battery_id == BATTERY_VENDOR_UNKNOWN) {
+		sm_err("fatal!!!, battery id still unknown, use fallback\n");
+		battery_id = 0;
+	} else {
+		sm_info("battery id = %d (attempts=%d)\n", battery_id, i + 1);
+	}
+
+	/* battery_table 0..1 (FG_TABLE_LEN) */
+	for (i = BATTERY_TABLE0; i < BATTERY_TABLE2; i++) {
+		snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s%d", battery_id, "battery_table", i);
+		ret = of_property_read_u32_array(bp, prop_name, table, FG_TABLE_LEN);
+		if (ret < 0) {
+			sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
+			continue;
+		}
+		for (j = 0; j < FG_TABLE_LEN; j++)
+			sm->battery_table[i][j] = table[j];
+	}
+
+	/* battery_table2 (FG_ADD_TABLE_LEN) */
 	i = BATTERY_TABLE2;
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s%d", battery_id, "battery_table", i);
-	ret = of_property_read_u32_array(np, prop_name, table, FG_ADD_TABLE_LEN);
+	ret = of_property_read_u32_array(bp, prop_name, table, FG_ADD_TABLE_LEN);
 	if (ret < 0) {
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
 	} else {
-		for (j = 0; j < FG_ADD_TABLE_LEN; j++) {
+		for (j = 0; j < FG_ADD_TABLE_LEN; j++)
 			sm->battery_table[i][j] = table[j];
-			/*sm_info("%s = <table[%d][%d] 0x%x>\n",
-					prop_name, i, j, table[j]);*/
-		}
 	}
 
 	/* rs */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "rs");
-	ret = of_property_read_u32_array(np, prop_name, &sm->rs, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->rs, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->rs);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->rs);
 
 	/* alpha */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "alpha");
-	ret = of_property_read_u32_array(np, prop_name, &sm->alpha, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->alpha, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->alpha);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->alpha);
 
 	/* beta */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "beta");
-	ret = of_property_read_u32_array(np, prop_name, &sm->beta, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->beta, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->beta);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->beta);
 
-	/* rs_value*/
-	for (i = 0; i < 4; i++) {
-		snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "rs_value");
-		ret = of_property_read_u32_array(np, prop_name, rs_value, 4);
-		if (ret < 0)
-			sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-		sm->rs_value[i] = rs_value[i];
-	}
-	sm_info("%s = <0x%x 0x%x 0x%x 0x%x>\n",
+	/* rs_value (4 elemen) */
+	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "rs_value");
+	ret = of_property_read_u32_array(bp, prop_name, rs_value, 4);
+	if (ret < 0) {
+		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
+	} else {
+		for (i = 0; i < 4; i++)
+			sm->rs_value[i] = rs_value[i];
+		sm_info("%s = <0x%x 0x%x 0x%x 0x%x>\n",
 			prop_name, rs_value[0], rs_value[1], rs_value[2], rs_value[3]);
+	}
 
-	/* vit_period*/
+	/* vit_period */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "vit_period");
-	ret = of_property_read_u32_array(np, prop_name, &sm->vit_period, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->vit_period, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->vit_period);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->vit_period);
 
-	/* battery_type*/
+	/* battery_type */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "battery_type");
-	ret = of_property_read_u32_array(np, prop_name, battery_type, 3);
-	if (ret < 0)
+	ret = of_property_read_u32_array(bp, prop_name, battery_type, 3);
+	if (ret < 0) {
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-
-	sm->batt_v_max = battery_type[0];
-	sm->min_cap = battery_type[1];
-	sm->cap = battery_type[2];
-	sm_info("%s = <%d %d %d>\n", prop_name,
+	} else {
+		sm->batt_v_max = battery_type[0];
+		sm->min_cap = battery_type[1];
+		sm->cap = battery_type[2];
+		sm_info("%s = <%d %d %d>\n", prop_name,
 			sm->batt_v_max, sm->min_cap, sm->cap);
+	}
 
 	/* tempoff level */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "tempoff");
-	ret = of_property_read_u32_array(np, prop_name, set_tempoff, 2);
-	if (ret < 0)
+	ret = of_property_read_u32_array(bp, prop_name, set_tempoff, 2);
+	if (ret < 0) {
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm->n_tempoff = set_tempoff[0];
-	sm->n_tempoff_offset = set_tempoff[1];
-	sm_info("%s = <%d %d>\n",
-			prop_name, sm->n_tempoff, sm->n_tempoff_offset);
+	} else {
+		sm->n_tempoff = set_tempoff[0];
+		sm->n_tempoff_offset = set_tempoff[1];
+		sm_info("%s = <%d %d>\n", prop_name, sm->n_tempoff, sm->n_tempoff_offset);
+	}
 
-	/* max-voltage -mv*/
+	/* max-voltage */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "max_voltage_uv");
-	ret = of_property_read_u32(np, prop_name, &sm->batt_max_voltage_uv);
+	ret = of_property_read_u32(bp, prop_name, &sm->batt_max_voltage_uv);
 	if (ret < 0)
 		sm_err("couldn't find battery max voltage\n");
 
 	/* TOPOFF SOC */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "topoff_soc");
-	ret = of_property_read_u32_array(np, prop_name, topoff_soc, 3);
-	if (ret < 0)
+	ret = of_property_read_u32_array(bp, prop_name, topoff_soc, 3);
+	if (ret < 0) {
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
+	} else {
+		sm->topoff_soc = topoff_soc[0];
+		sm->topoff = topoff_soc[1];
+		sm->topoff_margin = topoff_soc[2];
+		sm_info("%s = <%d %d %d>\n", prop_name, sm->topoff_soc, sm->topoff, sm->topoff_margin);
+	}
 
-	sm->topoff_soc = topoff_soc[0];
-	sm->topoff = topoff_soc[1];
-	sm->topoff_margin = topoff_soc[2];
-	sm_info("%s = <%d %d %d>\n", prop_name, sm->topoff_soc, sm->topoff, sm->topoff_margin);
-
-	/* Mix */
+	/* mix_value */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "mix_value");
-	ret = of_property_read_u32_array(np, prop_name, &sm->mix_value, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->mix_value, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <%d>\n", prop_name, sm->mix_value);
+	else
+		sm_info("%s = <%d>\n", prop_name, sm->mix_value);
 
-	/* VOLT CAL */
+	/* volt_cal */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "volt_cal");
-	ret = of_property_read_u32_array(np, prop_name, &sm->volt_cal, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->volt_cal, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->volt_cal);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->volt_cal);
 
-	/* CURR OFFSET */
+	/* curr_offset */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "curr_offset");
-	ret = of_property_read_u32_array(np, prop_name, &sm->curr_offset, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->curr_offset, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->curr_offset);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->curr_offset);
 
-	/* CURR SLOPE */
+	/* curr_slope */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "curr_slope");
-	ret = of_property_read_u32_array(np, prop_name, &sm->curr_slope, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->curr_slope, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->curr_slope);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->curr_slope);
 
 	/* temp_std */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "temp_std");
-	ret = of_property_read_u32_array(np, prop_name, &sm->temp_std, 1);
+	ret = of_property_read_u32_array(bp, prop_name, &sm->temp_std, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <%d>\n", prop_name, sm->temp_std);
+	else
+		sm_info("%s = <%d>\n", prop_name, sm->temp_std);
 
-	/* temp_offset */
+	/* temp_offset (6) */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "temp_offset");
-	ret = of_property_read_u32_array(np, prop_name, temp_offset, 6);
-	if (ret < 0)
+	ret = of_property_read_u32_array(bp, prop_name, temp_offset, 6);
+	if (ret < 0) {
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-
-	sm->en_high_fg_temp_offset = temp_offset[0];
-	sm->high_fg_temp_offset_denom = temp_offset[1];
-	sm->high_fg_temp_offset_fact = temp_offset[2];
-	sm->en_low_fg_temp_offset = temp_offset[3];
-	sm->low_fg_temp_offset_denom = temp_offset[4];
-	sm->low_fg_temp_offset_fact = temp_offset[5];
-	sm_info("%s = <%d, %d, %d, %d, %d, %d>\n", prop_name,
+	} else {
+		sm->en_high_fg_temp_offset = temp_offset[0];
+		sm->high_fg_temp_offset_denom = temp_offset[1];
+		sm->high_fg_temp_offset_fact = temp_offset[2];
+		sm->en_low_fg_temp_offset = temp_offset[3];
+		sm->low_fg_temp_offset_denom = temp_offset[4];
+		sm->low_fg_temp_offset_fact = temp_offset[5];
+		sm_info("%s = <%d, %d, %d, %d, %d, %d>\n", prop_name,
 			sm->en_high_fg_temp_offset,
 			sm->high_fg_temp_offset_denom, sm->high_fg_temp_offset_fact,
 			sm->en_low_fg_temp_offset,
 			sm->low_fg_temp_offset_denom, sm->low_fg_temp_offset_fact);
+	}
 
-	/* temp_calc */
+	/* temp_cal (10) */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "temp_cal");
-	ret = of_property_read_u32_array(np, prop_name, temp_cal, 10);
-	if (ret < 0)
+	ret = of_property_read_u32_array(bp, prop_name, temp_cal, 10);
+	if (ret < 0) {
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-
-	sm->en_high_fg_temp_cal = temp_cal[0];
-	sm->high_fg_temp_p_cal_denom = temp_cal[1];
-	sm->high_fg_temp_p_cal_fact = temp_cal[2];
-	sm->high_fg_temp_n_cal_denom = temp_cal[3];
-	sm->high_fg_temp_n_cal_fact = temp_cal[4];
-	sm->en_low_fg_temp_cal = temp_cal[5];
-	sm->low_fg_temp_p_cal_denom = temp_cal[6];
-	sm->low_fg_temp_p_cal_fact = temp_cal[7];
-	sm->low_fg_temp_n_cal_denom = temp_cal[8];
-	sm->low_fg_temp_n_cal_fact = temp_cal[9];
-	sm_info("%s = <%d, %d, %d, %d, %d, %d, %d, %d, %d, %d>\n", prop_name,
+	} else {
+		sm->en_high_fg_temp_cal = temp_cal[0];
+		sm->high_fg_temp_p_cal_denom = temp_cal[1];
+		sm->high_fg_temp_p_cal_fact = temp_cal[2];
+		sm->high_fg_temp_n_cal_denom = temp_cal[3];
+		sm->high_fg_temp_n_cal_fact = temp_cal[4];
+		sm->en_low_fg_temp_cal = temp_cal[5];
+		sm->low_fg_temp_p_cal_denom = temp_cal[6];
+		sm->low_fg_temp_p_cal_fact = temp_cal[7];
+		sm->low_fg_temp_n_cal_denom = temp_cal[8];
+		sm->low_fg_temp_n_cal_fact = temp_cal[9];
+		sm_info("%s = <%d, %d, %d, %d, %d, %d, %d, %d, %d, %d>\n", prop_name,
 			sm->en_high_fg_temp_cal,
 			sm->high_fg_temp_p_cal_denom, sm->high_fg_temp_p_cal_fact,
 			sm->high_fg_temp_n_cal_denom, sm->high_fg_temp_n_cal_fact,
 			sm->en_low_fg_temp_cal,
 			sm->low_fg_temp_p_cal_denom, sm->low_fg_temp_p_cal_fact,
 			sm->low_fg_temp_n_cal_denom, sm->low_fg_temp_n_cal_fact);
+	}
 
-	/* ext_temp_calc */
+	/* ext_temp_cal (10) */
 	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "ext_temp_cal");
-	ret = of_property_read_u32_array(np, prop_name, ext_temp_cal, 10);
-	if (ret < 0)
+	ret = of_property_read_u32_array(bp, prop_name, ext_temp_cal, 10);
+	if (ret < 0) {
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-
-	sm->en_high_temp_cal = ext_temp_cal[0];
-	sm->high_temp_p_cal_denom = ext_temp_cal[1];
-	sm->high_temp_p_cal_fact = ext_temp_cal[2];
-	sm->high_temp_n_cal_denom = ext_temp_cal[3];
-	sm->high_temp_n_cal_fact = ext_temp_cal[4];
-	sm->en_low_temp_cal = ext_temp_cal[5];
-	sm->low_temp_p_cal_denom = ext_temp_cal[6];
-	sm->low_temp_p_cal_fact = ext_temp_cal[7];
-	sm->low_temp_n_cal_denom = ext_temp_cal[8];
-	sm->low_temp_n_cal_fact = ext_temp_cal[9];
-	sm_info("%s = <%d, %d, %d, %d, %d, %d, %d, %d, %d, %d>\n", prop_name,
+	} else {
+		sm->en_high_temp_cal = ext_temp_cal[0];
+		sm->high_temp_p_cal_denom = ext_temp_cal[1];
+		sm->high_temp_p_cal_fact = ext_temp_cal[2];
+		sm->high_temp_n_cal_denom = ext_temp_cal[3];
+		sm->high_temp_n_cal_fact = ext_temp_cal[4];
+		sm->en_low_temp_cal = ext_temp_cal[5];
+		sm->low_temp_p_cal_denom = ext_temp_cal[6];
+		sm->low_temp_p_cal_fact = ext_temp_cal[7];
+		sm->low_temp_n_cal_denom = ext_temp_cal[8];
+		sm->low_temp_n_cal_fact = ext_temp_cal[9];
+		sm_info("%s = <%d, %d, %d, %d, %d, %d, %d, %d, %d, %d>\n", prop_name,
 			sm->en_high_temp_cal,
 			sm->high_temp_p_cal_denom, sm->high_temp_p_cal_fact,
 			sm->high_temp_n_cal_denom, sm->high_temp_n_cal_fact,
 			sm->en_low_temp_cal,
 			sm->low_temp_p_cal_denom, sm->low_temp_p_cal_fact,
 			sm->low_temp_n_cal_denom, sm->low_temp_n_cal_fact);
-
-	/* FCM Offset */
-	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "fcm_offset");
-	ret = of_property_read_u32_array(np, prop_name, &sm->fcm_offset, 1);
-	if (ret < 0)
-		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->fcm_offset);
-
-	/* get battery_temp_table*/
-	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "thermal_table");
-	ret = of_property_read_u32_array(np, prop_name, battery_temp_table, FG_TEMP_TABLE_CNT_MAX);
-	if (ret < 0)
-		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	for (i = 0; i < FG_TEMP_TABLE_CNT_MAX; i++) {
-		sm->battery_temp_table[i] = battery_temp_table[i];
-		/* sm_err("%s = <battery_temp_table[%d] 0x%x>\n",
-				prop_name, i, battery_temp_table[i]); */
 	}
 
-	/* Battery Paramter */
-	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "param_version");
-	ret = of_property_read_u32_array(np, prop_name, &sm->battery_param_version, 1);
+	/* fcm_offset */
+	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "fcm_offset");
+	ret = of_property_read_u32_array(bp, prop_name, &sm->fcm_offset, 1);
 	if (ret < 0)
 		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
-	sm_info("%s = <0x%x>\n", prop_name, sm->battery_param_version);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->fcm_offset);
 
+	/* thermal_table */
+	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "thermal_table");
+	ret = of_property_read_u32_array(bp, prop_name, battery_temp_table, FG_TEMP_TABLE_CNT_MAX);
+	if (ret < 0) {
+		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
+	} else {
+		for (i = 0; i < FG_TEMP_TABLE_CNT_MAX; i++)
+			sm->battery_temp_table[i] = (int16_t)battery_temp_table[i];
+	}
+
+	/* param_version */
+	snprintf(prop_name, PROPERTY_NAME_SIZE, "battery%d,%s", battery_id, "param_version");
+	ret = of_property_read_u32_array(bp, prop_name, &sm->battery_param_version, 1);
+	if (ret < 0)
+		sm_err("couldn't get prop %s (%d)\n", prop_name, ret);
+	else
+		sm_info("%s = <0x%x>\n", prop_name, sm->battery_param_version);
+
+	/* release child node ref */
+	of_node_put(bp);
 	return 0;
 }
 
 bool hal_fg_init(struct i2c_client *client)
 {
 	struct sm_fg_chip *sm = i2c_get_clientdata(client);
-	bool ret;
+	int rc;
+	bool ok;
 
 	sm_info("start\n");
-	mutex_lock(&sm->data_lock);
 	if (client->dev.of_node) {
-		/* Load common data from DTS*/
-		fg_common_parse_dt(sm);
-		/* Load battery data from DTS*/
-		fg_battery_parse_dt(sm);
+		rc = fg_common_parse_dt(sm);
+		if (rc) {
+			sm_err("fg_common_parse_dt failed: %d\n", rc);
+			goto out;
+		}
+
+		rc = fg_battery_parse_dt(sm);
+		if (rc) {
+			sm_err("fg_battery_parse_dt failed: %d\n", rc);
+			goto out;
+		}
 	}
 
-	ret = fg_init(client);
+	mutex_lock(&sm->data_lock);
+	ok = fg_init(client);
 	mutex_unlock(&sm->data_lock);
 
-	if (!ret) {
-		sm_info("init fail!\n");
-		return false;
+	if (!ok) {
+		sm_err("fg_init failed\n");
+		goto out;
 	}
 
 	sm_info("init done\n");
 	return true;
+
+out:
+	sm_info("init failed\n");
+	return false;
 }
 
 static int sm5602_get_psy(struct sm_fg_chip *sm)
@@ -4022,7 +4160,7 @@ static int sm5602_get_psy(struct sm_fg_chip *sm)
 
 	sm->batt_psy = power_supply_get_by_name("battery");
 	if (!sm->batt_psy) {
-		sm_err("bms psy not found, force probe\n");
+		sm_err("batt psy not found, force probe\n");
 		return -EINVAL;
 	}
 
@@ -4030,7 +4168,7 @@ static int sm5602_get_psy(struct sm_fg_chip *sm)
 }
 
 //20220108 : W/A for over 60degree
-static void overtemp_delay_work(struct work_struct *work)
+static void overtemp_delay_workfunc(struct work_struct *work)
 {
 	struct sm_fg_chip *sm = container_of(work, struct sm_fg_chip, overtemp_delay_work.work);
 
@@ -4041,16 +4179,14 @@ static void overtemp_delay_work(struct work_struct *work)
 }
 
 /*if rawsoc less than 1% and vbat less than 3.4V then force UI_SOC update to 0%.*/
-static void LowBatteryCheckFunc(struct work_struct *work)
+static void low_battery_check_workfunc(struct work_struct *work)
 {
-	struct sm_fg_chip *sm = container_of(work, struct sm_fg_chip, LowBatteryCheckWork.work);
+	struct sm_fg_chip *sm = container_of(work, struct sm_fg_chip, low_battery_check_work.work);
 	int i, low_soc_count = 0;
 
 	for (i = 0; i < 3; i++) {
-		mutex_lock(&sm->data_lock);
-		sm->batt_volt = fg_read_volt(sm);
-		sm->batt_soc = fg_read_soc(sm);
-		mutex_unlock(&sm->data_lock);
+		fg_read_volt(sm);
+		fg_read_soc(sm);
 
 		if (sm->batt_soc < 10 && sm->batt_volt < 3400)
 			low_soc_count++;
@@ -4062,7 +4198,7 @@ static void LowBatteryCheckFunc(struct work_struct *work)
 	if (low_soc_count == 3) {
 		sm->low_battery_power = true;
 		mutex_lock(&sm->data_lock);
-		sm->param.batt_raw_soc = 0;
+		sm->param.batt_soc = 0;
 		sm->batt_soc = 0;
 		mutex_unlock(&sm->data_lock);
 	} else {
@@ -4104,13 +4240,13 @@ static int sm5602_notifier_call(struct notifier_block *nb,
 
 		if (sm->usb_present && !prev_present) {
 			//sm->usb_present = true;
-			pm_stay_awake(sm->dev);
-			sm_info("USB connected, stay awake\n");
+			//pm_stay_awake(sm->dev);
+			sm_info("USB connected\n");
 		} else if (!sm->usb_present && prev_present) {
 			sm->batt_sw_fc = false;
 			//sm->usb_present = false;
-			pm_relax(sm->dev);
-			sm_info("USB disconnected, relax wakelock\n");
+			//pm_relax(sm->dev);
+			sm_info("USB disconnected\n");
 		}
 	}
 
@@ -4159,16 +4295,43 @@ static int sm_fg_probe(struct i2c_client *client,
 {
 	int ret;
 	struct sm_fg_chip *sm;
-	u8 *regs;
+	const u8 *regs;
 
 	pr_info("sm fuel gauge probe enter\n");
 	sm = devm_kzalloc(&client->dev, sizeof(*sm), GFP_KERNEL);
-	if (!sm)
+	if (!sm) {
+		pr_err("out of memory!!\n");
 		return -ENOMEM;
+	}
 
 	sm->dev = &client->dev;
 	sm->client = client;
+	i2c_set_clientdata(client, sm);
+
 	sm->chip = id->driver_data;
+	if (sm->chip == SM5602) {
+		regs = sm5602_regs;
+	} else {
+		pr_err("unexpected fuel gauge: %d\n", sm->chip);
+		regs = sm5602_regs;
+	}
+
+	memcpy(sm->regs, regs, ARRAY_SIZE(sm->regs) * sizeof(sm->regs[0]));
+
+	mutex_init(&sm->i2c_rw_lock);
+	mutex_init(&sm->data_lock);
+	mutex_init(&sm->update_lock);
+	memset(sm->last_update_jiffies, 0, sizeof(sm->last_update_jiffies));
+
+#ifdef CONFIG_BATT_VERIFY_BY_DS28E16
+	sm->max_verify_psy = power_supply_get_by_name("batt_verify");
+	if (!sm->max_verify_psy) {
+		pr_err("batt_verify psy not ready, defer probe\n");
+		ret = -EPROBE_DEFER;
+		goto err_free;
+	}
+#endif
+	sm_fg_get_psy(sm);
 
 	sm->batt_soc	= -ENODATA;
 	sm->batt_fcc	= -ENODATA;
@@ -4178,35 +4341,18 @@ static int sm_fg_probe(struct i2c_client *client,
 	sm->batt_curr	= -ENODATA;
 	sm->fake_soc	= -EINVAL;
 	sm->fake_temp	= -EINVAL;
-	sm->param.batt_ma	= -EINVAL;
-	sm->param.batt_soc	= -EINVAL;
 	sm->param.batt_raw_soc	= -EINVAL;
+	sm->param.batt_soc	= -EINVAL;
+#ifdef ENABLE_CURRENT_AVG
+	sm->param.batt_ma = -EINVAL;
+	sm->param.batt_ma_prev = -EINVAL;
+	sm->param.batt_ma_avg = -EINVAL;
+#endif
 #ifdef ENABLE_TEMP_AVG
-	sm->temp_param.batt_temp = -EINVAL;
-	sm->temp_param.batt_temp_prev = -EINVAL;
-	sm->temp_param.batt_temp_avg = -EINVAL;
+	sm->param.batt_temp = -EINVAL;
+	sm->param.batt_temp_prev = -EINVAL;
+	sm->param.batt_temp_avg = -EINVAL;
 #endif
-#ifdef CONFIG_BATT_VERIFY_BY_DS28E16
-	sm->max_verify_psy = power_supply_get_by_name("batt_verify");
-	if (!sm->max_verify_psy) {
-		pr_err("batt_verify psy not ready, defer probe\n");
-		ret = -EPROBE_DEFER;
-		goto err_free;
-	}
-#endif
-
-	if (sm->chip == SM5602) {
-		regs = sm5602_regs;
-	} else {
-		pr_err("unexpected fuel gauge: %d\n", sm->chip);
-		regs = sm5602_regs;
-	}
-
-	memcpy(sm->regs, regs, NUM_REGS);
-	i2c_set_clientdata(client, sm);
-
-	mutex_init(&sm->i2c_rw_lock);
-	mutex_init(&sm->data_lock);
 
 	if (true != fg_check_device_id(client)) {
 		ret = -ENODEV;
@@ -4233,56 +4379,32 @@ static int sm_fg_probe(struct i2c_client *client,
 	sm->overtemp_allow_restart = false;
 	sm->low_battery_power = false;
 	sm->start_low_battery_check = false;
-	sm->soc_reporting_ready = false;
 	sm->soc_smooth_initialized = false;
 	sm->cp_work_flag = false;
-	sm_fg_get_psy(sm);
 
 	INIT_DELAYED_WORK(&sm->monitor_work, fg_monitor_workfunc);
-	INIT_DELAYED_WORK(&sm->overtemp_delay_work, overtemp_delay_work);
-	INIT_DELAYED_WORK(&sm->LowBatteryCheckWork, LowBatteryCheckFunc);
+	INIT_DELAYED_WORK(&sm->overtemp_delay_work, overtemp_delay_workfunc);
+	INIT_DELAYED_WORK(&sm->low_battery_check_work, low_battery_check_workfunc);
 	pr_info("overtemp_delay_on: %d\n", sm->overtemp_delay_on);
 
 	// find votable
 	sm->fv_votable = find_votable("FV");
 	sm->chg_dis_votable = find_votable("CHG_DISABLE");
 
-#if (FG_REMOVE_IRQ == 0)
-	if (sm->gpio_int != -EINVAL) {
-		//client->irq = sm->gpio_int;
-		pr_err("unused\n");
-	} else {
-		pr_err("Failed to register gpio interrupt\n");
+	ret = sysfs_create_group(&sm->dev->kobj, &fg_attr_group);
+	if (ret) {
+		pr_err("Failed to register sysfs: %d\n", ret);
 		goto err_reg;
 	}
 
-	if (client->irq) {
-		ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
-				fg_irq_thread, IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-				"sm fuel gauge irq", sm);
-		if (ret < 0) {
-			pr_err("request irq for irq=%d failed, ret=%d\n", client->irq, ret);
-			//goto err_reg;
-		}
-	}
-	//fg_irq_thread(client->irq, sm); // if IRQF_TRIGGER_FALLING or IRQF_TRIGGER_RISING is needed, enable initial irq.
-#endif
+	create_debugfs_entry(sm);
 
 	sm->nb.notifier_call = sm5602_notifier_call;
 	ret = power_supply_reg_notifier(&sm->nb);
 	if (ret < 0) {
 		pr_err("Couldn't register psy notifier, rc=%d\n", ret);
-		goto err_reg;
-	}
-
-	ret = sysfs_create_group(&sm->dev->kobj, &fg_attr_group);
-	if (ret) {
-		pr_err("Failed to register sysfs: %d\n", ret);
 		goto err_sysfs;
 	}
-
-	create_debugfs_entry(sm);
-	fg_show_registers(sm);
 
 	schedule_delayed_work(&sm->monitor_work, 10 * HZ);
 	//schedule_delayed_work(&sm->soc_monitor_work, msecs_to_jiffies(MONITOR_SOC_WAIT_MS));
@@ -4291,17 +4413,19 @@ static int sm_fg_probe(struct i2c_client *client,
 	return 0;
 
 err_sysfs:
-	power_supply_unreg_notifier(&sm->nb);
+	sysfs_remove_group(&sm->dev->kobj, &fg_attr_group);
 err_reg:
 	fg_psy_unregister(sm);
-	sm_fg_cleanup_psy(sm);
 err_init:
-	mutex_destroy(&sm->data_lock);
-	mutex_destroy(&sm->i2c_rw_lock);
+	sm_fg_cleanup_psy(sm);
 #ifdef CONFIG_BATT_VERIFY_BY_DS28E16
 err_free:
 #endif
-	devm_kfree(&client->dev, sm);
+	mutex_destroy(&sm->update_lock);
+	mutex_destroy(&sm->data_lock);
+	mutex_destroy(&sm->i2c_rw_lock);
+	i2c_set_clientdata(client, NULL);
+
 	pr_err("sm fuel gauge probe failed\n");
 	return ret;
 }
@@ -4313,20 +4437,24 @@ static int sm_fg_remove(struct i2c_client *client)
 	if (!sm)
 		return 0;
 
+	power_supply_unreg_notifier(&sm->nb);
+
 	cancel_delayed_work_sync(&sm->monitor_work);
 	cancel_delayed_work_sync(&sm->overtemp_delay_work);
-	cancel_delayed_work_sync(&sm->LowBatteryCheckWork);
+	cancel_delayed_work_sync(&sm->low_battery_check_work);
 
 	if (!IS_ERR_OR_NULL(sm->debug_root))
 		debugfs_remove_recursive(sm->debug_root);
 
 	sysfs_remove_group(&sm->dev->kobj, &fg_attr_group);
-	power_supply_unreg_notifier(&sm->nb);
+
 	fg_psy_unregister(sm);
 	sm_fg_cleanup_psy(sm);
 
+	mutex_destroy(&sm->update_lock);
 	mutex_destroy(&sm->data_lock);
 	mutex_destroy(&sm->i2c_rw_lock);
+	i2c_set_clientdata(client, NULL);
 
 	return 0;
 }

@@ -17,8 +17,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-#define pr_fmt(fmt) KBUILD_MODNAME ": %s: " fmt, __func__
+#undef pr_fmt
+#define pr_fmt(fmt) "[max77729-muic]: %s: " fmt "\n", __func__
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -47,48 +47,47 @@ void max77729_bc12_get_vadc(u8 vbadc)
 {
 	switch (vbadc) {
 	case 0:
-		pr_info("VBUS < 3.5V\n");
+		pr_info("VBUS < 3.5V");
 		break;
 	case 1:
-		pr_info("3.5V <= VBUS < 4.5V\n");
+		pr_info("3.5V <= VBUS < 4.5V");
 		break;
 	case 2:
-		pr_info("4.5V <= VBUS < 5.5V\n");
+		pr_info("4.5V <= VBUS < 5.5V");
 		break;
 	case 3:
-		pr_info("5.5V <= VBUS < 6.5V\n");
+		pr_info("5.5V <= VBUS < 6.5V");
 		break;
 	case 4:
-		pr_info("6.5V <= VBUS < 7.5V\n");
+		pr_info("6.5V <= VBUS < 7.5V");
 		break;
 	case 5:
-		pr_info("7.5V <= VBUS < 8.5V\n");
+		pr_info("7.5V <= VBUS < 8.5V");
 		break;
 	case 6:
-		pr_info("8.5V <= VBUS < 9.5V\n");
+		pr_info("8.5V <= VBUS < 9.5V");
 		break;
 	case 7:
-		pr_info("9.5V <= VBUS < 10.5V\n");
+		pr_info("9.5V <= VBUS < 10.5V");
 		break;
 	case 8:
-		pr_info("10.5V <= VBUS < 11.5V\n");
+		pr_info("10.5V <= VBUS < 11.5V");
 		break;
 	case 9:
-		pr_info("11.5V <= VBUS < 12.5V\n");
+		pr_info("11.5V <= VBUS < 12.5V");
 		break;
 	case 10:
-		pr_info("12.5V <= VBUS < 13.5V\n");
+		pr_info("12.5V <= VBUS < 13.5V");
 		break;
 	case 11:
-		pr_info("13.5V <= VBUS < 14.5V\n");
+		pr_info("13.5V <= VBUS < 14.5V");
 		break;
 	case 12:
-		pr_info("14.5V <= VBUS < 15.5V\n");
+		pr_info("14.5V <= VBUS < 15.5V");
 		break;
 	default:
-		pr_info("Reserved\n");
+		pr_info("Reserved");
 		break;
-
 	};
 }
 
@@ -98,7 +97,7 @@ int max77729_bc12_set_charger(struct max77729_usbc_platform_data *usbc_data)
 	union power_supply_propval value;
 	enum power_supply_type	real_charger_type;
 
-	pr_info("BIT_ChgTyp = %02Xh, BIT_PrChgTyp = %02Xh\n",
+ 	pr_err("BIT_ChgTyp = %02Xh, BIT_PrChgTyp = %02Xh",
 			muic_data->chg_type, muic_data->pr_chg_type);
 
 	switch (muic_data->chg_type) {
@@ -134,7 +133,6 @@ int max77729_bc12_set_charger(struct max77729_usbc_platform_data *usbc_data)
 		psy_do_property("bbc", set, POWER_SUPPLY_PROP_STATUS, value);
 		break;
 	}
-
 	/* maxim pmic */
 	/* psy_do_property("bbc", set, POWER_SUPPLY_PROP_ONLINE, value); */
 	/* psy_do_property("bms", set, POWER_SUPPLY_PROP_ONLINE, value); */
@@ -153,8 +151,8 @@ static irqreturn_t max77729_vbadc_irq(int irq, void *data)
 	u8 vbadc = 0;
 
 	/* pr_debug("%s: IRQ(%d)_IN\n", __func__, irq); */
-	max77729_read_reg(muic_data->i2c, MAX77729_USBC_REG_USBC_STATUS1,
-		&muic_data->usbc_status1);
+	max77729_read_reg(muic_data->i2c,
+			MAX77729_USBC_REG_USBC_STATUS1, &muic_data->usbc_status1);
 	vbadc = (muic_data->usbc_status1 & BIT_VBADC) >> FFS(BIT_VBADC);
 	max77729_bc12_get_vadc(vbadc);
 	muic_data->vbadc = vbadc;
@@ -165,7 +163,6 @@ static irqreturn_t max77729_vbadc_irq(int irq, void *data)
 
 static irqreturn_t max77729_chgtype_irq(int irq, void *data)
 {
-
 	struct max77729_usbc_platform_data *usbc_data = data;
 	struct max77729_muic_data *muic_data = usbc_data->muic_data;
 
@@ -173,11 +170,9 @@ static irqreturn_t max77729_chgtype_irq(int irq, void *data)
 
 	max77729_read_reg(muic_data->i2c, REG_BC_STATUS, &muic_data->bc_status);
 
-	muic_data->chg_type = (muic_data->bc_status & BIT_ChgTyp)
-		>> FFS(BIT_ChgTyp);
+	muic_data->chg_type = (muic_data->bc_status & BIT_ChgTyp) >> FFS(BIT_ChgTyp);
 
-	muic_data->pr_chg_type = (muic_data->bc_status & BIT_PrChgTyp)
-		>> FFS(BIT_PrChgTyp);
+	muic_data->pr_chg_type = (muic_data->bc_status & BIT_PrChgTyp) >> FFS(BIT_PrChgTyp);
 
 	max77729_bc12_set_charger(usbc_data);
 
@@ -188,14 +183,13 @@ static irqreturn_t max77729_chgtype_irq(int irq, void *data)
 	} else {
 		cancel_delayed_work_sync(&(muic_data->qc_work));
 	}
-
 	/* pr_debug("%s: IRQ(%d)_OUT\n", __func__, irq); */
+
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t max77729_dcdtmo_irq(int irq, void *data)
 {
-
 	struct max77729_usbc_platform_data *usbc_data = data;
 	struct max77729_muic_data *muic_data = usbc_data->muic_data;
 	u8 dcdtmo_flag;
@@ -203,16 +197,14 @@ static irqreturn_t max77729_dcdtmo_irq(int irq, void *data)
 	/* pr_debug("%s: IRQ(%d)_IN\n", __func__, irq); */
 	max77729_read_reg(muic_data->i2c, REG_BC_STATUS, &muic_data->bc_status);
 
-	dcdtmo_flag = (muic_data->bc_status & BIT_DCDTmo)
-		>> FFS(BIT_DCDTmo);
-
+	dcdtmo_flag = (muic_data->bc_status & BIT_DCDTmo) >> FFS(BIT_DCDTmo);
 	if (dcdtmo_flag) {
 		muic_data->dcdtmo++;
 	} else {
 		muic_data->dcdtmo = 0;
 	}
 
-	pr_debug("BIT_DCDTmoI occured %d\n", muic_data->dcdtmo);
+	//pr_debug("BIT_DCDTmoI occured %d", muic_data->dcdtmo);
 	/* pr_debug("%s: IRQ(%d)_OUT\n", __func__, irq); */
 
 	return IRQ_HANDLED;
@@ -224,17 +216,17 @@ static irqreturn_t max77729_vbusdet_irq(int irq, void *data)
 	struct max77729_usbc_platform_data *usbc_data = data;
 	struct max77729_muic_data *muic_data = usbc_data->muic_data;
 
-	pr_debug("IRQ(%d)_IN\n", irq);
+	pr_debug("IRQ(%d)_IN", irq);
 	max77729_read_reg(muic_data->i2c, REG_BC_STATUS, &muic_data->bc_status);
 
 	if ((muic_data->bc_status & BIT_VBUSDet) == BIT_VBUSDet) {
-		pr_info("VBUS > VVBDET\n");
+		pr_info("VBUS > VVBDET");
 		muic_data->vbusdet = 1;
 	} else {
-		pr_info("VBUS < VVBDET\n");
+		pr_info("VBUS < VVBDET");
 		muic_data->vbusdet = 0;
 	}
-	pr_debug("IRQ(%d)_OUT\n", irq);
+	pr_debug("IRQ(%d)_OUT", irq);
 
 	return IRQ_HANDLED;
 }
@@ -242,8 +234,7 @@ static irqreturn_t max77729_vbusdet_irq(int irq, void *data)
 
 static void max77729_muic_print_reg_log(struct work_struct *work)
 {
-	struct max77729_muic_data *muic_data =
-		container_of(work, struct max77729_muic_data, debug_work.work);
+	struct max77729_muic_data *muic_data = container_of(work, struct max77729_muic_data, debug_work.work);
 	struct i2c_client *i2c = muic_data->i2c;
 	struct i2c_client *pmic_i2c = muic_data->usbc_pdata->i2c;
 	u8 status[12] = {0, };
@@ -267,8 +258,7 @@ static void max77729_muic_print_reg_log(struct work_struct *work)
 		/* __func__, status[7], status[8], status[9], status[10], status[11], */
 		/* muic_data->usbc_pdata->watchdog_count, muic_data->usbc_pdata->por_count); */
 
-	schedule_delayed_work(&(muic_data->debug_work),
-		msecs_to_jiffies(60000));
+	schedule_delayed_work(&(muic_data->debug_work), msecs_to_jiffies(60000));
 }
 
 /* static void max77729_muic_free_irqs(struct max77729_muic_data *muic_data) */
@@ -295,12 +285,11 @@ void max77729_set_qc(struct max77729_muic_data *muic_data, int voltage)
 		dpdndrv = 0x09;
 		break;
 	default:
-		pr_info("%s: invalid value(%d), return\n", MUIC_DEV_NAME, voltage);
+		pr_info("invalid value(%d), return", voltage);
 		return;
 	}
 
-	// pr_info("%s:%s voltage(%d)\n", MUIC_DEV_NAME, __func__, voltage);
-	//pr_info("%s:%s voltage(%d)\n", MUIC_DEV_NAME, __func__, voltage);
+	/* pr_info("%s:%s voltage(%d)\n", MUIC_DEV_NAME, __func__, voltage); */
 
 	init_usbc_cmd_data(&write_data);
 	write_data.opcode = OPCODE_QC_2_0_SET;
@@ -313,8 +302,7 @@ void max77729_set_qc(struct max77729_muic_data *muic_data, int voltage)
 
 static void max77729_qc_work(struct work_struct *work)
 {
-	struct max77729_muic_data *muic_data =
-		container_of(work, struct max77729_muic_data, qc_work.work);
+	struct max77729_muic_data *muic_data = container_of(work, struct max77729_muic_data, qc_work.work);
 	struct max77729_usbc_platform_data *usbc_pdata = muic_data->usbc_pdata;
 
 	/* pr_info("%s\n", __func__); */
@@ -347,7 +335,7 @@ int max77729_bc12_probe(struct max77729_usbc_platform_data *usbc_data)
 	}
 
 	if (!mfd_pdata) {
-		pr_err("failed to get mfd platform data\n");
+		pr_err("failed to get mfd platform data");
 		ret = -ENOMEM;
 		goto err_return;
 	}
@@ -360,70 +348,62 @@ int max77729_bc12_probe(struct max77729_usbc_platform_data *usbc_data)
 	usbc_data->muic_data = muic_data;
 	g_muic_data = muic_data;
 
-	muic_data->irq_chgtyp = usbc_data->irq_base
-		+ MAX77729_USBC_IRQ_CHGT_INT;
+	muic_data->irq_chgtyp = usbc_data->irq_base + MAX77729_USBC_IRQ_CHGT_INT;
 	if (muic_data->irq_chgtyp) {
 		ret = request_threaded_irq(muic_data->irq_chgtyp,
 				NULL, max77729_chgtype_irq,
 				0,
 				"bc-chgtyp-irq", usbc_data);
 		if (ret) {
-			pr_err("Failed to Request IRQ (%d)\n", ret);
+			pr_err("Failed to Request IRQ (%d)", ret);
 			goto err_irq;
 		}
 	}
 
-	muic_data->irq_dcdtmo = usbc_data->irq_base
-		+ MAX77729_USBC_IRQ_DCD_INT;
+	muic_data->irq_dcdtmo = usbc_data->irq_base + MAX77729_USBC_IRQ_DCD_INT;
 	if (muic_data->irq_dcdtmo) {
 		ret = request_threaded_irq(muic_data->irq_dcdtmo,
 				NULL, max77729_dcdtmo_irq,
 				0,
 				"bc-dcdtmo-irq", usbc_data);
 		if (ret) {
-			pr_err("Failed to Request IRQ (%d)\n", ret);
+			pr_err("Failed to Request IRQ (%d)", ret);
 			goto err_irq;
 		}
 	}
 
-	muic_data->irq_vbadc = usbc_data->irq_base
-		+ MAX77729_USBC_IRQ_VBADC_INT;
+	muic_data->irq_vbadc = usbc_data->irq_base + MAX77729_USBC_IRQ_VBADC_INT;
 	if (muic_data->irq_vbadc) {
 		ret = request_threaded_irq(muic_data->irq_vbadc,
 				NULL, max77729_vbadc_irq,
 				0,
 				"bc-vbadc-irq", usbc_data);
 		if (ret) {
-			pr_err("Failed to Request IRQ (%d)\n", ret);
+			pr_err("Failed to Request IRQ (%d)", ret);
 			goto err_irq;
 		}
 	}
 
 #if 0
-	muic_data->irq_vbusdet = usbc_data->irq_base
-		+ MAX77729_USBC_IRQ_VBUS_INT;
+	muic_data->irq_vbusdet = usbc_data->irq_base + MAX77729_USBC_IRQ_VBUS_INT;
 	if (muic_data->irq_vbusdet) {
 		ret = request_threaded_irq(muic_data->irq_vbusdet,
 				NULL, max77729_vbusdet_irq,
 				0,
 				"bc-vbusdet-irq", usbc_data);
 		if (ret) {
-			pr_err("Failed to Request IRQ (%d)\n", ret);
+			pr_err("Failed to Request IRQ (%d)", ret);
 			goto err_irq;
 		}
 	}
 #endif
 
-	INIT_DELAYED_WORK(&(muic_data->debug_work),
-		max77729_muic_print_reg_log);
-	INIT_DELAYED_WORK(&(muic_data->qc_work),
-		max77729_qc_work);
-
+	INIT_DELAYED_WORK(&(muic_data->debug_work), max77729_muic_print_reg_log);
+	INIT_DELAYED_WORK(&(muic_data->qc_work), max77729_qc_work);
 	/* schedule_delayed_work(&(muic_data->debug_work), */
 		/* msecs_to_jiffies(10000)); */
 
 	return 0;
-
 err_irq:
 err_return:
 	return ret;

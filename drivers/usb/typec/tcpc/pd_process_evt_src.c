@@ -339,7 +339,7 @@ static inline bool pd_process_hw_msg_tx_failed(
 		PE_TRANSIT_STATE(pd_port, PE_SRC_SEND_CAPABILITIES);
 		return true;
 	}
-#endif	/* CONFIG_PD_SRC_RESET_CABLE */
+#endif	/*  CONFIG_PD_SRC_RESET_CABLE */
 
 	return pd_process_tx_failed(pd_port);
 }
@@ -376,11 +376,11 @@ static inline bool pd_process_pe_msg(
 {
 	switch (pd_event->msg) {
 	case PD_PE_RESET_PRL_COMPLETED:
-		return PE_MAKE_STATE_TRANSIT_SINGLE(
+		return  PE_MAKE_STATE_TRANSIT_SINGLE(
 			PE_SRC_STARTUP, PE_SRC_SEND_CAPABILITIES);
 
 	case PD_PE_POWER_ROLE_AT_DEFAULT:
-		return PE_MAKE_STATE_TRANSIT_SINGLE(
+		return  PE_MAKE_STATE_TRANSIT_SINGLE(
 			PE_SRC_TRANSITION_TO_DEFAULT, PE_SRC_STARTUP);
 
 	default:
@@ -461,7 +461,7 @@ static inline bool pd_process_timer_msg(
 	case PD_TIMER_SENDER_RESPONSE:
 		return PE_MAKE_STATE_TRANSIT_SINGLE(
 			PE_SRC_CBL_SEND_SOFT_RESET, PE_SRC_SEND_CAPABILITIES);
-#endif	/* CONFIG_PD_SRC_RESET_CABLE */
+#endif	/*  CONFIG_PD_SRC_RESET_CABLE */
 #endif
 
 	case PD_TIMER_PS_HARD_RESET:

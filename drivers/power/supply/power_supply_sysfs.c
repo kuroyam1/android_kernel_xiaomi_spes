@@ -41,7 +41,7 @@
 static struct device_attribute power_supply_attrs[];
 
 static const char * const power_supply_type_text[] = {
-	"Unknown", "Battery", "UPS", "Mains", "USB",
+	"Unknown", "Battery", "Battery_Verify", "UPS", "Mains", "USB",
 	"USB_DCP", "USB_CDP", "USB_ACA", "USB_C",
 	"USB_PD", "USB_PD_DRP", "BrickID",
 	"USB_HVDCP", "USB_HVDCP_3", "USB_HVDCP_3P5", "Wireless", "USB_FLOAT",
@@ -352,9 +352,9 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(sc_fault_status),
 	POWER_SUPPLY_ATTR(sc_vbus_error_status),
 	POWER_SUPPLY_ATTR(sc_chip_vendor),
-	POWER_SUPPLY_ATTR(sc_otg_enable),	
-	POWER_SUPPLY_ATTR(sc_reg_status),	
-	POWER_SUPPLY_ATTR(sc_set_bus_protection_for_qc3),	
+	POWER_SUPPLY_ATTR(sc_otg_enable),
+	POWER_SUPPLY_ATTR(sc_reg_status),
+	POWER_SUPPLY_ATTR(sc_set_bus_protection_for_qc3),
 	POWER_SUPPLY_ATTR(energy_full_design),
 	POWER_SUPPLY_ATTR(energy_empty_design),
 	POWER_SUPPLY_ATTR(energy_full),
@@ -380,7 +380,7 @@ static struct device_attribute power_supply_attrs[] = {
 	//POWER_SUPPLY_ATTR(soh),
 	//POWER_SUPPLY_ATTR(charge_done),
 	//POWER_SUPPLY_ATTR(force_recharge),
-	/*add by xiaomi end*/	
+	/*add by xiaomi end*/
 	POWER_SUPPLY_ATTR(temp),
 	POWER_SUPPLY_ATTR(temp_max),
 	POWER_SUPPLY_ATTR(temp_min),
@@ -523,7 +523,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(apsd_rerun),
 	POWER_SUPPLY_ATTR(apsd_timeout),
 //2021.09.06 wsy add for fg
-#if 1//defined(CONFIG_FG_SM5602)	
+#if 1//defined(CONFIG_FG_SM5602)
 	POWER_SUPPLY_ATTR(fastcharge_mode),
 	POWER_SUPPLY_ATTR(chip_ok),
 	POWER_SUPPLY_ATTR(termination_current),

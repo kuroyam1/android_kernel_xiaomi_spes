@@ -53,7 +53,7 @@ EXPORT_SYMBOL_GPL(dual_role_class);
 
 static struct device_type dual_role_dev_type;
 
-static char *kstrdupcase(const char *str, gfp_t gfp, bool to_upper)
+/*static char *kstrdupcase(const char *str, gfp_t gfp, bool to_upper)
 {
 	char *ret, *ustr;
 
@@ -68,12 +68,37 @@ static char *kstrdupcase(const char *str, gfp_t gfp, bool to_upper)
 	*ustr = 0;
 
 	return ret;
+}*/
+
+static char *kstrdupcase(const char *str, gfp_t gfp, bool to_upper)
+{
+	char *ret, *p;
+	const unsigned char *s;
+	size_t len;
+
+	if (!str)
+		return NULL;
+
+	len = strlen(str);
+	ret = kmalloc_array(len + 1, sizeof(char), gfp);
+	if (!ret)
+		return NULL;
+
+	p = ret;
+	s = (const unsigned char *)str;
+
+	while (*s) {
+		unsigned char c = *s++;
+		*p++ = to_upper ? toupper(c) : tolower(c);
+	}
+
+	*p = '\0';
+	return ret;
 }
 
 static void dual_role_changed_work(struct work_struct *work)
 {
-	struct dual_role_phy_instance *dual_role =
-		container_of(work, struct dual_role_phy_instance, changed_work);
+	struct dual_role_phy_instance *dual_role = container_of(work, struct dual_role_phy_instance, changed_work);
 
 	dev_dbg(&dual_role->dev, "%s\n", __func__);
 	kobject_uevent(&dual_role->dev.kobj, KOBJ_CHANGE);
@@ -118,14 +143,14 @@ EXPORT_SYMBOL_GPL(dual_role_property_is_writeable);
 
 static void dual_role_dev_release(struct device *dev)
 {
-	struct dual_role_phy_instance *dual_role =
-		container_of(dev, struct dual_role_phy_instance, dev);
-	pr_debug("device: '%s': %s\n", dev_name(dev), __func__);
+	struct dual_role_phy_instance *dual_role = container_of(dev, struct dual_role_phy_instance, dev);
+
+	dev_dbg(&dual_role->dev, "%s\n", __func__);
 	kfree(dual_role);
 }
 
 static struct dual_role_phy_instance *__must_check
-__dual_role_register(struct device *parent,
+		     __dual_role_register(struct device *parent,
 		     const struct dual_role_phy_desc *desc)
 {
 	struct device *dev;
@@ -197,9 +222,9 @@ devm_dual_role_instance_register(struct device *parent,
 	struct dual_role_phy_instance **ptr, *dual_role;
 
 	ptr = devres_alloc(devm_dual_role_release, sizeof(*ptr), GFP_KERNEL);
-
 	if (!ptr)
 		return ERR_PTR(-ENOMEM);
+
 	dual_role = __dual_role_register(parent, desc);
 	if (IS_ERR(dual_role)) {
 		devres_free(ptr);
@@ -207,6 +232,7 @@ devm_dual_role_instance_register(struct device *parent,
 		*ptr = dual_role;
 		devres_add(parent, ptr);
 	}
+
 	return dual_role;
 }
 EXPORT_SYMBOL_GPL(devm_dual_role_instance_register);
@@ -227,8 +253,7 @@ void devm_dual_role_instance_unregister(struct device *dev,
 {
 	int rc;
 
-	rc = devres_release(dev, devm_dual_role_release,
-			devm_dual_role_match, dual_role);
+	rc = devres_release(dev, devm_dual_role_release, devm_dual_role_match, dual_role);
 	WARN_ON(rc);
 }
 EXPORT_SYMBOL_GPL(devm_dual_role_instance_unregister);
@@ -278,15 +303,16 @@ static ssize_t dual_role_show_property(struct device *dev,
 		value = dual_role->desc->supported_modes;
 	} else {
 		ret = dual_role_get_property(dual_role, off, &value);
-
 		if (ret < 0) {
 			if (ret == -ENODATA)
 				dev_dbg(dev,
-					"driver has no data for `%s' property\n",
+					"%s: driver has no data for `%s' property\n",
+					__func__,
 					attr->attr.name);
 			else if (ret != -ENODEV)
 				dev_err(dev,
-					"driver failed to report `%s' property: %zd\n",
+					"%s: driver failed to report `%s' property: %zd\n",
+					__func__,
 					attr->attr.name, ret);
 			return ret;
 		}
@@ -491,7 +517,7 @@ void dual_role_init_attrs(struct device_type *dev_type)
 		dev_dbg(dev, "prop %s=%s\n", attrname, prop_buf);
 
 		ret = add_uevent_var(env, "DUAL_ROLE_%s=%s", attrname,
-				prop_buf);
+					prop_buf);
 		kfree(attrname);
 		if (ret)
 			goto out;
@@ -510,20 +536,35 @@ int dual_role_uevent(struct device *dev, struct kobj_uevent_env *env)
 	char *prop_buf = NULL;
 	char *attrname = NULL;
 
-	dev_dbg(dev, "uevent\n");
+	dev_dbg(dev, "%s: entry\n", __func__);
 
 	if (!dual_role || !dual_role->desc) {
-		dev_dbg(dev, "No dual_role phy yet\n");
+		dev_dbg(dev, "%s: No dual_role phy yet\n", __func__);
 		return 0;
 	}
 
-	dev_dbg(dev, "DUAL_ROLE_NAME=%s\n", dual_role->desc->name);
-
-	ret = add_uevent_var(env, "DUAL_ROLE_NAME=%s", dual_role->desc->name);
+	if (dual_role->desc->name && dual_role->desc->name[0]) {
+		dev_dbg(dev, "%s: DUAL_ROLE_NAME=%s\n", __func__, dual_role->desc->name);
+		ret = add_uevent_var(env, "DUAL_ROLE_NAME=%s", dual_role->desc->name);
+	} else {
+		dev_dbg(dev, "%s: DUAL_ROLE_NAME=<empty>\n", __func__);
+		ret = add_uevent_var(env, "DUAL_ROLE_NAME=");
+	}
 	if (ret)
 		return ret;
 
-	prop_buf = (char *)get_zeroed_page(GFP_KERNEL);
+	if (!dual_role->desc->properties || dual_role->desc->num_properties <= 0) {
+		dev_dbg(dev, "%s: no properties to report\n", __func__);
+		return 0;
+	}
+
+	if (dual_role->desc->num_properties > 1024) {
+		dev_dbg(dev, "%s: num_properties too large: %zu\n", __func__,
+				dual_role->desc->num_properties);
+		return -EINVAL;
+	}
+
+	prop_buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!prop_buf)
 		return -ENOMEM;
 
@@ -532,14 +573,12 @@ int dual_role_uevent(struct device *dev, struct kobj_uevent_env *env)
 		char *line;
 		size_t idx = dual_role->desc->properties[j];
 
-		/* validate index to avoid out-of-bounds access */
 		if (idx >= ARRAY_SIZE(dual_role_attrs)) {
-			dev_dbg(dev, "property index out of range: %zu\n", idx);
+			dev_dbg(dev, "%s: property index out of range: %zu\n", __func__, idx);
 			continue;
 		}
 
 		attr = &dual_role_attrs[idx];
-
 		ret = dual_role_show_property(dev, attr, prop_buf);
 		if (ret == -ENODEV || ret == -ENODATA) {
 			ret = 0;
@@ -548,19 +587,18 @@ int dual_role_uevent(struct device *dev, struct kobj_uevent_env *env)
 		if (ret < 0)
 			goto out;
 
+		prop_buf[PAGE_SIZE - 1] = '\0';
 		line = strnchr(prop_buf, PAGE_SIZE, '\n');
 		if (line)
 			*line = '\0';
 
-		/* preserve original behavior: use kstrdupcase */
 		attrname = kstrdupcase(attr->attr.name, GFP_KERNEL, true);
 		if (!attrname) {
 			ret = -ENOMEM;
 			goto out;
 		}
 
-		dev_dbg(dev, "prop %s=%s\n", attrname, prop_buf);
-
+		dev_dbg(dev, "%s: prop %s=%s\n", __func__, attrname, prop_buf);
 		ret = add_uevent_var(env, "DUAL_ROLE_%s=%s", attrname, prop_buf);
 		kfree(attrname);
 		attrname = NULL;
@@ -572,7 +610,7 @@ out:
 	if (attrname)
 		kfree(attrname);
 	if (prop_buf)
-		free_page((unsigned long)prop_buf);
+		kfree(prop_buf);
 
 	return ret;
 }

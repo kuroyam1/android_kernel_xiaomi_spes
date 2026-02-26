@@ -13,6 +13,9 @@
  * GNU General Public License for more details.
  */
 
+#undef pr_fmt
+#define pr_fmt(fmt) "[pd_dpm_core]: %s: " fmt, __func__
+
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
@@ -107,11 +110,11 @@ int dpm_check_supported_modes(void)
 				svdm_svid_ops[i].svid)
 				is_disorder = true;
 		}
-		pr_info("%s: SVDM supported mode [%d]: name = %s, svid = 0x%x\n",
-			__func__, i, svdm_svid_ops[i].name,
+		pr_info("SVDM supported mode [%d]: name = %s, svid = 0x%x\n",
+			i, svdm_svid_ops[i].name,
 			svdm_svid_ops[i].svid);
 	}
-	pr_info("%s: found \"disorder\"...\n", __func__);
+	pr_info("found \"disorder\"...\n");
 	found_error |= is_disorder;
 	return found_error ? -EFAULT : 0;
 }
@@ -282,8 +285,8 @@ static int pps_request_thread_fn(void *data)
 
 	while (true) {
 		wait_event(pd_port->pps_request_wait_que,
-				atomic_read(&pd_port->pps_request) ||
-				kthread_should_stop());
+			   atomic_read(&pd_port->pps_request) ||
+			   kthread_should_stop());
 		if (kthread_should_stop())
 			break;
 		do {
@@ -361,7 +364,7 @@ static bool dpm_build_request_info_pdo(
 			else
 				max_uw = req_info->vmax * req_info->oper_ma;
 
-			DPM_DBG("Find SrcCap%d(%s):%d mw\n",
+			DPM_DBG("Find SrcCap%d(%s): %d mw\n",
 					req_info->pos, req_info->mismatch ?
 					"Mismatch" : "Match", max_uw/1000);
 			pd_port->pe_data.local_selected_cap = i + 1;
@@ -382,7 +385,7 @@ static bool dpm_build_request_info(
 
 	memset(req_info, 0, sizeof(struct dpm_rdo_info_t));
 
-	DPM_INFO("Policy=0x%X\n", charging_policy);
+	DPM_INFO("Policy = 0x%X\n", charging_policy);
 
 	for (i = 0; i < src_cap->nr; i++)
 		DPM_INFO("SrcCap%d: 0x%08x\n", i+1, src_cap->pdos[i]);
@@ -542,7 +545,7 @@ int pd_dpm_update_tcp_request(struct pd_port *pd_port,
 
 	memset(&req_info, 0, sizeof(struct dpm_rdo_info_t));
 
-	DPM_INFO("Policy=0x%X\n", charging_policy);
+	DPM_INFO("Policy = 0x%X\n", charging_policy);
 
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
 	if ((charging_policy & DPM_CHARGING_POLICY_MASK)
@@ -593,7 +596,7 @@ int pd_dpm_update_tcp_request_ex(struct pd_port *pd_port,
 
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
 	if (pd_port->dpm_charging_policy == DPM_CHARGING_POLICY_PPS) {
-		DPM_INFO("Reject tcp_rqeuest_ex if charging_policy=pps\n");
+		DPM_INFO("Reject tcp_rqeuest_ex if charging_policy = pps\n");
 		return TCP_DPM_RET_DENIED_INVALID_REQUEST;
 	}
 #endif	/* CONFIG_USB_PD_REV30_PPS_SINK */
@@ -700,7 +703,8 @@ void pd_dpm_snk_standby_power(struct pd_port *pd_port)
 
 	uint8_t type;
 	int ma = -1;
-	int standby_curr = 2500000 / max(pd_port->request_v, pd_port->request_v_new);
+	int standby_curr = 2500000 / max(pd_port->request_v,
+					 pd_port->request_v_new);
 
 #ifdef CONFIG_USB_PD_VCONN_SAFE5V_ONLY
 	struct tcpc_device *tcpc = pd_port->tcpc;
@@ -884,7 +888,7 @@ void pd_dpm_src_evaluate_request(struct pd_port *pd_port)
 
 	pe_data = &pd_port->pe_data;
 
-	if (dpm_evaluate_request(pd_port, rdo, rdo_pos)) {
+	if (dpm_evaluate_request(pd_port, rdo, rdo_pos))  {
 		pe_data->local_selected_cap = rdo_pos;
 		pd_put_dpm_notify_event(pd_port, rdo_pos);
 	} else {
@@ -1138,6 +1142,7 @@ static inline void dpm_dfp_update_partner_id(
 	memcpy(pd_port->pe_data.partner_vdos, payload, size);
 #endif	/* CONFIG_USB_PD_KEEP_PARTNER_ID */
 }
+
 static inline void dpm_dfp_update_svid_data_exist(
 			struct pd_port *pd_port, uint16_t svid)
 {
@@ -1150,7 +1155,7 @@ static inline void dpm_dfp_update_svid_data_exist(
 	if (list->cnt < VDO_MAX_SVID_NR)
 		list->svids[list->cnt++] = svid;
 	else
-		DPM_INFO("ERR:SVIDCNT\n");
+		DPM_INFO("ERR: SVIDCNT\n");
 #endif	/* CONFIG_USB_PD_KEEP_SVIDS */
 
 	for (k = 0; k < pd_port->svid_data_cnt; k++) {
@@ -1248,7 +1253,8 @@ void pd_dpm_dfp_inform_id(struct pd_port *pd_port, bool ack)
 	VDM_STATE_DPM_INFORMED(pd_port);
 
 	if (!payload) {
-		dpm_reaction_clear(pd_port, DPM_REACTION_DISCOVER_ID | DPM_REACTION_DISCOVER_SVID);
+		dpm_reaction_clear(pd_port, DPM_REACTION_DISCOVER_ID |
+					    DPM_REACTION_DISCOVER_SVID);
 		return;
 	}
 
@@ -1496,9 +1502,7 @@ void pd_dpm_dfp_inform_uvdm(struct pd_port *pd_port, bool ack)
 		ack ? TCP_DPM_RET_VDM_ACK : TCP_DPM_RET_VDM_NAK);
 	VDM_STATE_DPM_INFORMED(pd_port);
 }
-
 #endif	/* CONFIG_USB_PD_CUSTOM_VDM */
-
 
 /*
  * DRP : Inform Source/Sink Cap
@@ -1776,8 +1780,8 @@ void pd_dpm_inform_source_cap_ext(struct pd_port *pd_port)
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_SOURCE_CAP_EXT)) {
 		scedb = pd_get_msg_data_payload(pd_port);
-		DPM_INFO2("vid=0x%04x, pid=0x%04x\n", scedb->vid, scedb->pid);
-		DPM_INFO2("fw_ver=0x%02x, hw_ver=0x%02x\n",
+		DPM_INFO2("vid = 0x%04x, pid = 0x%04x\n", scedb->vid, scedb->pid);
+		DPM_INFO2("fw_ver = 0x%02x, hw_ver = 0x%02x\n",
 			scedb->fw_ver, scedb->hw_ver);
 
 		dpm_reaction_clear(pd_port,
@@ -1808,7 +1812,7 @@ int pd_dpm_send_battery_cap(struct pd_port *pd_port)
 		pd_get_msg_data_payload(pd_port);
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
-	DPM_INFO2("bat_ref=%d\n", gbcdb->bat_cap_ref);
+	DPM_INFO2("bat_ref = %d\n", gbcdb->bat_cap_ref);
 
 	bat_info = pd_get_battery_info(pd_port, gbcdb->bat_cap_ref);
 
@@ -1832,7 +1836,7 @@ void pd_dpm_inform_battery_cap(struct pd_port *pd_port)
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_BAT_CAP)) {
 		bcdb = pd_get_msg_data_payload(pd_port);
-		DPM_INFO2("vid=0x%04x, pid=0x%04x\n",
+		DPM_INFO2("vid = 0x%04x, pid = 0x%04x\n",
 			bcdb->vid, bcdb->pid);
 	}
 }
@@ -1851,7 +1855,7 @@ int pd_dpm_send_battery_status(struct pd_port *pd_port)
 		pd_get_msg_data_payload(pd_port);
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
-	DPM_INFO2("bat_ref=%d\n", gbsdb->bat_status_ref);
+	DPM_INFO2("bat_ref = %d\n", gbsdb->bat_status_ref);
 
 	bat_info = pd_get_battery_info(pd_port, gbsdb->bat_status_ref);
 
@@ -1923,7 +1927,7 @@ void pd_dpm_inform_mfrs_info(struct pd_port *pd_port)
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_MFR_INFO)) {
 		midb = pd_get_msg_data_payload(pd_port);
-		DPM_INFO2("vid=0x%x, pid=0x%x\n", midb->vid, midb->pid);
+		DPM_INFO2("vid = 0x%x, pid = 0x%x\n", midb->vid, midb->pid);
 	}
 }
 #endif	/* CONFIG_USB_PD_REV30_MFRS_INFO_REMOTE */
@@ -1937,7 +1941,7 @@ void pd_dpm_inform_country_codes(struct pd_port *pd_port)
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_COUNTRY_CODES)) {
 		ccdb = pd_get_msg_data_payload(pd_port);
-		DPM_INFO2("len=%d, country_code[0]=0x%04x\n",
+		DPM_INFO2("len = %d, country_code[0] = 0x%04x\n",
 			ccdb->length, ccdb->country_code[0]);
 	}
 }
@@ -1969,7 +1973,7 @@ void pd_dpm_inform_country_info(struct pd_port *pd_port)
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_COUNTRY_INFO)) {
 		cidb = pd_get_msg_data_payload(pd_port);
-		DPM_INFO2("cc=0x%04x, ci=%d\n",
+		DPM_INFO2("cc = 0x%04x, ci = %d\n",
 			cidb->country_code, cidb->country_special_data[0]);
 	}
 }
@@ -1999,7 +2003,7 @@ int pd_dpm_send_country_info(struct pd_port *pd_port)
 	}
 
 	return pd_send_sop_ext_msg(pd_port, PD_EXT_COUNTRY_INFO,
-			cidb_size, &cidb);
+		 cidb_size, &cidb);
 }
 #endif	/* CONFIG_USB_PD_REV30_COUNTRY_INFO_LOCAL */
 
@@ -2009,7 +2013,7 @@ void pd_dpm_inform_alert(struct pd_port *pd_port)
 	uint32_t *data = pd_get_msg_data_payload(pd_port);
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
-	DPM_INFO("inform_alert:0x%08x\n", data[0]);
+	DPM_INFO("inform_alert: 0x%08x\n", data[0]);
 
 	pd_port->pe_data.pd_traffic_idle = false;
 	pd_port->pe_data.remote_alert = data[0];
@@ -2024,7 +2028,7 @@ int pd_dpm_send_alert(struct pd_port *pd_port)
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	pd_port->pe_data.local_alert = 0;
-	DPM_INFO("send_alert:0x%08x\n", ado);
+	DPM_INFO("send_alert: 0x%08x\n", ado);
 
 	return pd_send_sop_data_msg(pd_port, PD_DATA_ALERT,
 		PD_ADO_SIZE, &ado);
@@ -2039,7 +2043,7 @@ void pd_dpm_inform_status(struct pd_port *pd_port)
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_STATUS)) {
 		sdb = pd_get_msg_data_payload(pd_port);
-		DPM_INFO2("Temp=%d, IN=0x%x, BAT_IN=0x%x, EVT=0x%x, PTF=0x%x\n",
+		DPM_INFO2("Temp = %d, IN = 0x%x, BAT_IN = 0x%x, EVT = 0x%x, PTF = 0x%x\n",
 			sdb->internal_temp, sdb->present_input,
 			sdb->present_battey_input, sdb->event_flags,
 			PD_STATUS_TEMP_PTF(sdb->temp_status));
@@ -2080,7 +2084,7 @@ int pd_dpm_send_status(struct pd_port *pd_port)
 	if (sdb.event_flags & PD_STATUS_EVENT_OTP)
 		sdb.temp_status = PD_STATUS_TEMP_SET_PTF(PD_PTF_OVER_TEMP);
 
-	if (pd_port->power_role != PD_ROLE_SINK)
+	if (pd_port->power_role !=  PD_ROLE_SINK)
 		sdb.event_flags &= ~PD_STATUS_EVENT_OVP;
 
 	return pd_send_sop_ext_msg(pd_port, PD_EXT_STATUS,
@@ -2097,7 +2101,7 @@ void pd_dpm_inform_pps_status(struct pd_port *pd_port)
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_PPS_STATUS)) {
 		ppssdb = pd_get_msg_data_payload(pd_port);
-		DPM_INFO2("mv=%d, ma=%d\n",
+		DPM_INFO2("mv = %d, ma = %d\n",
 			PD_PPS_GET_OUTPUT_MV(ppssdb->output_vol_raw),
 			PD_PPS_GET_OUTPUT_MA(ppssdb->output_curr_raw));
 	}

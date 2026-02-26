@@ -20,7 +20,7 @@
 
 /*
  * [PD2.0] Figure 8-51:
- * Dual-Role Port in Source to Sink Power Role Swap State Diagram
+ *      Dual-Role Port in Source to Sink Power Role Swap State Diagram
  */
 
 void pe_prs_src_snk_evaluate_pr_swap_entry(struct pd_port *pd_port)
@@ -66,7 +66,7 @@ void pe_prs_src_snk_reject_pr_swap_entry(struct pd_port *pd_port)
 
 /*
  * [PD2.0] Figure 8-52:
- * Dual-role Port in Sink to Source Power Role Swap State Diagram
+ *      Dual-role Port in Sink to Source Power Role Swap State Diagram
  */
 
 void pe_prs_snk_src_evaluate_pr_swap_entry(struct pd_port *pd_port)

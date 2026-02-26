@@ -103,18 +103,18 @@ static int tcpc_dual_role_set_prop_pr(
 	}
 
 	if (val == tcpc->dual_role_pr) {
-		pr_info("%s wrong role (%d->%d)\n",
+		pr_info("%s: wrong role (%d->%d)\n",
 			__func__, tcpc->dual_role_pr, val);
 		return 0;
 	}
 
 	ret = tcpm_dpm_pd_power_swap(tcpc, role, NULL);
-	pr_info("%s power role swap (%d->%d): %d\n",
+	pr_info("%s: power role swap (%d->%d): %d\n",
 		__func__, tcpc->dual_role_pr, val, ret);
 
 	if (ret == TCPM_ERROR_NO_PD_CONNECTED) {
 		ret = tcpm_typec_role_swap(tcpc);
-		pr_info("%s typec role swap (%d->%d): %d\n",
+		pr_info("%s: typec role swap (%d->%d): %d\n",
 			__func__, tcpc->dual_role_pr, val, ret);
 	}
 
@@ -139,13 +139,13 @@ static int tcpc_dual_role_set_prop_dr(
 	}
 
 	if (val == tcpc->dual_role_dr) {
-		pr_info("%s wrong role (%d->%d)\n",
+		pr_info("%s: wrong role (%d->%d)\n",
 			__func__, tcpc->dual_role_dr, val);
 		return 0;
 	}
 
 	ret = tcpm_dpm_pd_data_swap(tcpc, role, NULL);
-	pr_info("%s data role swap (%d->%d): %d\n",
+	pr_info("%s: data role swap (%d->%d): %d\n",
 		__func__, tcpc->dual_role_dr, val, ret);
 
 	return ret;
@@ -169,13 +169,13 @@ static int tcpc_dual_role_set_prop_vconn(
 	}
 
 	if (val == tcpc->dual_role_vconn) {
-		pr_info("%s wrong role (%d->%d)\n",
+		pr_info("%s: wrong role (%d->%d)\n",
 			__func__, tcpc->dual_role_vconn, val);
 		return 0;
 	}
 
 	ret = tcpm_dpm_pd_vconn_swap(tcpc, role, NULL);
-	pr_info("%s vconn swap (%d->%d): %d\n",
+	pr_info("%s: vconn swap (%d->%d): %d\n",
 		__func__, tcpc->dual_role_vconn, val, ret);
 
 	return ret;
@@ -189,13 +189,13 @@ static int tcpc_dual_role_set_prop_mode(
 	int ret;
 
 	if (val == tcpc->dual_role_mode) {
-		pr_info("%s wrong role (%d->%d)\n",
+		pr_info("%s: wrong role (%d->%d)\n",
 			__func__, tcpc->dual_role_mode, val);
 		return 0;
 	}
 
 	ret = tcpm_typec_role_swap(tcpc);
-	pr_info("%s typec role swap (%d->%d): %d\n",
+	pr_info("%s: typec role swap (%d->%d): %d\n",
 		__func__, tcpc->dual_role_mode, val, ret);
 
 	return ret;
@@ -247,6 +247,8 @@ static void tcpc_get_dual_desc(struct tcpc_device *tcpc)
 		else
 			tcpc->dual_role_supported_modes = val;
 	}
+
+	of_node_put(np);
 }
 
 int tcpc_dual_role_phy_init(
@@ -278,7 +280,7 @@ int tcpc_dual_role_phy_init(
 
 	tcpc->dr_usb = devm_dual_role_instance_register(&tcpc->dev, dual_desc);
 	if (IS_ERR(tcpc->dr_usb)) {
-		dev_err(&tcpc->dev, "tcpc fail to register dual role usb\n");
+		dev_err(&tcpc->dev, "%s: tcpc fail to register dual role usb\n", __func__);
 		return -EINVAL;
 	}
 	/* init dual role phy instance property */

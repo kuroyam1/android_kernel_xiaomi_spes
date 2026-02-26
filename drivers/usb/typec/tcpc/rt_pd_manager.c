@@ -26,7 +26,7 @@
 
 #define RT_PD_MANAGER_VERSION	"0.0.9_G"
 
-#define PROBE_CNT_MAX			20
+#define PROBE_CNT_MAX			50
 /* 10ms * 100 = 1000ms = 1s */
 #define USB_TYPE_POLLING_INTERVAL	10
 #define USB_TYPE_POLLING_CNT_MAX	100
@@ -99,14 +99,14 @@ static int extcon_init(struct rt_pd_manager_data *rpmd)
 	rpmd->extcon = devm_extcon_dev_allocate(rpmd->dev, rpm_extcon_cable);
 	if (IS_ERR(rpmd->extcon)) {
 		ret = PTR_ERR(rpmd->extcon);
-		dev_err(rpmd->dev, "%s extcon dev alloc fail(%d)\n",
+		dev_err(rpmd->dev, "%s: extcon dev alloc fail(%d)\n",
 				   __func__, ret);
 		goto out;
 	}
 
 	ret = devm_extcon_dev_register(rpmd->dev, rpmd->extcon);
 	if (ret) {
-		dev_err(rpmd->dev, "%s extcon dev reg fail(%d)\n",
+		dev_err(rpmd->dev, "%s: extcon dev reg fail(%d)\n",
 				   __func__, ret);
 		goto out;
 	}
@@ -185,12 +185,12 @@ static void usb_dwork_handler(struct work_struct *work)
 	union power_supply_propval val = {.intval = 0};
 
 	if (usb_dr < DR_IDLE || usb_dr >= DR_MAX) {
-		dev_err(rpmd->dev, "%s invalid usb_dr = %d\n",
+		dev_err(rpmd->dev, "%s: invalid usb_dr = %d\n",
 				   __func__, usb_dr);
 		return;
 	}
 
-	dev_info(rpmd->dev, "%s %s\n", __func__, dr_names[usb_dr]);
+	dev_dbg(rpmd->dev, "%s: %s\n", __func__, dr_names[usb_dr]);
 
 	switch (usb_dr) {
 	case DR_IDLE:
@@ -203,7 +203,7 @@ static void usb_dwork_handler(struct work_struct *work)
 			POWER_SUPPLY_PROP_REAL_TYPE, &val);
 	//	ret = 0;
 	//	val.intval = POWER_SUPPLY_TYPE_UNKNOWN;
-		dev_info(rpmd->dev, "%s polling_cnt = %d, ret = %d type = %d\n",
+		dev_dbg(rpmd->dev, "%s: polling_cnt = %d, ret = %d, type = %d\n",
 				    __func__, ++rpmd->usb_type_polling_cnt,
 				    ret, val.intval);
 		if (ret < 0 || val.intval == POWER_SUPPLY_TYPE_UNKNOWN) {
@@ -288,7 +288,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 	case TCP_NOTIFY_SINK_VBUS:
 		rpmd->sink_mv_new = noti->vbus_state.mv;
 		rpmd->sink_ma_new = noti->vbus_state.ma;
-		dev_info(rpmd->dev, "%s sink vbus %dmV %dmA type(0x%02X)\n",
+		dev_info(rpmd->dev, "%s: sink vbus %dmV %dmA type(0x%02X)\n",
 				    __func__, rpmd->sink_mv_new,
 				    rpmd->sink_ma_new, noti->vbus_state.type);
 
@@ -308,7 +308,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 					  noti->vbus_state.type);
 		break;
 	case TCP_NOTIFY_SOURCE_VBUS:
-		dev_info(rpmd->dev, "%s source vbus %dmV %dmA type(0x%02X)\n",
+		dev_info(rpmd->dev, "%s: source vbus %dmV %dmA type(0x%02X)\n",
 							__func__, noti->vbus_state.mv,
 							noti->vbus_state.ma, noti->vbus_state.type);
 		/* enable/disable OTG power output */
@@ -322,7 +322,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		     new_state == TYPEC_ATTACHED_CUSTOM_SRC ||
 		     new_state == TYPEC_ATTACHED_DBGACC_SNK)) {
 			dev_info(rpmd->dev,
-				 "%s Charger plug in, polarity = %d\n",
+				 "%s: Charger plug in, polarity = %d\n",
 				 __func__, noti->typec_state.polarity);
 			/*
 			 * start charger type detection,
@@ -345,7 +345,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			    old_state == TYPEC_ATTACHED_CUSTOM_SRC ||
 			    old_state == TYPEC_ATTACHED_DBGACC_SNK) &&
 			    new_state == TYPEC_UNATTACHED) {
-			dev_info(rpmd->dev, "%s Charger plug out\n", __func__);
+			dev_info(rpmd->dev, "%s: Charger plug out\n", __func__);
 			/*
 			 * report charger plug-out,
 			 * and disable device connection
@@ -357,7 +357,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			   (new_state == TYPEC_ATTACHED_SRC ||
 			    new_state == TYPEC_ATTACHED_DEBUG)) {
 			dev_info(rpmd->dev,
-				 "%s OTG plug in, polarity = %d\n",
+				 "%s: OTG plug in, polarity = %d\n",
 				 __func__, noti->typec_state.polarity);
 			val.intval = noti->typec_state.polarity;
 			smblib_set_prop(rpmd, POWER_SUPPLY_PROP_TYPEC_CC_ORIENTATION, &val);
@@ -384,18 +384,18 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		} else if ((old_state == TYPEC_ATTACHED_SRC ||
 			    old_state == TYPEC_ATTACHED_DEBUG) &&
 			    new_state == TYPEC_UNATTACHED) {
-			dev_info(rpmd->dev, "%s OTG plug out\n", __func__);
+			dev_info(rpmd->dev, "%s: OTG plug out\n", __func__);
 			/* disable host connection */
 			cancel_delayed_work_sync(&rpmd->usb_dwork);
 			rpmd->usb_dr = DR_IDLE;
 			schedule_delayed_work(&rpmd->usb_dwork, 0);
 		} else if (old_state == TYPEC_UNATTACHED &&
 			   new_state == TYPEC_ATTACHED_AUDIO) {
-			dev_info(rpmd->dev, "%s Audio plug in\n", __func__);
+			dev_info(rpmd->dev, "%s: Audio plug in\n", __func__);
 			/* enable AudioAccessory connection */
 		} else if (old_state == TYPEC_ATTACHED_AUDIO &&
 			   new_state == TYPEC_UNATTACHED) {
-			dev_info(rpmd->dev, "%s Audio plug out\n", __func__);
+			dev_info(rpmd->dev, "%s: Audio plug out\n", __func__);
 			/* disable AudioAccessory connection */
 		}
 
@@ -452,7 +452,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			if (IS_ERR(rpmd->partner)) {
 				ret = PTR_ERR(rpmd->partner);
 				dev_notice(rpmd->dev,
-				"%s typec register partner fail(%d)\n",
+				"%s: typec register partner fail(%d)\n",
 					   __func__, ret);
 			}
 		}
@@ -489,10 +489,10 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		}
 		break;
 	case TCP_NOTIFY_PR_SWAP:
-		dev_info(rpmd->dev, "%s power role swap, new role = %d\n",
+		dev_info(rpmd->dev, "%s: power role swap, new role = %d\n",
 				    __func__, noti->swap_state.new_role);
 		if (noti->swap_state.new_role == PD_ROLE_SINK) {
-			dev_info(rpmd->dev, "%s swap power role to sink\n",
+			dev_info(rpmd->dev, "%s: swap power role to sink\n",
 					    __func__);
 			/*
 			 * report charger plug-in without charger type detection
@@ -503,7 +503,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 					&val);
 			typec_set_pwr_role(rpmd->typec_port, TYPEC_SINK);
 		} else if (noti->swap_state.new_role == PD_ROLE_SOURCE) {
-			dev_info(rpmd->dev, "%s swap power role to source\n",
+			dev_info(rpmd->dev, "%s: swap power role to source\n",
 					    __func__);
 			/* report charger plug-out */
 
@@ -511,10 +511,10 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		}
 		break;
 	case TCP_NOTIFY_DR_SWAP:
-		dev_info(rpmd->dev, "%s data role swap, new role = %d\n",
+		dev_info(rpmd->dev, "%s: data role swap, new role = %d\n",
 				    __func__, noti->swap_state.new_role);
 		if (noti->swap_state.new_role == PD_ROLE_UFP) {
-			dev_info(rpmd->dev, "%s swap data role to device\n",
+			dev_info(rpmd->dev, "%s: swap data role to device\n",
 					    __func__);
 			/*
 			 * disable host connection,
@@ -525,7 +525,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			schedule_delayed_work(&rpmd->usb_dwork, 0);
 			typec_set_data_role(rpmd->typec_port, TYPEC_DEVICE);
 		} else if (noti->swap_state.new_role == PD_ROLE_DFP) {
-			dev_info(rpmd->dev, "%s swap data role to host\n",
+			dev_info(rpmd->dev, "%s: swap data role to host\n",
 					    __func__);
 			/*
 			 * disable device connection,
@@ -538,25 +538,25 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		}
 		break;
 	case TCP_NOTIFY_VCONN_SWAP:
-		dev_info(rpmd->dev, "%s vconn role swap, new role = %d\n",
+		dev_info(rpmd->dev, "%s: vconn role swap, new role = %d\n",
 				    __func__, noti->swap_state.new_role);
 		if (noti->swap_state.new_role) {
-			dev_info(rpmd->dev, "%s swap vconn role to on\n",
+			dev_info(rpmd->dev, "%s: swap vconn role to on\n",
 					    __func__);
 			typec_set_vconn_role(rpmd->typec_port, TYPEC_SOURCE);
 		} else {
-			dev_info(rpmd->dev, "%s swap vconn role to off\n",
+			dev_info(rpmd->dev, "%s: swap vconn role to off\n",
 					    __func__);
 			typec_set_vconn_role(rpmd->typec_port, TYPEC_SINK);
 		}
 		break;
 	case TCP_NOTIFY_EXT_DISCHARGE:
-		dev_info(rpmd->dev, "%s ext discharge = %d\n",
+		dev_info(rpmd->dev, "%s: ext discharge = %d\n",
 				    __func__, noti->en_state.en);
 		/* enable/disable VBUS discharge */
 		break;
 	case TCP_NOTIFY_PD_STATE:
-		dev_info(rpmd->dev, "%s pd state = %d\n",
+		dev_info(rpmd->dev, "%s: pd state = %d\n",
 				    __func__, noti->pd_state.connected);
 		switch (noti->pd_state.connected) {
 		case PD_CONNECT_NONE:
@@ -630,7 +630,7 @@ static int tcpc_typec_try_role(const struct typec_capability *cap, int role)
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) */
 	uint8_t typec_role = TYPEC_ROLE_UNKNOWN;
 
-	dev_info(rpmd->dev, "%s role = %d\n", __func__, role);
+	dev_info(rpmd->dev, "%s: role = %d\n", __func__, role);
 
 	switch (role) {
 	case TYPEC_NO_PREFERRED_ROLE:
@@ -664,7 +664,7 @@ static int tcpc_typec_dr_set(const struct typec_capability *cap,
 	uint8_t data_role = tcpm_inquire_pd_data_role(rpmd->tcpc);
 	bool do_swap = false;
 
-	dev_info(rpmd->dev, "%s role = %d\n", __func__, role);
+	dev_info(rpmd->dev, "%s: role = %d\n", __func__, role);
 
 	if (role == TYPEC_HOST) {
 		if (data_role == PD_ROLE_UFP) {
@@ -677,14 +677,14 @@ static int tcpc_typec_dr_set(const struct typec_capability *cap,
 			data_role = PD_ROLE_UFP;
 		}
 	} else {
-		dev_err(rpmd->dev, "%s invalid role\n", __func__);
+		dev_err(rpmd->dev, "%s: invalid role\n", __func__);
 		return -EINVAL;
 	}
 
 	if (do_swap) {
 		ret = tcpm_dpm_pd_data_swap(rpmd->tcpc, data_role, NULL);
 		if (ret != TCPM_SUCCESS) {
-			dev_err(rpmd->dev, "%s data role swap fail(%d)\n",
+			dev_err(rpmd->dev, "%s: data role swap fail(%d)\n",
 					   __func__, ret);
 			return -EPERM;
 		}
@@ -708,7 +708,7 @@ static int tcpc_typec_pr_set(const struct typec_capability *cap,
 	uint8_t power_role = tcpm_inquire_pd_power_role(rpmd->tcpc);
 	bool do_swap = false;
 
-	dev_info(rpmd->dev, "%s role = %d\n", __func__, role);
+	dev_info(rpmd->dev, "%s: role = %d\n", __func__, role);
 
 	if (role == TYPEC_SOURCE) {
 		if (power_role == PD_ROLE_SINK) {
@@ -721,7 +721,7 @@ static int tcpc_typec_pr_set(const struct typec_capability *cap,
 			power_role = PD_ROLE_SINK;
 		}
 	} else {
-		dev_err(rpmd->dev, "%s invalid role\n", __func__);
+		dev_err(rpmd->dev, "%s: invalid role\n", __func__);
 		return -EINVAL;
 	}
 
@@ -730,7 +730,7 @@ static int tcpc_typec_pr_set(const struct typec_capability *cap,
 		if (ret == TCPM_ERROR_NO_PD_CONNECTED)
 			ret = tcpm_typec_role_swap(rpmd->tcpc);
 		if (ret != TCPM_SUCCESS) {
-			dev_err(rpmd->dev, "%s power role swap fail(%d)\n",
+			dev_err(rpmd->dev, "%s: power role swap fail(%d)\n",
 					   __func__, ret);
 			return -EPERM;
 		}
@@ -754,7 +754,7 @@ static int tcpc_typec_vconn_set(const struct typec_capability *cap,
 	uint8_t vconn_role = tcpm_inquire_pd_vconn_role(rpmd->tcpc);
 	bool do_swap = false;
 
-	dev_info(rpmd->dev, "%s role = %d\n", __func__, role);
+	dev_info(rpmd->dev, "%s: role = %d\n", __func__, role);
 
 	if (role == TYPEC_SOURCE) {
 		if (vconn_role == PD_ROLE_VCONN_OFF) {
@@ -767,14 +767,14 @@ static int tcpc_typec_vconn_set(const struct typec_capability *cap,
 			vconn_role = PD_ROLE_VCONN_OFF;
 		}
 	} else {
-		dev_err(rpmd->dev, "%s invalid role\n", __func__);
+		dev_err(rpmd->dev, "%s: invalid role\n", __func__);
 		return -EINVAL;
 	}
 
 	if (do_swap) {
 		ret = tcpm_dpm_pd_vconn_swap(rpmd->tcpc, vconn_role, NULL);
 		if (ret != TCPM_SUCCESS) {
-			dev_err(rpmd->dev, "%s vconn role swap fail(%d)\n",
+			dev_err(rpmd->dev, "%s: vconn role swap fail(%d)\n",
 					   __func__, ret);
 			return -EPERM;
 		}
@@ -799,7 +799,7 @@ static int tcpc_typec_port_type_set(const struct typec_capability *cap,
 	bool as_sink = tcpc_typec_is_act_as_sink_role(rpmd->tcpc);
 	uint8_t typec_role = TYPEC_ROLE_UNKNOWN;
 
-	dev_info(rpmd->dev, "%s type = %d, as_sink = %d\n",
+	dev_info(rpmd->dev, "%s: type = %d, as_sink = %d\n",
 			    __func__, type, as_sink);
 
 	switch (type) {
@@ -872,7 +872,7 @@ static int typec_init(struct rt_pd_manager_data *rpmd)
 	rpmd->typec_port = typec_register_port(rpmd->dev, &rpmd->typec_caps);
 	if (IS_ERR(rpmd->typec_port)) {
 		ret = PTR_ERR(rpmd->typec_port);
-		dev_err(rpmd->dev, "%s typec register port fail(%d)\n",
+		dev_err(rpmd->dev, "%s: typec register port fail(%d)\n",
 				   __func__, ret);
 		goto out;
 	}
@@ -888,19 +888,21 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 	static int probe_cnt = 0;
 	struct rt_pd_manager_data *rpmd = NULL;
 
-	dev_info(&pdev->dev, "%s (%s) probe_cnt = %d\n",
+	dev_info(&pdev->dev, "%s: (%s) probe_cnt = %d\n",
 			     __func__, RT_PD_MANAGER_VERSION, ++probe_cnt);
 
 	switch (nopmi_get_charger_ic_type()) {
 	case NOPMI_CHARGER_IC_NONE:
-		pr_err("%s: probe retry, probe_cnt=%d, PROBE_CNT_MAX=%d\n", __func__, probe_cnt, PROBE_CNT_MAX);
+		dev_info(&pdev->dev, "%s: probe_cnt = %d, PROBE_CNT_MAX = %d\n",
+			    __func__, probe_cnt, PROBE_CNT_MAX);
 		if (probe_cnt >= PROBE_CNT_MAX) {
-			pr_err("%s: probe stop retry, probe_cnt=%d, PROBE_CNT_MAX=%d\n", __func__, probe_cnt, PROBE_CNT_MAX);
-			return 0;
+			dev_err(&pdev->dev, "%s: stop, probe_cnt = %d, PROBE_CNT_MAX = %d\n",
+				    __func__, probe_cnt, PROBE_CNT_MAX);
+			return -ENODEV;
 		}
-		return -EPROBE_DEFER;
+		break;
 	case NOPMI_CHARGER_IC_MAXIM:
-		pr_err("%s: curr charger IC not support\n", __func__);
+		dev_info(&pdev->dev, "%s: curr charger IC not support\n", __func__);
 		return -ENODEV;
 	default:
 		break;
@@ -911,20 +913,11 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	rpmd->dev = &pdev->dev;
-
-	ret = extcon_init(rpmd);
-	if (ret) {
-		dev_err(rpmd->dev, "%s init extcon fail(%d)\n", __func__, ret);
-		ret = -EPROBE_DEFER;
-		if (probe_cnt >= PROBE_CNT_MAX)
-			goto out;
-		else
-			goto err_init_extcon;
-	}
+	platform_set_drvdata(pdev, rpmd);
 
 	rpmd->usb_psy = power_supply_get_by_name("usb");
 	if (!rpmd->usb_psy) {
-		dev_err(rpmd->dev, "%s get usb psy fail\n", __func__);
+		dev_err(&pdev->dev, "%s: get usb psy fail\n", __func__);
 		ret = -EPROBE_DEFER;
 		if (probe_cnt >= PROBE_CNT_MAX)
 			goto out;
@@ -934,12 +927,22 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 
 	rpmd->tcpc = tcpc_dev_get_by_name("type_c_port0");
 	if (!rpmd->tcpc) {
-		dev_err(rpmd->dev, "%s get tcpc dev fail\n", __func__);
+		dev_err(&pdev->dev, "%s: get tcpc dev fail\n", __func__);
 		ret = -EPROBE_DEFER;
 		if (probe_cnt >= PROBE_CNT_MAX)
 			goto out;
 		else
 			goto err_get_tcpc_dev;
+	}
+
+	ret = extcon_init(rpmd);
+	if (ret) {
+		dev_err(&pdev->dev, "%s: init extcon fail(%d)\n", __func__, ret);
+		ret = -EPROBE_DEFER;
+		if (probe_cnt >= PROBE_CNT_MAX)
+			goto out;
+		else
+			goto err_init_extcon;
 	}
 
 	INIT_DELAYED_WORK(&rpmd->usb_dwork, usb_dwork_handler);
@@ -950,7 +953,7 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 
 	ret = typec_init(rpmd);
 	if (ret < 0) {
-		dev_err(rpmd->dev, "%s init typec fail(%d)\n", __func__, ret);
+		dev_err(&pdev->dev, "%s: init typec fail(%d)\n", __func__, ret);
 		ret = -EPROBE_DEFER;
 		if (probe_cnt >= PROBE_CNT_MAX)
 			goto out;
@@ -962,7 +965,7 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 	ret = register_tcp_dev_notifier(rpmd->tcpc, &rpmd->pd_nb,
 					TCP_NOTIFY_TYPE_ALL);
 	if (ret < 0) {
-		dev_err(rpmd->dev, "%s register tcpc notifier fail(%d)\n",
+		dev_err(&pdev->dev, "%s: register tcpc notifier fail(%d)\n",
 				   __func__, ret);
 		ret = -EPROBE_DEFER;
 		if (probe_cnt >= PROBE_CNT_MAX)
@@ -970,19 +973,22 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 		else
 			goto err_reg_tcpc_notifier;
 	}
+
 out:
-	platform_set_drvdata(pdev, rpmd);
-	dev_info(rpmd->dev, "%s %s!!\n", __func__, ret == -EPROBE_DEFER ?
+	dev_info(&pdev->dev, "%s: %s!!\n", __func__, ret == -EPROBE_DEFER ?
 			    "Over probe cnt max" : "OK");
 	return 0;
 
 err_reg_tcpc_notifier:
 	typec_unregister_port(rpmd->typec_port);
 err_init_typec:
-err_get_tcpc_dev:
-err_get_usb_psy:
 err_init_extcon:
-	devm_kfree(&pdev->dev,rpmd);
+err_get_tcpc_dev:
+	if (rpmd->usb_psy)
+		power_supply_put(rpmd->usb_psy);
+err_get_usb_psy:
+	platform_set_drvdata(pdev, NULL);
+	dev_err(&pdev->dev, "%s: fail(%d)\n", __func__, ret);
 	return ret;
 }
 
@@ -992,15 +998,21 @@ static int rt_pd_manager_remove(struct platform_device *pdev)
 	struct rt_pd_manager_data *rpmd = platform_get_drvdata(pdev);
 
 	if (!rpmd)
-		return -EINVAL;
+		return 0;
 
 	ret = unregister_tcp_dev_notifier(rpmd->tcpc, &rpmd->pd_nb,
 					  TCP_NOTIFY_TYPE_ALL);
 	if (ret < 0)
-		dev_err(rpmd->dev, "%s unregister tcpc notifier fail(%d)\n",
+		dev_err(&pdev->dev, "%s: unregister tcpc notifier fail(%d)\n",
 				   __func__, ret);
+
+	cancel_delayed_work_sync(&rpmd->usb_dwork);
 	typec_unregister_port(rpmd->typec_port);
 
+	if (rpmd->usb_psy)
+		power_supply_put(rpmd->usb_psy);
+
+	platform_set_drvdata(pdev, NULL);
 	return ret;
 }
 
@@ -1013,6 +1025,7 @@ MODULE_DEVICE_TABLE(of, rt_pd_manager_of_match);
 static struct platform_driver rt_pd_manager_driver = {
 	.driver = {
 		.name = "rt-pd-manager",
+		.owner = THIS_MODULE,
 		.of_match_table = of_match_ptr(rt_pd_manager_of_match),
 	},
 	.probe = rt_pd_manager_probe,

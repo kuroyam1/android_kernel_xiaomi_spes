@@ -350,7 +350,7 @@ static inline int pd_handle_tcp_dpm_event(
 
 	case TCP_DPM_EVT_GOTOMIN:
 #ifdef CONFIG_USB_PD_PE_SOURCE
-		ret = pd_handle_tcp_event_gotomin(pd_port);
+		ret =  pd_handle_tcp_event_gotomin(pd_port);
 #endif	/* CONFIG_USB_PD_PE_SOURCE */
 		break;
 	case TCP_DPM_EVT_SOFTRESET:
@@ -368,7 +368,7 @@ static inline int pd_handle_tcp_dpm_event(
 		break;
 
 	case TCP_DPM_EVT_GET_SINK_CAP:
-		ret = pd_handle_tcp_event_get_sink_cap(pd_port);
+		ret =  pd_handle_tcp_event_get_sink_cap(pd_port);
 		break;
 
 #ifdef CONFIG_USB_PD_PE_SINK

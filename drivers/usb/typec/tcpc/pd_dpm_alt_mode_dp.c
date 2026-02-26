@@ -13,6 +13,9 @@
  * GNU General Public License for more details.
  */
 
+#undef pr_fmt
+#define pr_fmt(fmt) "[pd_dpm_alt_mode_dp]: %s: " fmt, __func__
+
 #include <linux/delay.h>
 
 #include "inc/tcpci.h"
@@ -24,7 +27,6 @@
 #ifdef CONFIG_USB_PD_ALT_MODE
 
 /* Display Port DFP_U / UFP_U */
-
 
 /* DP_Role : DFP_D & UFP_D Both or DFP_D only */
 
@@ -128,7 +130,7 @@ int dp_dfp_u_notify_pe_ready(
 	struct dp_data *dp_data = pd_get_dp_data(pd_port);
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
-	DPM_DBG("start.\n");
+	DPM_DBG("entry\n");
 
 	if (pd_port->data_role != PD_ROLE_DFP)
 		return 0;
@@ -349,7 +351,8 @@ static inline uint8_t dp_dfp_u_select_mode(struct pd_port *pd_port,
 	struct svdm_mode *remote, *local;
 	int i, j;
 	int match_score, best_match_score = 0;
-	int __maybe_unused local_index = -1, remote_index = -1;
+	int __maybe_unused local_index = -1;
+	int remote_index = -1;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	local = &svid_data->local_mode;
@@ -378,7 +381,7 @@ static inline uint8_t dp_dfp_u_select_mode(struct pd_port *pd_port,
 
 #if DP_INFO_ENABLE
 	for (i = 0; i < svid_data->remote_mode.mode_cnt; i++) {
-		DP_INFO("Mode%d=0x%08x\n", i,
+		DP_INFO("Mode%d = 0x%08x\n", i,
 			svid_data->remote_mode.mode_vdo[i]);
 	}
 
@@ -518,8 +521,8 @@ static inline bool dp_dfp_u_select_pin_mode(struct pd_port *pd_port)
 		return false;
 	}
 
-	PE_DBG("modes=0x%x 0x%x\n", dp_mode[0], dp_mode[1]);
-	PE_DBG("pins=0x%x 0x%x\n", pin_cap[0], pin_cap[1]);
+	PE_DBG("modes = 0x%x 0x%x\n", dp_mode[0], dp_mode[1]);
+	PE_DBG("pins = 0x%x 0x%x\n", pin_cap[0], pin_cap[1]);
 
 	pin_caps = pin_cap[0] & pin_cap[1];
 
@@ -1013,7 +1016,7 @@ static const struct {
 bool dp_parse_svid_data(
 	struct pd_port *pd_port, struct svdm_svid_data *svid_data)
 {
-	struct device_node *np, *ufp_np, *dfp_np;
+	struct device_node *np = NULL, *ufp_np = NULL, *dfp_np = NULL;
 	const char *connection;
 	uint32_t ufp_d_pin_cap = 0;
 	uint32_t dfp_d_pin_cap = 0;
@@ -1021,37 +1024,50 @@ bool dp_parse_svid_data(
 	uint32_t receptacle = 1;
 	uint32_t usb2 = 0;
 	int i = 0;
+	bool ret = false;
 
-	np = of_find_node_by_name(
-		pd_port->tcpc->dev.of_node, "displayport");
-	if (np == NULL) {
-		pr_err("%s get displayport data fail\n", __func__);
+	if (!pd_port || !pd_port->tcpc) {
+		pr_err("dp_parse_svid_data: invalid pd_port or tcpc\n");
 		return false;
 	}
 
-	pr_info("%s dp, svid\n", __func__);
+	if (!pd_port->tcpc->dev.of_node) {
+		pr_err("dp_parse_svid_data: tcpc->dev.of_node is NULL\n");
+		return false;
+	}
+
+	np = of_find_node_by_name(pd_port->tcpc->dev.of_node, "displayport");
+	if (np == NULL) {
+		pr_err("get displayport data fail\n");
+		return false;
+	}
+
+	pr_info("dp, svid\n");
 	svid_data->svid = USB_SID_DISPLAYPORT;
+
 	ufp_np = of_find_node_by_name(np, "ufp_d");
 	dfp_np = of_find_node_by_name(np, "dfp_d");
 
 	if (ufp_np) {
-		pr_info("%s dp, ufp_np\n", __func__);
+		pr_info("dp, ufp_np\n");
 		for (i = 0; i < ARRAY_SIZE(supported_dp_pin_modes); i++) {
 			if (of_property_read_bool(ufp_np,
 				supported_dp_pin_modes[i].prop_name))
-				ufp_d_pin_cap |=
-					supported_dp_pin_modes[i].mode;
+				ufp_d_pin_cap |= supported_dp_pin_modes[i].mode;
 		}
+		of_node_put(ufp_np);
+		ufp_np = NULL;
 	}
 
 	if (dfp_np) {
-		pr_info("%s dp, dfp_np\n", __func__);
+		pr_info("dp, dfp_np\n");
 		for (i = 0; i < ARRAY_SIZE(supported_dp_pin_modes); i++) {
 			if (of_property_read_bool(dfp_np,
 				supported_dp_pin_modes[i].prop_name))
-				dfp_d_pin_cap |=
-					supported_dp_pin_modes[i].mode;
+				dfp_d_pin_cap |= supported_dp_pin_modes[i].mode;
 		}
+		of_node_put(dfp_np);
+		dfp_np = NULL;
 	}
 
 	if (of_property_read_bool(np, "signal,dp_v13"))
@@ -1073,7 +1089,7 @@ bool dp_parse_svid_data(
 	pd_port->dp_second_connected = DEFAULT_DP_SECOND_CONNECTED;
 
 	if (of_property_read_string(np, "1st_connection", &connection) == 0) {
-		pr_info("%s dp, 1st_connection\n", __func__);
+		pr_info("dp, 1st_connection\n");
 		for (i = 0; i < ARRAY_SIZE(dp_connect_mode); i++) {
 			if (strcasecmp(connection,
 				dp_connect_mode[i].conn_mode) == 0) {
@@ -1085,7 +1101,7 @@ bool dp_parse_svid_data(
 	}
 
 	if (of_property_read_string(np, "2nd_connection", &connection) == 0) {
-		pr_info("%s dp, 2nd_connection\n", __func__);
+		pr_info("dp, 2nd_connection\n");
 		for (i = 0; i < ARRAY_SIZE(dp_connect_mode); i++) {
 			if (strcasecmp(connection,
 				dp_connect_mode[i].conn_mode) == 0) {
@@ -1095,6 +1111,7 @@ bool dp_parse_svid_data(
 			}
 		}
 	}
+
 	/* 2nd connection must not be BOTH */
 	PD_BUG_ON(pd_port->dp_second_connected == DPSTS_BOTH_CONNECTED);
 	/* UFP or DFP can't both be invalid */
@@ -1104,7 +1121,9 @@ bool dp_parse_svid_data(
 		PD_BUG_ON(dfp_d_pin_cap == 0);
 	}
 
-	return true;
+	of_node_put(np);
+	ret = true;
+	return ret;
 }
 #endif	/* CONFIG_USB_PD_ALT_MODE */
 

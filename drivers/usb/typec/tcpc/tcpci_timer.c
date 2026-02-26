@@ -1043,7 +1043,7 @@ static void wake_up_work_func(struct work_struct *work)
 
 	mutex_lock(&tcpc->typec_lock);
 
-	TCPC_INFO("%s\n", __func__);
+	TCPC_INFO("entry\n");
 #ifdef CONFIG_TYPEC_WAKEUP_ONCE_LOW_DUTY
 	tcpc->typec_wakeup_once = true;
 #endif	/* CONFIG_TYPEC_WAKEUP_ONCE_LOW_DUTY */
@@ -1200,7 +1200,7 @@ static void __tcpc_enable_wakeup_timer(struct tcpc_device *tcpc, bool en)
 			else
 				tout = 20;
 		}
-#endif /* CONFIG_TYPEC_WAKEUP_ONCE_LOW_DUTY */
+#endif  /* CONFIG_TYPEC_WAKEUP_ONCE_LOW_DUTY */
 
 		alarm_start_relative(&tcpc->wake_up_timer, ktime_set(tout, 0));
 	} else
@@ -1262,7 +1262,7 @@ void tcpc_enable_timer(struct tcpc_device *tcpc, uint32_t timer_id)
 		tout += TIMEOUT_VAL(jiffies & 0x07);
 #endif	/* CONFIG_USB_PD_RANDOM_FLOW_DELAY */
 
-	r = tout / 1000000;
+	r =  tout / 1000000;
 	mod = tout % 1000000;
 
 	mutex_unlock(&tcpc->timer_lock);
@@ -1381,7 +1381,7 @@ int tcpci_timer_init(struct tcpc_device *tcpc)
 	INIT_DELAYED_WORK(&tcpc->wake_up_work, wake_up_work_func);
 	alarm_init(&tcpc->wake_up_timer, ALARM_REALTIME, tcpc_timer_wakeup);
 
-	pr_info("%s: OK\n", __func__);
+	pr_info("%s: init OK\n", __func__);
 	return 0;
 }
 
@@ -1394,6 +1394,6 @@ int tcpci_timer_deinit(struct tcpc_device *tcpc)
 	cancel_delayed_work_sync(&tcpc->wake_up_work);
 	wakeup_source_unregister(tcpc->wakeup_wake_lock);
 
-	pr_info("%s: OK\n", __func__);
+	pr_info("%s: deinit OK\n", __func__);
 	return 0;
 }

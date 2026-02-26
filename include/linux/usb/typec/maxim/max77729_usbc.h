@@ -29,8 +29,6 @@
 #define UNIT_FOR_APDO_VOLTAGE 100
 #define UNIT_FOR_APDO_CURRENT 50
 
-
-
 typedef enum {
 	TYPE_C_DETACH = 0,
 	TYPE_C_ATTACH_DFP = 1, /* Host */
@@ -422,6 +420,9 @@ bool max77729_sec_pps_control(int en);
 extern const uint8_t BOOT_FLASH_FW_PASS2[];
 
 // #define DEBUG_MAX77729
-#define msg_maxim(format, args...) \
-	pr_info("[%s]: %s: " format, KBUILD_MODNAME, __func__, ##args)
+#ifdef DEBUG_MAX77729
+#define msg_maxim(fmt, ...) pr_info("[max77729]: %s: " fmt "\n", __func__, ##__VA_ARGS__)
+#else
+#define msg_maxim(fmt, ...) do { } while (0)
+#endif /* __DEBUG_MAX77729__ */
 #endif

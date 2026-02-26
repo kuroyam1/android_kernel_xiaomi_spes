@@ -585,7 +585,7 @@ void pd_notify_tcp_event_2nd_result(struct pd_port *pd_port, int ret)
 		break;
 	}
 
-	TCPC_DBG2("tcp_event_2nd: evt%d=%d\n",
+	TCPC_DBG2("tcp_event_2nd: evt%d = %d\n",
 		pd_port->tcp_event_id_2nd, ret);
 
 	if (tcp_event->event_cb != NULL)
@@ -604,7 +604,7 @@ void pd_notify_tcp_event_1st_result(struct pd_port *pd_port, int ret)
 	if (pd_port->tcp_event_id_1st == TCP_DPM_EVT_UNKNOWN)
 		return;
 
-	TCPC_DBG2("tcp_event_1st: evt%d=%d\n",
+	TCPC_DBG2("tcp_event_1st: evt%d = %d\n",
 		pd_port->tcp_event_id_1st, ret);
 
 #ifdef CONFIG_USB_PD_TCPM_CB_2ND
@@ -1152,7 +1152,7 @@ void pd_notify_pe_cancel_pr_swap(struct pd_port *pd_port)
 
 	if (!tcpci_check_vbus_valid(tcpc)
 		&& (pd_port->request_v >= 4000)) {
-		TCPC_DBG("cancel_pr_swap_vbus=0\n");
+		TCPC_DBG("cancel_pr_swap_vbus = 0\n");
 		pd_put_tcp_pd_event(pd_port, TCP_DPM_EVT_ERROR_RECOVERY);
 	}
 }
@@ -1279,7 +1279,7 @@ void pd_notify_pe_direct_charge(struct pd_port *pd_port, bool en)
 }
 #endif	/* CONFIG_USB_PD_DIRECT_CHARGE */
 
-/* ---- init ---- */
+/* ---- init  ---- */
 static int tcpc_event_thread_fn(void *data)
 {
 	struct tcpc_device *tcpc = data;

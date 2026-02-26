@@ -128,7 +128,7 @@ struct battery_data_t {
 	u32 sw_v_empty_vol_cisd;
 	u32 sw_v_empty_recover_vol;
 	u32 Capacity;
-	u8  *type_str;
+	u8 *type_str;
 	u32 ichgterm;
 	u32 misccfg;
 	u32 fullsocthr;
@@ -219,14 +219,14 @@ struct lost_soc_data {
 };
 
 struct max77729_fuelgauge_data {
-	struct device           *dev;
-	struct i2c_client       *i2c;
-	struct i2c_client       *pmic;
-	struct mutex            fuelgauge_mutex;
+	struct device	*dev;
+	struct i2c_client	*i2c;
+	struct i2c_client	*pmic;
+	struct mutex	fuelgauge_mutex;
 	struct max77729_platform_data *max77729_pdata;
 	max77729_fuelgauge_platform_data_t *pdata;
-	struct power_supply	      *psy_fg;
-	struct power_supply	      *psy_batt;
+	struct power_supply	*psy_fg;
+	struct power_supply	*psy_batt;
 	struct delayed_work isr_work;
 	struct delayed_work shutdown_delay_work;
 
@@ -241,7 +241,7 @@ struct max77729_fuelgauge_data {
 	 * (ex. dummy_fuelgauge.c)
 	 */
 	struct sec_fg_info	info;
-	struct battery_data_t        *battery_data;
+	struct battery_data_t	*battery_data;
 
 	bool is_fuel_alerted;
 	struct wakeup_source *fuel_alert_ws;
@@ -288,7 +288,6 @@ struct max77729_fuelgauge_data {
 	int fake_temp;
 	int *dec_rate_seq;
 	int dec_rate_len;
-
 
 #ifdef CONFIG_BATT_VERIFY_BY_DS28E16
 	struct power_supply *max_verify_psy;

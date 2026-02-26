@@ -421,7 +421,7 @@ void tcpm_set_dpm_caps(struct tcpc_device *tcpc, uint32_t caps)
 int tcpm_inquire_pd_contract(
 	struct tcpc_device *tcpc, int *mv, int *ma)
 {
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	ret = tcpm_check_pd_attached(tcpc);
@@ -440,13 +440,12 @@ int tcpm_inquire_pd_contract(
 	mutex_unlock(&pd_port->pd_lock);
 
 	return ret;
-
 }
 
 int tcpm_inquire_cable_inform(
 	struct tcpc_device *tcpc, uint32_t *vdos)
 {
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	ret = tcpm_check_pd_attached(tcpc);
@@ -471,7 +470,7 @@ int tcpm_inquire_pd_partner_inform(
 	struct tcpc_device *tcpc, uint32_t *vdos)
 {
 #ifdef CONFIG_USB_PD_KEEP_PARTNER_ID
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	ret = tcpm_check_pd_attached(tcpc);
@@ -499,7 +498,7 @@ int tcpm_inquire_pd_partner_svids(
 	struct tcpc_device *tcpc, struct tcpm_svid_list *list)
 {
 #ifdef CONFIG_USB_PD_KEEP_SVIDS
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 	struct svdm_svid_list *svdm_list = &pd_port->pe_data.remote_svid_list;
 
@@ -560,7 +559,7 @@ int tcpm_inquire_pd_partner_modes(
 int tcpm_inquire_pd_source_cap(
 	struct tcpc_device *tcpc, struct tcpm_power_cap *cap)
 {
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	ret = tcpm_check_pd_attached(tcpc);
@@ -585,7 +584,7 @@ int tcpm_inquire_pd_source_cap(
 int tcpm_inquire_pd_sink_cap(
 	struct tcpc_device *tcpc, struct tcpm_power_cap *cap)
 {
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	ret = tcpm_check_pd_attached(tcpc);
@@ -701,7 +700,7 @@ static inline int __tcpm_inquire_select_source_cap(
 int tcpm_inquire_select_source_cap(
 		struct tcpc_device *tcpc, struct tcpm_power_cap_val *cap_val)
 {
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	if (cap_val == NULL)
@@ -1219,7 +1218,7 @@ int tcpm_dpm_dp_attention(struct tcpc_device *tcpc,
 int tcpm_inquire_dp_dfp_u_state(
 	struct tcpc_device *tcpc, uint8_t *state)
 {
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	ret = tcpm_check_pd_attached(tcpc);
@@ -1887,7 +1886,7 @@ int tcpm_dpm_bk_event_cb(
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	if (pd_port->tcpm_bk_event_id != event->event_id) {
-		TCPM_DBG("bk_event_cb_dummy: expect:%d real:%d\n",
+		TCPM_DBG("bk_event_cb_dummy: expect:%d, real:%d\n",
 			pd_port->tcpm_bk_event_id, event->event_id);
 		return 0;
 	}
@@ -1910,7 +1909,7 @@ static inline int __tcpm_dpm_wait_bk_event(
 	int ret = TCP_DPM_RET_BK_TIMEOUT;
 
 	wait_event_timeout(pd_port->tcpm_bk_wait_que, pd_port->tcpm_bk_done,
-			msecs_to_jiffies(tout_ms));
+			   msecs_to_jiffies(tout_ms));
 
 	if (pd_port->tcpm_bk_done)
 		return pd_port->tcpm_bk_ret;
@@ -1963,7 +1962,7 @@ static int __tcpm_put_tcp_dpm_event_bk(
 	struct tcpc_device *tcpc, struct tcp_dpm_event *event,
 	uint32_t tout_ms, uint8_t *data, uint8_t size)
 {
-	int ret;
+	int ret = TCPM_SUCCESS;
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	pd_port->tcpm_bk_done = false;
@@ -2007,7 +2006,7 @@ static int tcpm_put_tcp_dpm_event_bk(
 
 #ifndef CONFIG_USB_PD_TCPM_CB_2ND
 	if ((data != NULL) && (ret == TCPM_SUCCESS))
-	return TCPM_ERROR_EXPECT_CB2;
+		return TCPM_ERROR_EXPECT_CB2;
 #endif	/* CONFIG_USB_PD_TCPM_CB_2ND */
 
 	if (ret == TCP_DPM_RET_DENIED_REPEAT_REQUEST)

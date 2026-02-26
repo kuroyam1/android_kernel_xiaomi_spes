@@ -588,7 +588,7 @@ static inline bool pe_is_valid_pd_msg_role(struct pd_port *pd_port,
 	 */
 
 	if (msg_pr == pd_port->power_role)
-		PE_DBG("Wrong PR:%d\n", msg_pr);
+		PE_DBG("Wrong PR: %d\n", msg_pr);
 
 	/*
 	 * Should a Type-C Port receive a Message with the Port Data Role field
@@ -602,7 +602,7 @@ static inline bool pe_is_valid_pd_msg_role(struct pd_port *pd_port,
 #ifdef CONFIG_USB_PD_CHECK_DATA_ROLE
 		ret = false;
 #endif
-		PE_INFO("Wrong DR:%d\n", msg_dr);
+		PE_INFO("Wrong DR: %d\n", msg_dr);
 	}
 
 	return ret;
@@ -701,7 +701,7 @@ static inline uint8_t pe_check_trap_in_idle_state(
 	switch (pd_port->pe_pd_state) {
 	case PE_IDLE1:
 	case PE_ERROR_RECOVERY:
-		if (pd_event_pe_msg_match(pd_event, PD_PE_IDLE)) {
+		if (pd_event_pe_msg_match(pd_event, PD_PE_IDLE))  {
 			PE_TRANSIT_STATE(pd_port, PE_IDLE2);
 			return TII_TRANSIT_STATE;
 		}

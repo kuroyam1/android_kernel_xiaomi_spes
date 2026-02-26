@@ -67,22 +67,22 @@ static const struct pdpm_config pm_config = {
 };
 
 #define _PDPM_RAW(a, b) a##b
-#define _PDPM_RATE(a, b) _PDPM_RAW(a, b)
+#define _PDPM_NAME(a, b) _PDPM_RAW(a, b)
 
 #if defined(__COUNTER__)
-#define _PDPM_FALLBACK() _PDPM_RATE(pdpm_rl_, __COUNTER__)
+#define _PDPM_ID() __COUNTER__
 #else
-#define _PDPM_FALLBACK() _PDPM_RATE(pdpm_rl_, __LINE__)
+#define _PDPM_ID() __LINE__
 #endif
 
-#define _PDPM_INFO_WRAPPER(name, fmt, ...)		\
-do {							\
-	static DEFINE_RATELIMIT_STATE(name, 3 * HZ, 1);	\
-	if (__ratelimit(&name))				\
-		pr_info(fmt, ##__VA_ARGS__);		\
+#define _PDPM_WRAPPER_ID(id, fmt, ...)						\
+do {										\
+	static DEFINE_RATELIMIT_STATE(_PDPM_NAME(pdpm_rl_, id), 3 * HZ, 1);	\
+	if (__ratelimit(&_PDPM_NAME(pdpm_rl_, id)))				\
+		pr_info(fmt, ##__VA_ARGS__);					\
 } while (0)
 
-#define pdpm_info(fmt, ...)	_PDPM_INFO_WRAPPER(_PDPM_FALLBACK(), fmt, ##__VA_ARGS__)
+#define pdpm_info(fmt, ...)	_PDPM_WRAPPER_ID(_PDPM_ID(), fmt, ##__VA_ARGS__)
 #define pdpm_err(fmt, ...)	do { pr_err(fmt, ##__VA_ARGS__); } while (0)
 #define pdpm_dbg(fmt, ...)	do { pr_debug(fmt, ##__VA_ARGS__); } while (0)
 
@@ -1160,7 +1160,7 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 		}
 		break;
 	case PD_PM_STATE_FC2_ENTRY_3:
-		cv_val = 4450;
+		cv_val = 4608;
 		ret = pd_set_cv(pdpm, cv_val);
 		if (ret < 0) {
 			pdpm_err("set pd_cv fail, ret: %d\n", ret);
@@ -1225,8 +1225,10 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 		break;
 	case PD_PM_STATE_FC2_EXIT:
 		usbpd_select_pdo(pdpm, 9000, 2000); // 9V-2A
-		if (pdpm->fcc_votable)
+		if (pdpm->fcc_votable) {
+			usleep_range(1000, 2000);
 			vote(pdpm->fcc_votable, BQ_TAPER_FCC_VOTER, false, 0);
+		}
 
 		if (pdpm->cp.charge_enabled) {
 			usbpd_pm_enable_cp(pdpm, false);
@@ -1430,12 +1432,12 @@ static int usbpd_pm_probe(struct platform_device *pdev)
 	static int probe_cnt = 0;
 
 	pr_info("start, probe_cnt: %d\n", ++probe_cnt);
-	if (probe_cnt > 20) {
-		pr_err("stop: probe_cnt: %d, max probe_cnt is 20\n", probe_cnt);
-		return 0;
+	if (probe_cnt >= 50) {
+		pr_err("stop: probe_cnt: %d, max probe_cnt is 50\n", probe_cnt);
+		return -ENODEV;
 	}
 
-	pdpm = devm_kzalloc(&pdev->dev, sizeof(struct usbpd_pm), GFP_KERNEL);
+	pdpm = devm_kzalloc(&pdev->dev, sizeof(*pdpm), GFP_KERNEL);
 	if (!pdpm) {
 		pr_err("Failed to allocate memory\n");
 		return -ENOMEM;
@@ -1444,11 +1446,11 @@ static int usbpd_pm_probe(struct platform_device *pdev)
 	pdpm->dev = &pdev->dev;
 	pdpm->pdev = pdev;
 	platform_set_drvdata(pdev, pdpm);
-
-	spin_lock_init(&pdpm->psy_change_lock);
 	__pdpm = pdpm;
 
-	// get psy, tcpc
+	spin_lock_init(&pdpm->psy_change_lock);
+	pdpm->psy_change_running = false;
+
 	usbpd_check_cp_psy(pdpm);
 	if (pm_config.cp_sec_enable)
 		usbpd_check_cp_sec_psy(pdpm);
@@ -1470,23 +1472,31 @@ static int usbpd_pm_probe(struct platform_device *pdev)
 	INIT_WORK(&pdpm->usb_psy_change_work, usb_psy_change_work);
 	INIT_DELAYED_WORK(&pdpm->pm_work, usbpd_pm_workfunc);
 
-	if (NOPMI_CHARGER_IC_MAXIM != nopmi_get_charger_ic_type()) {
+	pdpm->nb.notifier_call = usbpd_psy_notifier_cb;
+	ret = power_supply_reg_notifier(&pdpm->nb);
+	if (ret < 0) {
+		pr_err("power_supply_reg_notifier failed: %d\n", ret);
+		goto err_psy;
+	}
+
+	if (NOPMI_CHARGER_IC_MAXIM != nopmi_get_charger_ic_type() && pdpm->tcpc) {
 		pdpm->tcp_nb.notifier_call = pca_pps_tcp_notifier_call;
 		ret = register_tcp_dev_notifier(pdpm->tcpc, &pdpm->tcp_nb, TCP_NOTIFY_TYPE_USB);
 		if (ret < 0) {
-			pr_err("register tcpc notifier fail\n");
-			goto err_notifer;
+			pr_err("register tcpc notifier fail: %d\n", ret);
+			goto err_notifier;
 		}
 	}
 
-	pdpm->nb.notifier_call = usbpd_psy_notifier_cb;
-	power_supply_reg_notifier(&pdpm->nb);
 	pdpm->fcc_votable = find_votable("FCC");
+	pdpm->fv_votable  = find_votable("FV");
 
 	pr_info("success\n");
 	return 0;
 
-err_notifer:
+err_notifier:
+	power_supply_unreg_notifier(&pdpm->nb);
+err_psy:
 	if (pdpm->cp_psy)
 		power_supply_put(pdpm->cp_psy);
 	if (pm_config.cp_sec_enable && pdpm->cp_sec_psy)
@@ -1497,9 +1507,9 @@ err_notifer:
 		power_supply_put(pdpm->sw_psy);
 	if (pdpm->bms_psy)
 		power_supply_put(pdpm->bms_psy);
-err_psy:
+
+	platform_set_drvdata(pdev, NULL);
 	__pdpm = NULL;
-	//kfree(pdpm);
 	pr_err("fail!\n");
 	return ret;
 }
@@ -1511,7 +1521,10 @@ static int usbpd_pm_remove(struct platform_device *pdev)
 	if (!pdpm)
 		return 0;
 
+	if (pdpm->tcpc)
+		unregister_tcp_dev_notifier(pdpm->tcpc, &pdpm->tcp_nb, TCP_NOTIFY_TYPE_USB);
 	power_supply_unreg_notifier(&pdpm->nb);
+
 	cancel_delayed_work_sync(&pdpm->pm_work);
 	cancel_work_sync(&pdpm->cp_psy_change_work);
 	cancel_work_sync(&pdpm->usb_psy_change_work);
@@ -1527,7 +1540,7 @@ static int usbpd_pm_remove(struct platform_device *pdev)
 	if (pdpm->bms_psy)
 		power_supply_put(pdpm->bms_psy);
 
-	//kfree(pdpm);
+	platform_set_drvdata(pdev, NULL);
 	__pdpm = NULL;
 
 	return 0;

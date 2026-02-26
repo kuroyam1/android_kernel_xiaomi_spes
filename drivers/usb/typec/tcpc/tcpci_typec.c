@@ -73,7 +73,7 @@ static inline void typec_wait_ps_change(struct tcpc_device *tcpc,
 	uint8_t new_state = (uint8_t) state;
 
 	if (new_state != old_state)
-		TYPEC_INFO2("wait_ps=%s\n", typec_wait_ps_name[new_state]);
+		TYPEC_INFO2("wait_ps = %s\n", typec_wait_ps_name[new_state]);
 #endif	/* TYPEC_INFO2_ENABLE */
 
 #ifdef CONFIG_TYPEC_ATTACHED_SRC_SAFE0V_TIMEOUT
@@ -306,7 +306,6 @@ static const char *const typec_attach_name[] = {
 	"SOURCE",
 	"AUDIO",
 	"DEBUG",
-
 	"DBGACC_SNK",
 	"CUSTOM_SRC",
 	"NORP_SRC",
@@ -331,7 +330,7 @@ static int typec_alert_attach_state_change(struct tcpc_device *tcpc)
 	}
 
 	TYPEC_INFO("Attached-> %s\n",
-		   typec_attach_name[tcpc->typec_attach_new]);
+		typec_attach_name[tcpc->typec_attach_new]);
 
 	/* Report function */
 	ret = tcpci_report_usb_port_changed(tcpc);
@@ -380,7 +379,7 @@ static bool typec_try_enter_norp_src(struct tcpc_device *tcpc)
 	if (tcpci_check_vbus_valid_from_ic(tcpc) &&
 	    typec_is_cc_no_res() &&
 	    tcpc->typec_state == typec_unattached_snk) {
-		TYPEC_INFO("norp_src=1\n");
+		TYPEC_INFO("norp_src = 1\n");
 		tcpc_enable_timer(tcpc, TYPEC_TIMER_NORP_SRC);
 		return true;
 	}
@@ -394,7 +393,7 @@ static bool typec_try_exit_norp_src(struct tcpc_device *tcpc)
 	if ((!tcpci_check_vbus_valid_from_ic(tcpc) ||
 	     !typec_is_cc_no_res()) &&
 	    tcpc->typec_state == typec_attached_norp_src) {
-		TYPEC_INFO("norp_src=0\n");
+		TYPEC_INFO("norp_src = 0\n");
 		typec_unattach_wait_pe_idle_entry(tcpc);
 		typec_alert_attach_state_change(tcpc);
 		return true;
@@ -828,7 +827,6 @@ static inline void typec_sink_dbg_acc_attached_entry(
 	typec_custom_src_attached_entry(tcpc);
 }
 #endif	/* CONFIG_TYPEC_CAP_DBGACC_SNK */
-
 
 /*
  * [BLOCK] Try.SRC / TryWait.SNK
@@ -2210,7 +2208,7 @@ static inline void typec_handle_pd_wait_bc12(struct tcpc_device *tcpc)
 	type = tcpc->typec_attach_new;
 	ret = power_supply_get_property(tcpc->usb_psy,
 		POWER_SUPPLY_PROP_REAL_TYPE, &val);
-	TYPEC_INFO("type=%d, ret,chg_type=%d,%d, count=%d\n", type,
+	TYPEC_INFO("type = %d, ret = %d, chg_type=%d, count=%d\n", type,
 		ret, val.intval, tcpc->pd_wait_bc12_count);
 
 	if (type != TYPEC_ATTACHED_SNK && type != TYPEC_ATTACHED_DBGACC_SNK)
@@ -2846,7 +2844,7 @@ int tcpc_typec_handle_wd(struct tcpc_device *tcpc, bool wd)
 	if (!(tcpc->tcpc_flags & TCPC_FLAGS_WATER_DETECTION))
 		return 0;
 
-	TYPEC_INFO("%s %d\n", __func__, wd);
+	TYPEC_INFO("%d\n", wd);
 	if (!wd) {
 		tcpci_set_water_protection(tcpc, false);
 		tcpc_typec_error_recovery(tcpc);
@@ -2905,28 +2903,28 @@ int tcpc_typec_handle_ctd(struct tcpc_device *tcpc,
 			if (typec_is_cc_no_res() &&
 			    (tcpc->typec_state == typec_unattached_snk ||
 			     tcpc->typec_state == typec_unattached_src)) {
-				TCPC_INFO("%s toggling or open\n", __func__);
+				TCPC_INFO("toggling or open\n");
 				cable_type = TCPC_CABLE_TYPE_NONE;
 			}
 		}
 	}
 
-	TCPC_INFO("%s cable (%d, %d)\n", __func__, tcpc->typec_cable_type,
-		  cable_type);
+	TCPC_INFO("cable (%d, %d)\n", tcpc->typec_cable_type,
+		cable_type);
 
 	if (tcpc->typec_cable_type == cable_type)
 		return 0;
 
 	if (tcpc->typec_cable_type != TCPC_CABLE_TYPE_NONE &&
 	    cable_type != TCPC_CABLE_TYPE_NONE) {
-		TCPC_INFO("%s ctd done once %d\n", __func__,
-			  tcpc->typec_cable_type);
+		TCPC_INFO("ctd done once %d\n",
+			tcpc->typec_cable_type);
 		return 0;
 	}
 
 	tcpc->typec_cable_type = cable_type;
 
-	TCPC_INFO("%s cable type %d\n", __func__, tcpc->typec_cable_type);
+	TCPC_INFO("cable type %d\n", tcpc->typec_cable_type);
 	tcpci_notify_cable_type(tcpc);
 	return 0;
 }

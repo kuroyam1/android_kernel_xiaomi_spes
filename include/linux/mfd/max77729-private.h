@@ -34,7 +34,7 @@
 
 #define MAX77729_IRQSRC_CHG		(1 << 0)
 #define MAX77729_IRQSRC_TOP		(1 << 1)
-#define MAX77729_IRQSRC_FG		(1 << 2)
+#define MAX77729_IRQSRC_FG			(1 << 2)
 #define MAX77729_IRQSRC_USBC		(1 << 3)
 
 enum max77729_hw_rev {

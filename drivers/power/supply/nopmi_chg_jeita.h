@@ -68,7 +68,7 @@ enum sw_jeita_state_enum {
 	TEMP_ABOVE_T4
 };
 
-struct nopmi_chg_jeita_config{
+struct nopmi_chg_jeita_config {
 	/* sw jeita */
 	bool enable_sw_jeita;
 	int jeita_temp_above_t4_cv;
@@ -115,6 +115,7 @@ struct nopmi_chg_jeita_st {
 	struct power_supply *batt_psy;
 	struct power_supply *bbc_psy;
 	struct power_supply *usb_psy;
+	struct power_supply *cp_psy;
 
 	struct votable *fcc_votable;
 	struct votable *fv_votable;
