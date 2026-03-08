@@ -119,7 +119,8 @@ static int nopmi_update_batt_volt(struct nopmi_chg *nopmi_chg)
 			POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
 	if (ret < 0) {
 		pr_err("read fg batt volt property fail, ret=%d\n", ret);
-		WRITE_ONCE(nopmi_chg->batt_volt, 0);
+		if (!READ_ONCE(nopmi_chg->batt_volt))
+			WRITE_ONCE(nopmi_chg->batt_volt, 3800000);
 		return ret;
 	}
 
