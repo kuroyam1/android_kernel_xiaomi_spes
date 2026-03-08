@@ -22,7 +22,7 @@ config MFD_MAX77729
 
 config QCOM_IFPMIC_SUSPEND
 	tristate "QCOM_IFPMIC_SUSPEND Function Support"
-	default n
+	default y
 	help
 	  If you say yes here you will get support for
 	  QCOM_IFPMIC_SUSPEND function
