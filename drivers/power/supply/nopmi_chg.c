@@ -1296,9 +1296,15 @@ static void nopmi_chg_workfunc(struct work_struct *work)
 	struct nopmi_chg *nopmi_chg = container_of(work, struct nopmi_chg, nopmi_chg_work.work);
 
 	if (READ_ONCE(nopmi_chg->is_awake)) {
-		start_nopmi_chg_jeita_workfunc();
-		schedule_delayed_work(&nopmi_chg->nopmi_chg_work,
-				msecs_to_jiffies(NOPMI_CHG_WORKFUNC_GAP));
+		if (nopmi_chg_is_usb_present(nopmi_chg->usb_psy)) {
+			start_nopmi_chg_jeita_workfunc();
+			schedule_delayed_work(&nopmi_chg->nopmi_chg_work,
+					msecs_to_jiffies(NOPMI_CHG_WORKFUNC_GAP));
+		} else {
+			WRITE_ONCE(nopmi_chg->is_awake, 0);
+			stop_nopmi_chg_workfunc();
+			power_supply_changed(nopmi_chg->usb_psy);
+		}
 	} else {
 		pr_info("usb offline, stop nopmi monitor\n");
 	}
