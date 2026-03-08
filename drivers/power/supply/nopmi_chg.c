@@ -667,7 +667,6 @@ static int nopmi_usb_get_prop(struct power_supply *psy,
 	struct nopmi_chg *nopmi_chg = power_supply_get_drvdata(psy);
 	int ret = 0;
 	int batt_volt;
-	static int last_online;
 
 	if (NOPMI_CHARGER_IC_MAXIM == nopmi_get_charger_ic_type()) {
 		ret = max77729_usb_get_property(psy, psp, val);
@@ -697,10 +696,6 @@ static int nopmi_usb_get_prop(struct power_supply *psy,
 		if (val->intval == 1 && batt_volt < 3300)
 			val->intval = 0;
 
-		if (last_online != val->intval) {
-			nopmi_handle_work(nopmi_chg, val->intval);
-			last_online = val->intval;
-		}
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_QUICK_CHARGE_TYPE:
@@ -822,9 +817,17 @@ static int nopmi_usb_set_prop(struct power_supply *psy,
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_REAL_TYPE: //for maxim solution, use persent use g_nopmi_chg->real_type, we have to set it in global setting.
+	{
+		int online = val->intval > 0 ? 1 : 0;
+
+		if (nopmi_chg->last_real_online != online) {
+			nopmi_handle_work(nopmi_chg, online);
+			nopmi_chg->last_real_online = online;
+		}
 		nopmi_chg->real_type = val->intval;
 		ret = 0;
 		break;
+	}
 	default:
 		break;
 	}

@@ -85,6 +85,8 @@ struct nopmi_chg {
 	bool last_thermal_icl_disabled;
 	bool last_thermal_icl_valid;
 
+	int last_real_online;
+
 	u8 is_awake;
 	s32 last_cc_cv_votfcc;
 };
