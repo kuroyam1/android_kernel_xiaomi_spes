@@ -46,12 +46,11 @@ static inline int tcpci_alert_vsafe0v(struct tcpc_device *tcpc)
 }
 #endif	/* CONFIG_TCPC_VSAFE0V_DETECT_IC */
 
-static inline void tcpci_vbus_level_init_v10(
-	struct tcpc_device *tcpc, uint16_t power_status)
+static inline void tcpci_vbus_level_init_v10(struct tcpc_device *tcpc, uint16_t power_status)
 {
 	mutex_lock(&tcpc->access_lock);
 	tcpc->vbus_level = power_status & TCPC_REG_POWER_STATUS_VBUS_PRES ?
-			   TCPC_VBUS_VALID : TCPC_VBUS_INVALID;
+			TCPC_VBUS_VALID : TCPC_VBUS_INVALID;
 #ifdef CONFIG_TCPC_VSAFE0V_DETECT_IC
 	if (power_status & TCPC_REG_POWER_STATUS_EXT_VSAFE0V) {
 		if (tcpc->vbus_level == TCPC_VBUS_INVALID)
@@ -65,8 +64,7 @@ static inline void tcpci_vbus_level_init_v10(
 
 static void __tcpci_vbus_level_refresh(struct tcpc_device *tcpc)
 {
-	tcpc->vbus_level = tcpc->vbus_present ? TCPC_VBUS_VALID :
-						TCPC_VBUS_INVALID;
+	tcpc->vbus_level = tcpc->vbus_present ? TCPC_VBUS_VALID : TCPC_VBUS_INVALID;
 #ifdef CONFIG_TCPC_VSAFE0V_DETECT_IC
 	if (tcpc->vbus_safe0v) {
 		if (tcpc->vbus_level == TCPC_VBUS_INVALID)
@@ -177,8 +175,7 @@ static int tcpci_alert_tx_failed(struct tcpc_device *tcpc)
 static int tcpci_alert_tx_discard(struct tcpc_device *tcpc)
 {
 	uint8_t tx_state = PD_TX_STATE_GOOD_CRC;
-	bool retry_crc_discard =
-		!!(tcpc->tcpc_flags & TCPC_FLAGS_RETRY_CRC_DISCARD);
+	bool retry_crc_discard = !!(tcpc->tcpc_flags & TCPC_FLAGS_RETRY_CRC_DISCARD);
 
 	TCPC_INFO("Discard\n");
 
@@ -292,9 +289,10 @@ struct tcpci_alert_handler {
 	int (*handler)(struct tcpc_device *tcpc);
 };
 
-#define DECL_TCPCI_ALERT_HANDLER(xbit, xhandler) {\
-	.bit_mask = 1 << xbit,\
-	.handler = xhandler,\
+#define DECL_TCPCI_ALERT_HANDLER(xbit, xhandler)	\
+{	\
+	.bit_mask = 1 << xbit,	\
+	.handler = xhandler,	\
 }
 
 static const struct tcpci_alert_handler tcpci_alert_handlers[] = {
@@ -324,11 +322,9 @@ static const struct tcpci_alert_handler tcpci_alert_handlers[] = {
 };
 
 #ifdef CONFIG_USB_POWER_DELIVERY
-static inline bool tcpci_check_hard_reset_complete(
-	struct tcpc_device *tcpc, uint32_t alert_status)
+static inline bool tcpci_check_hard_reset_complete(struct tcpc_device *tcpc, uint32_t alert_status)
 {
-	if ((alert_status & TCPC_REG_ALERT_HRESET_SUCCESS)
-			== TCPC_REG_ALERT_HRESET_SUCCESS) {
+	if ((alert_status & TCPC_REG_ALERT_HRESET_SUCCESS) == TCPC_REG_ALERT_HRESET_SUCCESS) {
 		pd_put_sent_hard_reset_event(tcpc);
 		return true;
 	}
@@ -362,8 +358,7 @@ int tcpci_alert(struct tcpc_device *tcpc)
 
 	alert_status &= alert_mask;
 
-	if (typec_role == TYPEC_ROLE_UNKNOWN ||
-		typec_role >= TYPEC_ROLE_NR) {
+	if (typec_role == TYPEC_ROLE_UNKNOWN || typec_role >= TYPEC_ROLE_NR) {
 		TYPEC_INFO("Wrong TypeC-Role: %d\n", typec_role);
 		tcpci_alert_status_clear(tcpc, alert_status);
 		return 0;
@@ -378,8 +373,7 @@ int tcpci_alert(struct tcpc_device *tcpc)
 
 	tcpci_alert_status_clear(tcpc, alert_status & ~TCPC_REG_ALERT_RX_MASK);
 
-	if ((tcpc->tcpc_flags & TCPC_FLAGS_ALERT_V10) &&
-	    (alert_status & TCPC_REG_ALERT_EXT_VBUS_80))
+	if ((tcpc->tcpc_flags & TCPC_FLAGS_ALERT_V10) && (alert_status & TCPC_REG_ALERT_EXT_VBUS_80))
 		alert_status |= TCPC_REG_ALERT_POWER_STATUS;
 
 #ifdef CONFIG_USB_POWER_DELIVERY
@@ -420,7 +414,7 @@ static inline int tcpci_set_wake_lock(struct tcpc_device *tcpc, bool pd_lock)
 		if (pd_lock) {
 			TCPC_DBG("wake_lock = 1\n");
 			__pm_wakeup_event(tcpc->attach_wake_lock,
-					  CONFIG_TCPC_ATTACH_WAKE_LOCK_TOUT);
+					CONFIG_TCPC_ATTACH_WAKE_LOCK_TOUT);
 			if (tcpc->typec_watchdog)
 				tcpci_set_intrst(tcpc, true);
 		} else {

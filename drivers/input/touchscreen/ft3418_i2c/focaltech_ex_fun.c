@@ -166,25 +166,23 @@ static ssize_t fts_debug_write(struct file *filp, const char __user *buff,
 		snprintf(tmp, PROC_BUF_SIZE, "%s", writebuf + 1);
 		tmp[buflen - 1] = '\0';
 		if (strncmp(tmp, "focal_driver", 12) == 0) {
-			FTS_INFO("APK execute HW Reset");
+			FTS_DEBUG("APK execute HW Reset");
 			fts_reset_proc(0);
 		}
 		break;
 	case PROC_SET_BOOT_MODE:
 		FTS_DEBUG("[APK]: PROC_SET_BOOT_MODE = %x", writebuf[1]);
-		if (0 == writebuf[1]) {
+		if (0 == writebuf[1])
 			ts_data->fw_is_running = true;
-		} else {
+		else
 			ts_data->fw_is_running = false;
-		}
 		break;
 	case PROC_ENTER_TEST_ENVIRONMENT:
 		FTS_DEBUG("[APK]: PROC_ENTER_TEST_ENVIRONMENT = %x", writebuf[1]);
-		if (0 == writebuf[1]) {
+		if (0 == writebuf[1])
 			fts_enter_test_environment(0);
-		} else {
+		else
 			fts_enter_test_environment(1);
-		}
 		break;
 	default:
 		break;
@@ -363,25 +361,23 @@ static int fts_debug_write(struct file *filp, const char __user *buff,
 		snprintf(tmp, PROC_BUF_SIZE, "%s", writebuf + 1);
 		tmp[buflen - 1] = '\0';
 		if (strncmp(tmp, "focal_driver", 12) == 0) {
-			FTS_INFO("APK execute HW Reset");
+			FTS_DEBUG("APK execute HW Reset");
 			fts_reset_proc(0);
 		}
 		break;
 	case PROC_SET_BOOT_MODE:
 		FTS_DEBUG("[APK]: PROC_SET_BOOT_MODE = %x", writebuf[1]);
-		if (0 == writebuf[1]) {
+		if (0 == writebuf[1])
 			ts_data->fw_is_running = true;
-		} else {
+		else
 			ts_data->fw_is_running = false;
-		}
 		break;
 	case PROC_ENTER_TEST_ENVIRONMENT:
 		FTS_DEBUG("[APK]: PROC_ENTER_TEST_ENVIRONMENT = %x", writebuf[1]);
-		if (0 == writebuf[1]) {
+		if (0 == writebuf[1])
 			fts_enter_test_environment(0);
-		} else {
+		else
 			fts_enter_test_environment(1);
-		}
 		break;
 	default:
 		break;
@@ -490,7 +486,7 @@ int fts_create_apk_debug_channel(struct fts_ts_data *ts_data)
 	proc->proc_entry->read_proc = fts_debug_read;
 #endif
 
-	FTS_INFO("Create proc entry success!");
+	FTS_DEBUG("Create proc entry success!");
 	return 0;
 }
 
@@ -551,10 +547,10 @@ static ssize_t fts_irq_store(struct device *dev,
 
 	mutex_lock(&input_dev->mutex);
 	if (FTS_SYSFS_ECHO_ON(buf)) {
-		FTS_INFO("enable irq");
+		FTS_DEBUG("enable irq");
 		fts_irq_enable();
 	} else if (FTS_SYSFS_ECHO_OFF(buf)) {
-		FTS_INFO("disable irq");
+		FTS_DEBUG("disable irq");
 		fts_irq_disable();
 	}
 	mutex_unlock(&input_dev->mutex);
@@ -572,10 +568,10 @@ static ssize_t fts_bootmode_store(struct device *dev,
 	FTS_FUNC_ENTER();
 	mutex_lock(&input_dev->mutex);
 	if (FTS_SYSFS_ECHO_ON(buf)) {
-		FTS_INFO("[EX-FUN]set to boot mode");
+		FTS_DEBUG("[EX-FUN]set to boot mode");
 		fts_data->fw_is_running = false;
 	} else if (FTS_SYSFS_ECHO_OFF(buf)) {
-		FTS_INFO("[EX-FUN]set to fw mode");
+		FTS_DEBUG("[EX-FUN]set to fw mode");
 		fts_data->fw_is_running = true;
 	}
 	mutex_unlock(&input_dev->mutex);
@@ -592,11 +588,10 @@ static ssize_t fts_bootmode_show(struct device *dev,
 
 	FTS_FUNC_ENTER();
 	mutex_lock(&input_dev->mutex);
-	if (true == fts_data->fw_is_running) {
+	if (fts_data->fw_is_running)
 		count = snprintf(buf, PAGE_SIZE, "tp is in fw mode\n");
-	} else {
+	else
 		count = snprintf(buf, PAGE_SIZE, "tp is in boot mode\n");
-	}
 	mutex_unlock(&input_dev->mutex);
 	FTS_FUNC_EXIT();
 
@@ -652,17 +647,15 @@ static ssize_t fts_tprwreg_show(struct device *dev,
 		count = snprintf(buf, PAGE_SIZE, "Invalid cmd line\n");
 	} else if (rw_op.len == 1) {
 		if (RWREG_OP_READ == rw_op.type) {
-			if (rw_op.res == 0) {
+			if (rw_op.res == 0)
 				count = snprintf(buf, PAGE_SIZE, "Read %02X: %02X\n", rw_op.reg, rw_op.val);
-			} else {
+			else
 				count = snprintf(buf, PAGE_SIZE, "Read %02X failed, ret: %d\n", rw_op.reg, rw_op.res);
-			}
 		} else {
-			if (rw_op.res == 0) {
+			if (rw_op.res == 0)
 				count = snprintf(buf, PAGE_SIZE, "Write %02X, %02X success\n", rw_op.reg, rw_op.val);
-			} else {
+			else
 				count = snprintf(buf, PAGE_SIZE, "Write %02X failed, ret: %d\n", rw_op.reg, rw_op.res);
-			}
 		}
 	} else {
 		if (RWREG_OP_READ == rw_op.type) {
@@ -672,26 +665,23 @@ static ssize_t fts_tprwreg_show(struct device *dev,
 				count += snprintf(buf + count, PAGE_SIZE, "failed, ret: %d\n", rw_op.res);
 			} else {
 				if (rw_op.opbuf) {
-					for (i = 0; i < rw_op.len; i++) {
+					for (i = 0; i < rw_op.len; i++)
 						count += snprintf(buf + count, PAGE_SIZE, "%02X ", rw_op.opbuf[i]);
-					}
 					count += snprintf(buf + count, PAGE_SIZE, "\n");
 				}
 			}
 		} else {
 			count = snprintf(buf, PAGE_SIZE, "Write Reg: [%02X]-[%02X]\n", rw_op.reg, rw_op.reg + rw_op.len - 1);
 			count += snprintf(buf + count, PAGE_SIZE, "Write Data: ");
-			if (rw_op.opbuf) {
+			if (rw_op.opbuf)
 				for (i = 1; i < rw_op.len; i++) {
 					count += snprintf(buf + count, PAGE_SIZE, "%02X ", rw_op.opbuf[i]);
-				}
 				count += snprintf(buf + count, PAGE_SIZE, "\n");
 			}
-			if (rw_op.res) {
+			if (rw_op.res)
 				count += snprintf(buf + count, PAGE_SIZE, "Result: failed, ret: %d\n", rw_op.res);
-			} else {
+			else
 				count += snprintf(buf + count, PAGE_SIZE, "Result: success\n");
-			}
 		}
 		/*if (rw_op.opbuf) {
 			kfree(rw_op.opbuf);
@@ -713,15 +703,14 @@ static int shex_to_int(const char *hex_buf, int size)
 	for (i = size - 1; i >= 0; i--) {
 		single = hex_buf[i];
 
-		if ((single >= '0') && (single <= '9')) {
+		if ((single >= '0') && (single <= '9'))
 			value += (single - '0') * base;
-		} else if ((single >= 'a') && (single <= 'z')) {
+		else if ((single >= 'a') && (single <= 'z'))
 			value += (single - 'a' + 10) * base;
-		} else if ((single >= 'A') && (single <= 'Z')) {
+		else if ((single >= 'A') && (single <= 'Z'))
 			value += (single - 'A' + 10) * base;
-		} else {
+		else
 			return -EINVAL;
-		}
 
 		base *= 16;
 	}
@@ -842,7 +831,7 @@ static ssize_t fts_tprwreg_store(struct device *dev,
 			if (rw_op.res < 0) {
 				FTS_ERROR("Could not read 0x%02x", rw_op.reg);
 			} else {
-				FTS_INFO("read 0x%02x, %d bytes successful", rw_op.reg, rw_op.len);
+				FTS_DEBUG("read 0x%02x, %d bytes successful", rw_op.reg, rw_op.len);
 				rw_op.res = 0;
 			}
 		} else {
@@ -857,9 +846,8 @@ static ssize_t fts_tprwreg_store(struct device *dev,
 
 			if (rw_op.res < 0) {
 				FTS_ERROR("Could not write 0x%02x", rw_op.reg);
-
 			} else {
-				FTS_INFO("Write 0x%02x, %d bytes successful", rw_op.val, rw_op.len);
+				FTS_DEBUG("Write 0x%02x, %d bytes successful", rw_op.val, rw_op.len);
 				rw_op.res = 0;
 			}
 		}
@@ -895,7 +883,7 @@ static ssize_t fts_fwupgradebin_store(struct device *dev,
 	snprintf(fwname, FILE_NAME_LENGTH, "%s", buf);
 	fwname[count - 1] = '\0';
 
-	FTS_INFO("upgrade with bin file through sysfs node");
+	FTS_DEBUG("upgrade with bin file through sysfs node");
 	mutex_lock(&input_dev->mutex);
 	fts_upgrade_bin(fwname, 0);
 	mutex_unlock(&input_dev->mutex);
@@ -925,7 +913,7 @@ static ssize_t fts_fwforceupg_store(struct device *dev,
 	snprintf(fwname, FILE_NAME_LENGTH, "%s", buf);
 	fwname[count - 1] = '\0';
 
-	FTS_INFO("force upgrade through sysfs node");
+	FTS_DEBUG("force upgrade through sysfs node");
 	mutex_lock(&input_dev->mutex);
 	fts_upgrade_bin(fwname, 1);
 	mutex_unlock(&input_dev->mutex);
@@ -1086,7 +1074,7 @@ static ssize_t fts_log_level_store(struct device *dev,
 	FTS_FUNC_ENTER();
 	mutex_lock(&input_dev->mutex);
 	sscanf(buf, "%d", &value);
-	FTS_DEBUG("log level:%d->%d", fts_data->log_level, value);
+	FTS_DEBUG("log level: %d->%d", fts_data->log_level, value);
 	fts_data->log_level = value;
 	mutex_unlock(&input_dev->mutex);
 	FTS_FUNC_EXIT();
@@ -1149,10 +1137,9 @@ int fts_create_sysfs(struct fts_ts_data *ts_data)
 	ret = sysfs_create_group(&ts_data->dev->kobj, &fts_attribute_group);
 	if (ret) {
 		FTS_ERROR("[EX]: sysfs_create_group() failed!!");
-		sysfs_remove_group(&ts_data->dev->kobj, &fts_attribute_group);
 		return -ENOMEM;
 	} else {
-		FTS_INFO("[EX]: sysfs_create_group() succeeded!!");
+		FTS_DEBUG("[EX]: sysfs_create_group() succeeded!!");
 	}
 
 	return ret;

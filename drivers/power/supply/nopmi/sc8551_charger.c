@@ -225,10 +225,6 @@ struct sc8551 {
 	struct mutex charging_disable_lock;
 	struct mutex irq_complete;
 
-	bool irq_waiting;
-	bool irq_disabled;
-	bool resume_completed;
-
 	bool batt_present;
 	bool vbus_present;
 
@@ -294,12 +290,15 @@ struct sc8551 {
 	struct sc8551_platform_data *platform_data;
 
 	struct delayed_work monitor_work;
-	struct delayed_work irq_work;
 	struct workqueue_struct *irq_wq;
+	struct work_struct irq_work;
 	int irq;
 	atomic_t irq_pending;
 	atomic_t is_awake;
-	bool shutting_down;
+	atomic_t resume_completed;
+	atomic_t irq_disabled;
+	atomic_t irq_waiting;
+	atomic_t shutting_down;
 
 	struct dentry *debug_root;
 
@@ -2159,34 +2158,32 @@ static void sc8551_dump_important_regs(struct sc8551 *sc)
 
 static void sc8551_irq_work(struct work_struct *work)
 {
-	struct sc8551 *sc = container_of(to_delayed_work(work), struct sc8551, irq_work);
-
-	sc_dbg("irq_work running\n");
-
-	mutex_lock(&sc->irq_complete);
-	if (sc->shutting_down) {
-		mutex_unlock(&sc->irq_complete);
-		goto out;
-	}
+	struct sc8551 *sc = container_of(work, struct sc8551, irq_work);
 
 	atomic_set(&sc->irq_pending, 0);
-	sc->irq_waiting = true;
 
-	if (!sc->resume_completed) {
-		sc_dbg("IRQ triggered before device-resume\n");
-		if (!sc->irq_disabled) {
-			disable_irq_nosync(sc->irq);
-			sc->irq_disabled = true;
-		}
+	mutex_lock(&sc->irq_complete);
+
+	if (atomic_read(&sc->shutting_down)) {
 		mutex_unlock(&sc->irq_complete);
-		goto out;
+		goto out_relax;
 	}
 
-	sc->irq_waiting = false;
+	if (!atomic_read(&sc->resume_completed)) {
+		if (!atomic_read(&sc->irq_disabled)) {
+			disable_irq_nosync(sc->irq);
+			atomic_set(&sc->irq_disabled, 1);
+		}
+		mutex_unlock(&sc->irq_complete);
+		goto out_relax;
+	}
 	mutex_unlock(&sc->irq_complete);
 
-out:
-	if (atomic_xchg(&sc->is_awake, 0)) {
+	if (sc->fc2_psy)
+		power_supply_changed(sc->fc2_psy);
+
+out_relax:
+	if (atomic_cmpxchg(&sc->is_awake, 1, 0) == 1) {
 		if (sc->sc_ws)
 			__pm_relax(sc->sc_ws);
 	}
@@ -2205,18 +2202,21 @@ static irqreturn_t sc8551_charger_interrupt(int irq, void *data)
 	}
 
 	if (!atomic_xchg(&sc->irq_pending, 1))
-		mod_delayed_work(sc->irq_wq, &sc->irq_work, 0);
+		queue_work(sc->irq_wq, &sc->irq_work);
 
 	return IRQ_HANDLED;
 }
 
 static void determine_initial_status(struct sc8551 *sc)
 {
-	if (sc->irq)
-		sc8551_charger_interrupt(sc->irq, sc);
+	if (!sc || !sc->irq_wq)
+		return;
+
+	if (atomic_xchg(&sc->irq_pending, 0))
+		queue_work(sc->irq_wq, &sc->irq_work);
 }
 
-static struct of_device_id sc8551_charger_match_table[] = {
+static const struct of_device_id sc8551_charger_match_table[] = {
 	{
 		.compatible = "sc,sc8551-standalone",
 		.data = &sc8551_mode_data[SC8551_STDALONE],
@@ -2229,14 +2229,9 @@ static struct of_device_id sc8551_charger_match_table[] = {
 		.compatible = "sc,sc8551-slave",
 		.data = &sc8551_mode_data[SC8551_SLAVE],
 	},
-	{},
+	{ },
 };
-
-static void sc8551_wq_destroy(void *data)
-{
-	struct workqueue_struct *wq = data;
-	destroy_workqueue(wq);
-}
+MODULE_DEVICE_TABLE(of, sc8551_charger_match_table);
 
 static int sc8551_charger_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
@@ -2265,10 +2260,10 @@ static int sc8551_charger_probe(struct i2c_client *client,
 
 	atomic_set(&sc->irq_pending, 0);
 	atomic_set(&sc->is_awake, 0);
-	sc->resume_completed = true;
-	sc->shutting_down = false;
-	sc->irq_waiting = false;
-	sc->irq_disabled = false;
+	atomic_set(&sc->resume_completed, 1);
+	atomic_set(&sc->irq_disabled, 0);
+	atomic_set(&sc->irq_waiting, 0);
+	atomic_set(&sc->shutting_down, 0);
 	sc->is_sc8551 = true;
 
 	ret = sc8551_detect_device(sc);
@@ -2307,24 +2302,18 @@ static int sc8551_charger_probe(struct i2c_client *client,
 	}
 
 	sc->sc_ws = wakeup_source_register(sc->dev, "sc8551_ws");
-	if (!sc->sc_ws) {
-		pr_err("%s: wakeup_source_register failed\n", __func__);
-		ret = -ENOMEM;
+	if (IS_ERR_OR_NULL(sc->sc_ws)) {
+		ret = IS_ERR(sc->sc_ws) ? PTR_ERR(sc->sc_ws) : -ENOMEM;
+		pr_err("%s: wakeup_source_register failed: %d\n", __func__, ret);
 		goto err_unreg_psy;
 	}
 
-	INIT_DELAYED_WORK(&sc->irq_work, sc8551_irq_work);
+	INIT_WORK(&sc->irq_work, sc8551_irq_work);
 
 	sc->irq_wq = create_singlethread_workqueue("sc8551-irq-wq");
 	if (!sc->irq_wq) {
 		pr_err("%s: create_singlethread_workqueue failed\n", __func__);
 		ret = -ENOMEM;
-		goto err_unreg_ws;
-	}
-
-	ret = devm_add_action_or_reset(sc->dev, sc8551_wq_destroy, sc->irq_wq);
-	if (ret) {
-		pr_err("%s: devm_add_action_or_reset failed: %d\n", __func__, ret);
 		goto err_unreg_ws;
 	}
 
@@ -2352,14 +2341,13 @@ static int sc8551_charger_probe(struct i2c_client *client,
 	ret = devm_request_threaded_irq(sc->dev, irq,
 				NULL, sc8551_charger_interrupt,
 				IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-				"sc8551 charger irq", sc);
+				"sc8551_charger_irq", sc);
 	if (ret < 0) {
 		pr_err("%s: request irq=%d failed, ret=%d\n", __func__, irq, ret);
 		goto err_remove_sysfs;
 	}
 	sc->irq = irq;
 
-	device_init_wakeup(sc->dev, true);
 	enable_irq_wake(sc->irq);
 	usleep_range(4500, 5500);
 	determine_initial_status(sc);
@@ -2370,7 +2358,10 @@ static int sc8551_charger_probe(struct i2c_client *client,
 err_remove_sysfs:
 	sysfs_remove_group(&sc->dev->kobj, &sc8551_attr_group);
 err_unreg_wq:
-	cancel_delayed_work_sync(&sc->irq_work);
+	if (sc->irq_wq) {
+		destroy_workqueue(sc->irq_wq);
+		sc->irq_wq = NULL;
+	}
 err_unreg_ws:
 	if (sc->sc_ws) {
 		wakeup_source_unregister(sc->sc_ws);
@@ -2389,73 +2380,6 @@ err_out:
 	return ret;
 }
 
-static inline bool is_device_suspended(struct sc8551 *sc)
-{
-	return !sc->resume_completed;
-}
-
-static int sc8551_suspend(struct device *dev)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct sc8551 *sc = i2c_get_clientdata(client);
-
-	if (!sc)
-		return 0;
-
-	mutex_lock(&sc->irq_complete);
-	sc->resume_completed = false;
-	mutex_unlock(&sc->irq_complete);
-	pr_info_ratelimited("%s: Suspend successfully!\n", __func__);
-
-	return 0;
-}
-
-static int sc8551_suspend_noirq(struct device *dev)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct sc8551 *sc = i2c_get_clientdata(client);
-
-	if (!sc)
-		return 0;
-
-	mutex_lock(&sc->irq_complete);
-	if (sc->irq_waiting || atomic_read(&sc->irq_pending)) {
-		pr_err_ratelimited("%s: Aborting suspend, an interrupt was detected while suspending\n", __func__);
-		mutex_unlock(&sc->irq_complete);
-		return -EBUSY;
-	}
-	mutex_unlock(&sc->irq_complete);
-
-	return 0;
-}
-
-static int sc8551_resume(struct device *dev)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct sc8551 *sc = i2c_get_clientdata(client);
-
-	if (!sc)
-		return 0;
-
-	mutex_lock(&sc->irq_complete);
-	sc->resume_completed = true;
-	if (sc->irq_disabled) {
-		enable_irq(sc->irq);
-		sc->irq_disabled = false;
-	}
-
-	atomic_set(&sc->irq_pending, 0);
-	if (sc->irq_waiting)
-		mod_delayed_work(sc->irq_wq, &sc->irq_work, 0);
-	mutex_unlock(&sc->irq_complete);
-
-	if (sc->fc2_psy)
-		power_supply_changed(sc->fc2_psy);
-
-	pr_info_ratelimited("%s: Resume successfully!\n", __func__);
-	return 0;
-}
-
 static int sc8551_charger_remove(struct i2c_client *client)
 {
 	struct sc8551 *sc = i2c_get_clientdata(client);
@@ -2464,15 +2388,17 @@ static int sc8551_charger_remove(struct i2c_client *client)
 		return 0;
 
 	sc8551_enable_adc(sc, false);
-	device_init_wakeup(sc->dev, false);
 	if (sc->irq) {
 		disable_irq_wake(sc->irq);
 		disable_irq(sc->irq);
+		synchronize_irq(sc->irq);
 	}
 
-	cancel_delayed_work_sync(&sc->irq_work);
-	if (sc->irq_wq)
-		flush_workqueue(sc->irq_wq);
+	cancel_work_sync(&sc->irq_work);
+	if (sc->irq_wq) {
+		destroy_workqueue(sc->irq_wq);
+		sc->irq_wq = NULL;
+	}
 
 	sysfs_remove_group(&sc->dev->kobj, &sc8551_attr_group);
 
@@ -2500,38 +2426,103 @@ static void sc8551_charger_shutdown(struct i2c_client *client)
 		return;
 
 	mutex_lock(&sc->irq_complete);
-	sc->shutting_down = true;
+	atomic_set(&sc->shutting_down, 1);
 	mutex_unlock(&sc->irq_complete);
 
 	sc8551_enable_adc(sc, false);
-	device_init_wakeup(sc->dev, false);
 	if (sc->irq) {
 		disable_irq_wake(sc->irq);
 		disable_irq(sc->irq);
+		synchronize_irq(sc->irq);
 	}
 
-	cancel_delayed_work_sync(&sc->irq_work);
+	cancel_work_sync(&sc->irq_work);
 	if (sc->irq_wq)
 		flush_workqueue(sc->irq_wq);
 }
 
+static inline bool is_device_suspended(struct sc8551 *sc)
+{
+	return !atomic_read(&sc->resume_completed);
+}
+
+static int sc8551_suspend(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct sc8551 *sc = i2c_get_clientdata(client);
+
+	if (!sc)
+		return 0;
+
+	atomic_set(&sc->resume_completed, 0);
+	synchronize_irq(sc->irq);
+	flush_workqueue(sc->irq_wq);
+
+	pr_info_ratelimited("%s: Suspend successfully!\n", __func__);
+	return 0;
+}
+
+static int sc8551_suspend_noirq(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct sc8551 *sc = i2c_get_clientdata(client);
+
+	if (!sc)
+		return 0;
+
+	if (atomic_read(&sc->irq_disabled)) {
+		pr_err_ratelimited("%s: Aborting suspend_noirq: irq_disabled\n", __func__);
+		return -EBUSY;
+	}
+
+	return 0;
+}
+
+static int sc8551_resume(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct sc8551 *sc = i2c_get_clientdata(client);
+
+	if (!sc)
+		return 0;
+
+	atomic_set(&sc->resume_completed, 1);
+
+	if (atomic_read(&sc->irq_disabled)) {
+		enable_irq(sc->irq);
+		atomic_set(&sc->irq_disabled, 0);
+	}
+
+	determine_initial_status(sc);
+
+	pr_info_ratelimited("%s: Resume successfully!\n", __func__);
+	return 0;
+}
+
+static int sc8551_resume_noirq(struct device *dev)
+{
+	return 0;
+}
+
 static const struct dev_pm_ops sc8551_pm_ops = {
-	.resume		= sc8551_resume,
-	.suspend_noirq = sc8551_suspend_noirq,
 	.suspend	= sc8551_suspend,
+	.resume	= sc8551_resume,
+	.suspend_noirq	= sc8551_suspend_noirq,
+	.resume_noirq	= sc8551_resume_noirq,
 };
 
 static const struct i2c_device_id sc8551_charger_id[] = {
-	{"sc8551-standalone", SC8551_ROLE_STDALONE},
-	{},
+	{ "sc8551-standalone", SC8551_ROLE_STDALONE },
+	{ }
 };
+MODULE_DEVICE_TABLE(i2c, sc8551_charger_id);
 
 static struct i2c_driver sc8551_charger_driver = {
-	.driver		= {
-		.name	= "sc8551-charger",
-		.owner	= THIS_MODULE,
-		.of_match_table = sc8551_charger_match_table,
-		.pm	= &sc8551_pm_ops,
+	.driver = {
+		.owner		= THIS_MODULE,
+		.name		= "sc8551-charger",
+		.of_match_table	= of_match_ptr(sc8551_charger_match_table),
+		.pm		= &sc8551_pm_ops,
 	},
 	.id_table	= sc8551_charger_id,
 	.probe		= sc8551_charger_probe,

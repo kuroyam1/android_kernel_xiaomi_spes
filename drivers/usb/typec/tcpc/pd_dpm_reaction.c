@@ -30,8 +30,8 @@
 #define DPM_REACCOND_UFP	\
 	(DPM_REACTION_COND_ALWAYS | DPM_REACTION_COND_UFP_ONLY)
 
-#define DPM_REACTION_COND_CHECK_ONCE			(1<<5)
-#define DPM_REACTION_COND_ONE_SHOT			(1<<6)
+#define DPM_REACTION_COND_CHECK_ONCE		(1<<5)
+#define DPM_REACTION_COND_ONE_SHOT		(1<<6)
 #define DPM_REACTION_COND_LIMITED_RETRIES		(1<<7)
 
 /*
@@ -110,8 +110,7 @@ static uint8_t dpm_reaction_attemp_get_flag(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_PR_SWAP
 static uint8_t dpm_reaction_request_pr_swap(struct pd_port *pd_port)
 {
-	uint32_t prefer_role =
-		DPM_CAP_EXTRACT_PR_CHECK(pd_port->dpm_caps);
+	uint32_t prefer_role = DPM_CAP_EXTRACT_PR_CHECK(pd_port->dpm_caps);
 
 	if (!(pd_port->dpm_caps & DPM_CAP_LOCAL_DR_POWER))
 		return 0;
@@ -136,8 +135,7 @@ static uint8_t dpm_reaction_request_pr_swap(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_DR_SWAP
 static uint8_t dpm_reaction_request_dr_swap(struct pd_port *pd_port)
 {
-	uint32_t prefer_role =
-		DPM_CAP_EXTRACT_DR_CHECK(pd_port->dpm_caps);
+	uint32_t prefer_role = DPM_CAP_EXTRACT_DR_CHECK(pd_port->dpm_caps);
 
 	if (!(pd_port->dpm_caps & DPM_CAP_LOCAL_DR_DATA))
 		return 0;
@@ -153,7 +151,6 @@ static uint8_t dpm_reaction_request_dr_swap(struct pd_port *pd_port)
 	return 0;
 }
 #endif	/* #ifdef CONFIG_USB_PD_DR_SWAP */
-
 
 /*
  * DPM DiscoverCable reaction
@@ -287,8 +284,7 @@ const uint32_t c_get_status_alert_type = ADO_ALERT_OCP|
 
 static inline uint8_t dpm_reaction_alert_status_changed(struct pd_port *pd_port)
 {
-	pd_port->pe_data.remote_alert &=
-		~ADO_ALERT_TYPE_SET(c_get_status_alert_type);
+	pd_port->pe_data.remote_alert &= ~ADO_ALERT_TYPE_SET(c_get_status_alert_type);
 
 	return TCP_DPM_EVT_GET_STATUS;
 }
@@ -309,8 +305,7 @@ static inline uint8_t dpm_reaction_alert_battry_changed(struct pd_port *pd_port)
 			if (bat_change_mask1 & mask) {
 				bat_change_i = i;
 				bat_change_mask1 &= ~mask;
-				pd_port->pe_data.remote_alert &=
-					~ADO_FIXED_BAT_SET(bat_change_mask1);
+				pd_port->pe_data.remote_alert &= ~ADO_FIXED_BAT_SET(bat_change_mask1);
 				break;
 			}
 		}
@@ -320,16 +315,14 @@ static inline uint8_t dpm_reaction_alert_battry_changed(struct pd_port *pd_port)
 			if (bat_change_mask2 & mask) {
 				bat_change_i = i + 4;
 				bat_change_mask2 &= ~mask;
-				pd_port->pe_data.remote_alert &=
-					~ADO_HOT_SWAP_BAT_SET(bat_change_mask2);
+				pd_port->pe_data.remote_alert &= ~ADO_HOT_SWAP_BAT_SET(bat_change_mask2);
 				break;
 			}
 		}
 	}
 
 	if (bat_change_mask1 == 0 && bat_change_mask2 == 0) {
-		pd_port->pe_data.remote_alert &=
-			~ADO_ALERT_TYPE_SET(ADO_ALERT_BAT_CHANGED);
+		pd_port->pe_data.remote_alert &= ~ADO_ALERT_TYPE_SET(ADO_ALERT_BAT_CHANGED);
 	}
 
 	if (bat_change_i == 255)
@@ -438,194 +431,146 @@ struct dpm_ready_reaction {
 #define DECL_DPM_REACTION(xmask, xcond, xhandler)	{ \
 	.bit_mask = xmask,	\
 	.condition = xcond,	\
-	.handler = xhandler, \
+	.handler = xhandler,	\
 }
 
 #define DECL_DPM_REACTION_ALWAYS(xhandler)	\
 	DECL_DPM_REACTION(DPM_REACTION_CAP_ALWAYS,	\
-		DPM_REACTION_COND_ALWAYS,	\
-		xhandler)
+		DPM_REACTION_COND_ALWAYS, xhandler)
 
 #define DECL_DPM_REACTION_CHECK_ONCE(xmask, xhandler)	\
-	DECL_DPM_REACTION(xmask,	\
-		DPM_REACTION_COND_ALWAYS |	\
-		DPM_REACTION_COND_CHECK_ONCE,	\
-		xhandler)
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_ALWAYS |	\
+		DPM_REACTION_COND_CHECK_ONCE, xhandler)
 
 #define DECL_DPM_REACTION_LIMITED_RETRIES(xmask, xhandler)	\
-	DECL_DPM_REACTION(xmask,	\
-		DPM_REACTION_COND_ALWAYS |\
-		DPM_REACTION_COND_LIMITED_RETRIES,	\
-		xhandler)
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_ALWAYS |	\
+		DPM_REACTION_COND_LIMITED_RETRIES, xhandler)
 
 #define DECL_DPM_REACTION_ONE_SHOT(xmask, xhandler)	\
-	DECL_DPM_REACTION(xmask,	\
-		DPM_REACTION_COND_ALWAYS |	\
-		DPM_REACTION_COND_ONE_SHOT, \
-		xhandler)
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_ALWAYS |	\
+		DPM_REACTION_COND_ONE_SHOT, xhandler)
 
-#define DECL_DPM_REACTION_UFP(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_UFP_ONLY,	\
-		xhandler)
+#define DECL_DPM_REACTION_UFP(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_UFP_ONLY, xhandler)
 
-#define DECL_DPM_REACTION_DFP(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_DFP_ONLY,	\
-		xhandler)
+#define DECL_DPM_REACTION_DFP(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_DFP_ONLY, xhandler)
 
-#define DECL_DPM_REACTION_PD30(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_PD30,	 \
-		xhandler)
+#define DECL_DPM_REACTION_PD30(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_PD30, xhandler)
 
-#define DECL_DPM_REACTION_PD30_LIMITED_RETRIES(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_PD30 |\
-		DPM_REACTION_COND_LIMITED_RETRIES, \
-		xhandler)
+#define DECL_DPM_REACTION_PD30_LIMITED_RETRIES(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_PD30 |	\
+		DPM_REACTION_COND_LIMITED_RETRIES, xhandler)
 
-#define DECL_DPM_REACTION_PD30_ONE_SHOT(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_PD30 | \
-		DPM_REACTION_COND_ONE_SHOT, \
-		xhandler)
+#define DECL_DPM_REACTION_PD30_ONE_SHOT(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_PD30 |	\
+		DPM_REACTION_COND_ONE_SHOT, xhandler)
 
-#define DECL_DPM_REACTION_DFP_PD30_ONE_SHOT(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_DFP_ONLY |\
-		DPM_REACTION_COND_PD30 | \
-		DPM_REACTION_COND_ONE_SHOT, \
-		xhandler)
+#define DECL_DPM_REACTION_DFP_PD30_ONE_SHOT(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_DFP_ONLY |	\
+		DPM_REACTION_COND_PD30 | DPM_REACTION_COND_ONE_SHOT, xhandler)
 
-#define DECL_DPM_REACTION_DFP_PD30_LIMITED_RETRIES(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_DFP_ONLY |\
-		DPM_REACTION_COND_PD30 | \
-		DPM_REACTION_COND_LIMITED_RETRIES, \
-		xhandler)
+#define DECL_DPM_REACTION_DFP_PD30_LIMITED_RETRIES(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_DFP_ONLY |	\
+		DPM_REACTION_COND_PD30 | DPM_REACTION_COND_LIMITED_RETRIES, xhandler)
 
-#define DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_DFP_ONLY |\
-		DPM_REACTION_COND_PD30 | \
-		DPM_REACTION_COND_CHECK_ONCE, \
-		xhandler)
+#define DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(xmask, xhandler)	\
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_DFP_ONLY |	\
+		DPM_REACTION_COND_PD30 | DPM_REACTION_COND_CHECK_ONCE, xhandler)
 
 #define DECL_DPM_REACTION_DFP_PD30_RUN_ONCE(xmask, xhandler) \
-	DECL_DPM_REACTION(xmask, \
-		DPM_REACTION_COND_DFP_ONLY |\
-		DPM_REACTION_COND_PD30 | \
-		DPM_REACTION_COND_CHECK_ONCE | \
-		DPM_REACTION_COND_ONE_SHOT, \
-		xhandler)
+	DECL_DPM_REACTION(xmask, DPM_REACTION_COND_DFP_ONLY |	\
+		DPM_REACTION_COND_PD30 | DPM_REACTION_COND_CHECK_ONCE |	\
+		DPM_REACTION_COND_ONE_SHOT, xhandler)
 
 static const struct dpm_ready_reaction dpm_reactions[] = {
 
 #ifdef CONFIG_USB_PD_REV30
 #ifdef CONFIG_USB_PD_DPM_AUTO_SEND_ALERT
-	DECL_DPM_REACTION_PD30(
-		DPM_REACTION_CAP_ALWAYS,
+	DECL_DPM_REACTION_PD30(DPM_REACTION_CAP_ALWAYS,
 		dpm_reaction_send_alert),
 #endif	/* CONFIG_USB_PD_DPM_AUTO_SEND_ALERT */
 #ifdef CONFIG_USB_PD_DPM_AUTO_GET_STATUS
-	DECL_DPM_REACTION_PD30(
-		DPM_REACTION_CAP_ALWAYS,
+	DECL_DPM_REACTION_PD30(DPM_REACTION_CAP_ALWAYS,
 		dpm_reaction_handle_alert),
 #endif	/* CONFIG_USB_PD_DPM_AUTO_GET_STATUS */
 #endif	/* CONFIG_USB_PD_REV30 */
 
 #ifdef CONFIG_USB_PD_DFP_FLOW_DELAY
-	DECL_DPM_REACTION_DFP(
-		DPM_REACTION_DFP_FLOW_DELAY,
+	DECL_DPM_REACTION_DFP(DPM_REACTION_DFP_FLOW_DELAY,
 		dpm_reaction_dfp_flow_delay),
 #endif	/* CONFIG_USB_PD_DFP_FLOW_DELAY */
 
 #ifdef CONFIG_USB_PD_UFP_FLOW_DELAY
-	DECL_DPM_REACTION_UFP(
-		DPM_REACTION_UFP_FLOW_DELAY,
+	DECL_DPM_REACTION_UFP(DPM_REACTION_UFP_FLOW_DELAY,
 		dpm_reaction_ufp_flow_delay),
 #endif	/* CONFIG_USB_PD_UFP_FLOW_DELAY */
 
-	DECL_DPM_REACTION_LIMITED_RETRIES(
-		DPM_REACTION_GET_SINK_CAP,
+	DECL_DPM_REACTION_LIMITED_RETRIES(DPM_REACTION_GET_SINK_CAP,
 		dpm_reaction_get_sink_cap),
 
-	DECL_DPM_REACTION_LIMITED_RETRIES(
-		DPM_REACTION_GET_SOURCE_CAP,
+	DECL_DPM_REACTION_LIMITED_RETRIES(DPM_REACTION_GET_SOURCE_CAP,
 		dpm_reaction_get_source_cap),
 
-	DECL_DPM_REACTION_LIMITED_RETRIES(
-		DPM_REACTION_ATTEMPT_GET_FLAG,
+	DECL_DPM_REACTION_LIMITED_RETRIES(DPM_REACTION_ATTEMPT_GET_FLAG,
 		dpm_reaction_attemp_get_flag),
 
 #ifdef CONFIG_USB_PD_REV30
-	DECL_DPM_REACTION_PD30_ONE_SHOT(
-		DPM_REACTION_GET_SOURCE_CAP_EXT,
+	DECL_DPM_REACTION_PD30_ONE_SHOT(DPM_REACTION_GET_SOURCE_CAP_EXT,
 		dpm_reaction_get_source_cap_ext),
 #endif	/* CONFIG_USB_PD_REV30 */
 
 #ifdef CONFIG_USB_PD_PR_SWAP
-	DECL_DPM_REACTION_CHECK_ONCE(
-		DPM_REACTION_REQUEST_PR_SWAP,
+	DECL_DPM_REACTION_CHECK_ONCE(DPM_REACTION_REQUEST_PR_SWAP,
 		dpm_reaction_request_pr_swap),
 #endif	/* CONFIG_USB_PD_PR_SWAP */
 
 #ifdef CONFIG_USB_PD_DR_SWAP
-	DECL_DPM_REACTION_CHECK_ONCE(
-		DPM_REACTION_REQUEST_DR_SWAP,
+	DECL_DPM_REACTION_CHECK_ONCE(DPM_REACTION_REQUEST_DR_SWAP,
 		dpm_reaction_request_dr_swap),
 #endif	/* CONFIG_USB_PD_DR_SWAP */
 
 #ifdef CONFIG_TCPC_VCONN_SUPPLY_MODE
-	DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(
-		DPM_REACTION_DYNAMIC_VCONN,
+	DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(DPM_REACTION_DYNAMIC_VCONN,
 		dpm_reaction_dynamic_vconn),
 #endif	/* CONFIG_TCPC_VCONN_SUPPLY_MODE */
 
 #ifdef CONFIG_USB_PD_DISCOVER_CABLE_REQUEST_VCONN
-	DECL_DPM_REACTION_DFP_PD30_RUN_ONCE(
-		DPM_REACTION_REQUEST_VCONN_SRC,
+	DECL_DPM_REACTION_DFP_PD30_RUN_ONCE(DPM_REACTION_REQUEST_VCONN_SRC,
 		dpm_reaction_request_vconn_source),
 #endif	/* CONFIG_USB_PD_DISCOVER_CABLE_REQUEST_VCONN */
 
 #ifdef CONFIG_USB_PD_VCONN_STABLE_DELAY
-	DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(
-		DPM_REACTION_VCONN_STABLE_DELAY,
+	DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(DPM_REACTION_VCONN_STABLE_DELAY,
 		dpm_reaction_vconn_stable_delay),
 #endif	/* CONFIG_USB_PD_VCONN_STABLE_DELAY */
 
 #ifdef CONFIG_USB_PD_DFP_READY_DISCOVER_ID
-	DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(
-		DPM_REACTION_DISCOVER_CABLE,
+	DECL_DPM_REACTION_DFP_PD30_CHECK_ONCE(DPM_REACTION_DISCOVER_CABLE,
 		pd_dpm_reaction_discover_cable),
 #endif	/* CONFIG_USB_PD_DFP_READY_DISCOVER_ID */
 
 #ifdef CONFIG_USB_PD_DISCOVER_CABLE_RETURN_VCONN
-	DECL_DPM_REACTION_DFP_PD30_RUN_ONCE(
-		DPM_REACTION_RETURN_VCONN_SRC,
+	DECL_DPM_REACTION_DFP_PD30_RUN_ONCE(DPM_REACTION_RETURN_VCONN_SRC,
 		dpm_reaction_return_vconn_source),
 #endif	/* CONFIG_USB_PD_DISCOVER_CABLE_RETURN_VCONN */
 
 #ifdef CONFIG_USB_PD_ATTEMP_DISCOVER_ID
-	DECL_DPM_REACTION_DFP_PD30_LIMITED_RETRIES(
-		DPM_REACTION_DISCOVER_ID,
+	DECL_DPM_REACTION_DFP_PD30_LIMITED_RETRIES(DPM_REACTION_DISCOVER_ID,
 		dpm_reaction_discover_id),
 #endif	/* CONFIG_USB_PD_ATTEMP_DISCOVER_ID */
 
 #ifdef CONFIG_USB_PD_ATTEMP_DISCOVER_SVID
-	DECL_DPM_REACTION_DFP_PD30_LIMITED_RETRIES(
-		DPM_REACTION_DISCOVER_SVID,
+	DECL_DPM_REACTION_DFP_PD30_LIMITED_RETRIES(DPM_REACTION_DISCOVER_SVID,
 		dpm_reaction_discover_svid),
 #endif	/* CONFIG_USB_PD_ATTEMP_DISCOVER_SVID */
 
 #ifdef CONFIG_USB_PD_MODE_OPERATION
-	DECL_DPM_REACTION_ALWAYS(
-		dpm_reaction_mode_operation),
+	DECL_DPM_REACTION_ALWAYS(dpm_reaction_mode_operation),
 #endif	/* CONFIG_USB_PD_MODE_OPERATION */
 
-	DECL_DPM_REACTION_ALWAYS(
-		dpm_reaction_update_pe_ready),
+	DECL_DPM_REACTION_ALWAYS(dpm_reaction_update_pe_ready),
 };
 
 /**
@@ -667,8 +612,7 @@ static inline bool dpm_check_reaction_busy(struct pd_port *pd_port,
 	if (reaction->bit_mask & DPM_REACTION_CAP_ALWAYS)
 		return false;
 
-	return !dpm_reaction_check(
-			pd_port, DPM_REACTION_CAP_READY_ONCE);
+	return !dpm_reaction_check(pd_port, DPM_REACTION_CAP_READY_ONCE);
 }
 
 /**
@@ -747,8 +691,7 @@ uint8_t pd_dpm_get_ready_reaction(struct pd_port *pd_port)
 	uint8_t env;
 	uint32_t clear_reaction = DPM_REACTION_CAP_READY_ONCE;
 	const struct dpm_ready_reaction *reaction = dpm_reactions;
-	const struct dpm_ready_reaction *reaction_last =
-			dpm_reactions + ARRAY_SIZE(dpm_reactions);
+	const struct dpm_ready_reaction *reaction_last = dpm_reactions + ARRAY_SIZE(dpm_reactions);
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	env = dpm_get_reaction_env(pd_port);

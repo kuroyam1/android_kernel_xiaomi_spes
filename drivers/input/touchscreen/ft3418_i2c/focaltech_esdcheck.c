@@ -98,7 +98,7 @@ int idc_esdcheck_lcderror(struct fts_ts_data *ts_data)
 
 	ret = fts_read_reg(FTS_REG_ESD_SATURATE, &val);
 	if ( ret < 0) {
-		FTS_ERROR("read reg0xED fail,ret:%d", ret);
+		FTS_ERROR("read reg0xED fail, ret:%d", ret);
 		return -EIO;
 	}
 
@@ -144,13 +144,13 @@ static bool get_chip_id(struct fts_ts_data *ts_data)
 		reg_addr = FTS_REG_CHIP_ID;
 		ret = fts_read(&reg_addr, 1, &reg_value, 1);
 		if (ret < 0) {
-			FTS_ERROR("read chip id fail,ret:%d", ret);
+			FTS_ERROR("read chip id fail, ret:%d", ret);
 			fts_esdcheck_data.nack_cnt++;
 		} else {
 			if (reg_value == chip_id) {
 				break;
 			} else {
-				FTS_DEBUG("read chip_id:%x,retry:%d", reg_value, i);
+				FTS_DEBUG("read chip_id: %x, retry: %d", reg_value, i);
 				fts_esdcheck_data.dataerror_cnt++;
 			}
 		}
@@ -183,11 +183,11 @@ static bool get_flow_cnt(struct fts_ts_data *ts_data)
 	reg_addr = FTS_REG_FLOW_WORK_CNT;
 	ret = fts_read(&reg_addr, 1, &reg_value, 1);
 	if (ret < 0) {
-		FTS_ERROR("read reg0x91 fail,ret:%d", ret);
+		FTS_ERROR("read reg0x91 fail, ret:%d", ret);
 		fts_esdcheck_data.nack_cnt++;
 	} else {
 		if ( reg_value == fts_esdcheck_data.flow_work_cnt_last ) {
-			FTS_DEBUG("reg0x91,val:%x,last:%x", reg_value,
+			FTS_DEBUG("reg0x91, val: %x, last: %x", reg_value,
 					fts_esdcheck_data.flow_work_cnt_last);
 			fts_esdcheck_data.flow_work_hold_cnt++;
 		} else {
@@ -243,7 +243,7 @@ static int esdcheck_algorithm(struct fts_ts_data *ts_data)
 	ret = fts_read_reg(reg_addr, &reg_value);
 	if ( ret < 0 ) {
 		fts_esdcheck_data.nack_cnt++;
-	} else if ( (reg_value & 0x70) != FTS_REG_WORKMODE_WORK_VALUE) {
+	} else if ((reg_value & 0x70) != FTS_REG_WORKMODE_WORK_VALUE) {
 		FTS_DEBUG("not in work mode(%x), no check esd", reg_value);
 		return 0;
 	}
@@ -369,8 +369,8 @@ int fts_esdcheck_resume( void )
 }
 
 static ssize_t fts_esdcheck_store(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t count)
+			  struct device_attribute *attr,
+			  const char *buf, size_t count)
 {
 	struct input_dev *input_dev = fts_data->input_dev;
 
@@ -389,8 +389,9 @@ static ssize_t fts_esdcheck_store(struct device *dev,
 	return count;
 }
 
-static ssize_t fts_esdcheck_show(
-	struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t fts_esdcheck_show(struct device *dev,
+			  struct device_attribute *attr,
+			  char *buf)
 {
 	int count;
 	struct input_dev *input_dev = fts_data->input_dev;
@@ -424,11 +425,11 @@ int fts_create_esd_sysfs(struct device *dev)
 	int ret = 0;
 
 	ret = sysfs_create_group(&dev->kobj, &fts_esd_group);
-	if ( ret != 0) {
+	if (ret) {
 		FTS_ERROR("fts_create_esd_sysfs(sysfs) create fail");
-		sysfs_remove_group(&dev->kobj, &fts_esd_group);
 		return ret;
 	}
+
 	return 0;
 }
 
@@ -456,6 +457,7 @@ int fts_esdcheck_init(struct fts_ts_data *ts_data)
 
 int fts_esdcheck_exit(struct fts_ts_data *ts_data)
 {
+	cancel_delayed_work_sync(&ts_data->esdcheck_work);
 	sysfs_remove_group(&ts_data->dev->kobj, &fts_esd_group);
 	return 0;
 }

@@ -215,6 +215,12 @@ struct usbpd_pm {
 	bool jeita_triggered;
 	bool is_temp_out_fc2_range;
 	bool bq_cool_warm_done;
+
+	int ibus_limit;
+	int fcc_limit;
+	int tune_vbus_retry;
+	bool stop_sw;
+	bool recover;
 };
 
 struct pdpm_config {

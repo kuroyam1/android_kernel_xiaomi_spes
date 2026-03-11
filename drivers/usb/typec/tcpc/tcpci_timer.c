@@ -31,26 +31,26 @@
 #define RT_MASK64(i)	(((uint64_t)1) << i)
 
 #define TIMEOUT_VAL(val)	(val * 1000)
-#define TIMEOUT_RANGE(min, max)		((min * 4000 + max * 1000)/5)
+#define TIMEOUT_RANGE(min, max)		((min * 4000 + max * 1000) / 5)
 #define TIMEOUT_VAL_US(val)	(val)
 
 /* Debug message Macro */
 #if TCPC_TIMER_DBG_EN
 #define TCPC_TIMER_DBG(tcpc, id)				\
-{								\
+do {								\
 	RT_DBG_INFO("Trigger %s\n", tcpc_timer_name[id]);	\
-}
+} while (0)
 #else
-#define TCPC_TIMER_DBG(format, args...)
+#define TCPC_TIMER_DBG(tcpc, id)	((void)0)
 #endif /* TCPC_TIMER_DBG_EN */
 
 #if TCPC_TIMER_INFO_EN
 #define TCPC_TIMER_EN_DBG(tcpc, id)				\
-{								\
+do {								\
 	RT_DBG_INFO("Enable %s\n", tcpc_timer_name[id]);	\
-}
+} while (0)
 #else
-#define TCPC_TIMER_EN_DBG(format, args...)
+#define TCPC_TIMER_EN_DBG(tcpc, id)	((void)0)
 #endif /* TCPC_TIMER_INFO_EN */
 
 static inline void tcpc_clear_timer_tick(struct tcpc_device *tcpc, int nr);
@@ -69,8 +69,7 @@ static inline uint64_t tcpc_get_timer_enable_mask(struct tcpc_device *tcpc)
 	return data;
 }
 
-static inline void tcpc_clear_timer_enable_mask(
-	struct tcpc_device *tcpc, int nr)
+static inline void tcpc_clear_timer_enable_mask(struct tcpc_device *tcpc, int nr)
 {
 	unsigned long flags;
 
@@ -86,8 +85,7 @@ static inline void tcpc_clear_timer_enable_mask(
 	up(&tcpc->timer_enable_mask_lock);
 }
 
-static inline void tcpc_set_timer_enable_mask(
-	struct tcpc_device *tcpc, int nr)
+static inline void tcpc_set_timer_enable_mask(struct tcpc_device *tcpc, int nr)
 {
 	unsigned long flags;
 
@@ -370,8 +368,7 @@ DECL_TCPC_TIMEOUT(TYPEC_TIMER_NORP_SRC, 300),
 typedef enum hrtimer_restart (*tcpc_hrtimer_call)(struct hrtimer *timer);
 
 #ifdef CONFIG_USB_POWER_DELIVERY
-static inline void on_pe_timer_timeout(
-		struct tcpc_device *tcpc, uint32_t timer_id)
+static inline void on_pe_timer_timeout(struct tcpc_device *tcpc, uint32_t timer_id)
 {
 	struct pd_event pd_event = {0};
 
@@ -388,11 +385,9 @@ static inline void on_pe_timer_timeout(
 	case PD_TIMER_UVDM_RESPONSE:
 		pd_put_vdm_event(tcpc, &pd_event, false);
 		break;
-
 	case PD_TIMER_VSAFE0V_DELAY:
 		pd_put_vbus_safe0v_event(tcpc);
 		break;
-
 #ifdef CONFIG_USB_PD_SAFE0V_TIMEOUT
 	case PD_TIMER_VSAFE0V_TOUT:
 		TCPC_INFO("VSafe0V TOUT (%d)\n", tcpc->vbus_level);
@@ -400,31 +395,26 @@ static inline void on_pe_timer_timeout(
 			pd_put_vbus_safe0v_event(tcpc);
 		break;
 #endif	/* CONFIG_USB_PD_SAFE0V_TIMEOUT */
-
 #ifdef CONFIG_USB_PD_RETRY_CRC_DISCARD
 	case PD_TIMER_DISCARD:
 		tcpc->pd_discard_pending = false;
 		pd_put_hw_event(tcpc, PD_HW_TX_FAILED);
 		break;
 #endif	/* CONFIG_USB_PD_RETRY_CRC_DISCARD */
-
 #if CONFIG_USB_PD_VBUS_STABLE_TOUT
 	case PD_TIMER_VBUS_STABLE:
 		pd_put_vbus_stable_event(tcpc);
 		break;
 #endif	/* CONFIG_USB_PD_VBUS_STABLE_TOUT */
-
 	case PD_PE_VDM_POSTPONE:
 		tcpc->pd_postpone_vdm_timeout = true;
 		atomic_inc(&tcpc->pending_event);
 		wake_up(&tcpc->event_wait_que);
 		break;
-
 	case PD_TIMER_PE_IDLE_TOUT:
 		TCPC_INFO("pe_idle tout\n");
 		pd_put_pe_event(&tcpc->pd_port, PD_PE_IDLE);
 		break;
-
 	default:
 		pd_put_event(tcpc, &pd_event, false);
 		break;
@@ -432,8 +422,8 @@ static inline void on_pe_timer_timeout(
 }
 #endif	/* CONFIG_USB_POWER_DELIVERY */
 
-#define TCPC_TIMER_TRIGGER()	do \
-{				\
+#define TCPC_TIMER_TRIGGER()	\
+do {				\
 	tcpc_set_timer_tick(tcpc, index);	\
 	wake_up(&tcpc->timer_wait_que);	\
 } while (0)
@@ -442,8 +432,7 @@ static inline void on_pe_timer_timeout(
 static enum hrtimer_restart tcpc_timer_bist_cont_mode(struct hrtimer *timer)
 {
 	int index = PD_TIMER_BIST_CONT_MODE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -452,19 +441,16 @@ static enum hrtimer_restart tcpc_timer_bist_cont_mode(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_discover_id(struct hrtimer *timer)
 {
 	int index = PD_TIMER_DISCOVER_ID;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
 }
 
-static enum hrtimer_restart
-	tcpc_timer_hard_reset_complete(struct hrtimer *timer)
+static enum hrtimer_restart tcpc_timer_hard_reset_complete(struct hrtimer *timer)
 {
 	int index = PD_TIMER_HARD_RESET_COMPLETE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -473,8 +459,7 @@ static enum hrtimer_restart
 static enum hrtimer_restart tcpc_timer_no_response(struct hrtimer *timer)
 {
 	int index = PD_TIMER_NO_RESPONSE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -483,8 +468,7 @@ static enum hrtimer_restart tcpc_timer_no_response(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_ps_hard_reset(struct hrtimer *timer)
 {
 	int index = PD_TIMER_PS_HARD_RESET;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -493,8 +477,7 @@ static enum hrtimer_restart tcpc_timer_ps_hard_reset(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_ps_source_off(struct hrtimer *timer)
 {
 	int index = PD_TIMER_PS_SOURCE_OFF;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -503,8 +486,7 @@ static enum hrtimer_restart tcpc_timer_ps_source_off(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_ps_source_on(struct hrtimer *timer)
 {
 	int index = PD_TIMER_PS_SOURCE_ON;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -513,8 +495,7 @@ static enum hrtimer_restart tcpc_timer_ps_source_on(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_ps_transition(struct hrtimer *timer)
 {
 	int index = PD_TIMER_PS_TRANSITION;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -523,8 +504,7 @@ static enum hrtimer_restart tcpc_timer_ps_transition(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_sender_response(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SENDER_RESPONSE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -533,8 +513,7 @@ static enum hrtimer_restart tcpc_timer_sender_response(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_sink_request(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SINK_REQUEST;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -543,8 +522,7 @@ static enum hrtimer_restart tcpc_timer_sink_request(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_sink_wait_cap(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SINK_WAIT_CAP;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -553,8 +531,7 @@ static enum hrtimer_restart tcpc_timer_sink_wait_cap(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_source_capability(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SOURCE_CAPABILITY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -563,8 +540,7 @@ static enum hrtimer_restart tcpc_timer_source_capability(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_source_start(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SOURCE_START;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -573,8 +549,7 @@ static enum hrtimer_restart tcpc_timer_source_start(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vconn_on(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VCONN_ON;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -584,8 +559,7 @@ static enum hrtimer_restart tcpc_timer_vconn_on(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vconn_stable(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VCONN_STABLE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -595,8 +569,7 @@ static enum hrtimer_restart tcpc_timer_vconn_stable(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vdm_mode_entry(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VDM_MODE_ENTRY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -605,8 +578,7 @@ static enum hrtimer_restart tcpc_timer_vdm_mode_entry(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vdm_mode_exit(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VDM_MODE_EXIT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -615,8 +587,7 @@ static enum hrtimer_restart tcpc_timer_vdm_mode_exit(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vdm_response(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VDM_RESPONSE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -625,8 +596,7 @@ static enum hrtimer_restart tcpc_timer_vdm_response(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_source_transition(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SOURCE_TRANSITION;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -635,8 +605,7 @@ static enum hrtimer_restart tcpc_timer_source_transition(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_src_recover(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SRC_RECOVER;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -646,8 +615,7 @@ static enum hrtimer_restart tcpc_timer_src_recover(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_ck_no_support(struct hrtimer *timer)
 {
 	int index = PD_TIMER_CK_NOT_SUPPORTED;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -657,8 +625,7 @@ static enum hrtimer_restart tcpc_timer_ck_no_support(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_sink_tx(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SINK_TX;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -669,8 +636,7 @@ static enum hrtimer_restart tcpc_timer_sink_tx(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_source_pps(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SOURCE_PPS_TIMEOUT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -682,8 +648,7 @@ static enum hrtimer_restart tcpc_timer_source_pps(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_hard_reset_safe0v(struct hrtimer *timer)
 {
 	int index = PD_TIMER_HARD_RESET_SAFE0V;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -692,8 +657,7 @@ static enum hrtimer_restart tcpc_timer_hard_reset_safe0v(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_hard_reset_safe5v(struct hrtimer *timer)
 {
 	int index = PD_TIMER_HARD_RESET_SAFE5V;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -703,8 +667,7 @@ static enum hrtimer_restart tcpc_timer_hard_reset_safe5v(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vsafe0v_delay(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VSAFE0V_DELAY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -713,8 +676,7 @@ static enum hrtimer_restart tcpc_timer_vsafe0v_delay(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vsafe0v_tout(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VSAFE0V_TOUT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -723,8 +685,7 @@ static enum hrtimer_restart tcpc_timer_vsafe0v_tout(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_pd_discard(struct hrtimer *timer)
 {
 	int index = PD_TIMER_DISCARD;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -733,8 +694,7 @@ static enum hrtimer_restart tcpc_timer_pd_discard(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vbus_stable(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VBUS_STABLE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -743,8 +703,7 @@ static enum hrtimer_restart tcpc_timer_vbus_stable(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_uvdm_response(struct hrtimer *timer)
 {
 	int index = PD_TIMER_UVDM_RESPONSE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -753,8 +712,7 @@ static enum hrtimer_restart tcpc_timer_uvdm_response(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_dfp_flow_delay(struct hrtimer *timer)
 {
 	int index = PD_TIMER_DFP_FLOW_DELAY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -763,8 +721,7 @@ static enum hrtimer_restart tcpc_timer_dfp_flow_delay(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_ufp_flow_delay(struct hrtimer *timer)
 {
 	int index = PD_TIMER_UFP_FLOW_DELAY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -773,8 +730,7 @@ static enum hrtimer_restart tcpc_timer_ufp_flow_delay(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vconn_ready(struct hrtimer *timer)
 {
 	int index = PD_TIMER_VCONN_READY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -783,8 +739,7 @@ static enum hrtimer_restart tcpc_timer_vconn_ready(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_vdm_postpone(struct hrtimer *timer)
 {
 	int index = PD_PE_VDM_POSTPONE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -795,8 +750,7 @@ static enum hrtimer_restart tcpc_timer_vdm_postpone(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_deferred_evt(struct hrtimer *timer)
 {
 	int index = PD_TIMER_DEFERRED_EVT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -806,8 +760,7 @@ static enum hrtimer_restart tcpc_timer_deferred_evt(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_snk_flow_delay(struct hrtimer *timer)
 {
 	int index = PD_TIMER_SNK_FLOW_DELAY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -819,8 +772,7 @@ static enum hrtimer_restart tcpc_timer_snk_flow_delay(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_pe_idle_tout(struct hrtimer *timer)
 {
 	int index = PD_TIMER_PE_IDLE_TOUT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -833,8 +785,7 @@ static enum hrtimer_restart tcpc_timer_pe_idle_tout(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_vsafe0v_delay(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_SAFE0V_DELAY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -843,8 +794,7 @@ static enum hrtimer_restart tcpc_timer_rt_vsafe0v_delay(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_vsafe0v_tout(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_SAFE0V_TOUT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -853,8 +803,7 @@ static enum hrtimer_restart tcpc_timer_rt_vsafe0v_tout(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_role_swap_start(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_ROLE_SWAP_START;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -863,8 +812,7 @@ static enum hrtimer_restart tcpc_timer_rt_role_swap_start(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_role_swap_stop(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_ROLE_SWAP_STOP;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -873,8 +821,7 @@ static enum hrtimer_restart tcpc_timer_rt_role_swap_stop(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_legacy(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_STATE_CHANGE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -883,8 +830,7 @@ static enum hrtimer_restart tcpc_timer_rt_legacy(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_not_legacy(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_NOT_LEGACY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -893,8 +839,7 @@ static enum hrtimer_restart tcpc_timer_rt_not_legacy(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_legacy_stable(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_LEGACY_STABLE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -903,8 +848,7 @@ static enum hrtimer_restart tcpc_timer_rt_legacy_stable(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_legacy_recycle(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_LEGACY_RECYCLE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -913,8 +857,7 @@ static enum hrtimer_restart tcpc_timer_rt_legacy_recycle(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_discharge(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_DISCHARGE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -923,8 +866,7 @@ static enum hrtimer_restart tcpc_timer_rt_discharge(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_low_power_mode(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_LOW_POWER_MODE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -934,8 +876,7 @@ static enum hrtimer_restart tcpc_timer_rt_low_power_mode(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_pe_idle(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_PE_IDLE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -945,8 +886,7 @@ static enum hrtimer_restart tcpc_timer_rt_pe_idle(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_rt_pd_wait_bc12(struct hrtimer *timer)
 {
 	int index = TYPEC_RT_TIMER_PD_WAIT_BC12;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -958,8 +898,7 @@ static enum hrtimer_restart tcpc_timer_rt_pd_wait_bc12(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_try_drp_try(struct hrtimer *timer)
 {
 	int index = TYPEC_TRY_TIMER_DRP_TRY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -968,8 +907,7 @@ static enum hrtimer_restart tcpc_timer_try_drp_try(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_try_drp_trywait(struct hrtimer *timer)
 {
 	int index = TYPEC_TRY_TIMER_DRP_TRYWAIT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -979,8 +917,7 @@ static enum hrtimer_restart tcpc_timer_try_drp_trywait(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_ccdebounce(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_CCDEBOUNCE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -989,8 +926,7 @@ static enum hrtimer_restart tcpc_timer_ccdebounce(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_pddebounce(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_PDDEBOUNCE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -999,8 +935,7 @@ static enum hrtimer_restart tcpc_timer_pddebounce(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_apple_cc_open(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_APPLE_CC_OPEN;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -1009,8 +944,7 @@ static enum hrtimer_restart tcpc_timer_apple_cc_open(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_tryccdebounce(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_TRYCCDEBOUNCE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -1019,8 +953,7 @@ static enum hrtimer_restart tcpc_timer_tryccdebounce(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_srcdisconnect(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_SRCDISCONNECT;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -1029,8 +962,7 @@ static enum hrtimer_restart tcpc_timer_srcdisconnect(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_error_recovery(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_ERROR_RECOVERY;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -1038,8 +970,7 @@ static enum hrtimer_restart tcpc_timer_error_recovery(struct hrtimer *timer)
 
 static void wake_up_work_func(struct work_struct *work)
 {
-	struct tcpc_device *tcpc = container_of(
-			work, struct tcpc_device, wake_up_work.work);
+	struct tcpc_device *tcpc = container_of(work, struct tcpc_device, wake_up_work.work);
 
 	mutex_lock(&tcpc->typec_lock);
 
@@ -1054,11 +985,9 @@ static void wake_up_work_func(struct work_struct *work)
 	__pm_relax(tcpc->wakeup_wake_lock);
 }
 
-static enum alarmtimer_restart
-	tcpc_timer_wakeup(struct alarm *alarm, ktime_t now)
+static enum alarmtimer_restart tcpc_timer_wakeup(struct alarm *alarm, ktime_t now)
 {
-	struct tcpc_device *tcpc =
-		container_of(alarm, struct tcpc_device, wake_up_timer);
+	struct tcpc_device *tcpc = container_of(alarm, struct tcpc_device, wake_up_timer);
 
 	pm_wakeup_ws_event(tcpc->wakeup_wake_lock, 1000, true);
 	schedule_delayed_work(&tcpc->wake_up_work, 0);
@@ -1068,8 +997,7 @@ static enum alarmtimer_restart
 static enum hrtimer_restart tcpc_timer_drp_src_toggle(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_DRP_SRC_TOGGLE;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -1079,8 +1007,7 @@ static enum hrtimer_restart tcpc_timer_drp_src_toggle(struct hrtimer *timer)
 static enum hrtimer_restart tcpc_timer_norp_src(struct hrtimer *timer)
 {
 	int index = TYPEC_TIMER_NORP_SRC;
-	struct tcpc_device *tcpc =
-		container_of(timer, struct tcpc_device, tcpc_timer[index]);
+	struct tcpc_device *tcpc = container_of(timer, struct tcpc_device, tcpc_timer[index]);
 
 	TCPC_TIMER_TRIGGER();
 	return HRTIMER_NORESTART;
@@ -1200,15 +1127,14 @@ static void __tcpc_enable_wakeup_timer(struct tcpc_device *tcpc, bool en)
 			else
 				tout = 20;
 		}
-#endif  /* CONFIG_TYPEC_WAKEUP_ONCE_LOW_DUTY */
+#endif	/* CONFIG_TYPEC_WAKEUP_ONCE_LOW_DUTY */
 
 		alarm_start_relative(&tcpc->wake_up_timer, ktime_set(tout, 0));
 	} else
 		alarm_cancel(&tcpc->wake_up_timer);
 }
 
-static inline void tcpc_reset_timer_range(
-		struct tcpc_device *tcpc, int start, int end)
+static inline void tcpc_reset_timer_range(struct tcpc_device *tcpc, int start, int end)
 {
 	int i;
 	uint64_t mask;
@@ -1248,6 +1174,7 @@ void tcpc_enable_timer(struct tcpc_device *tcpc, uint32_t timer_id)
 		PD_BUG_ON(1);
 		return;
 	}
+
 	mutex_lock(&tcpc->timer_lock);
 	if (timer_id >= TYPEC_TIMER_START_ID)
 		tcpc_reset_timer_range(tcpc, TYPEC_TIMER_START_ID, PD_TIMER_NR);
@@ -1257,17 +1184,15 @@ void tcpc_enable_timer(struct tcpc_device *tcpc, uint32_t timer_id)
 	tout = tcpc_timer_timeout[timer_id];
 
 #ifdef CONFIG_USB_PD_RANDOM_FLOW_DELAY
-	if (timer_id == PD_TIMER_DFP_FLOW_DELAY ||
-		timer_id == PD_TIMER_UFP_FLOW_DELAY)
+	if (timer_id == PD_TIMER_DFP_FLOW_DELAY || timer_id == PD_TIMER_UFP_FLOW_DELAY)
 		tout += TIMEOUT_VAL(jiffies & 0x07);
 #endif	/* CONFIG_USB_PD_RANDOM_FLOW_DELAY */
 
-	r =  tout / 1000000;
+	r = tout / 1000000;
 	mod = tout % 1000000;
 
 	mutex_unlock(&tcpc->timer_lock);
-	hrtimer_start(&tcpc->tcpc_timer[timer_id],
-				ktime_set(r, mod*1000), HRTIMER_MODE_REL);
+	hrtimer_start(&tcpc->tcpc_timer[timer_id], ktime_set(r, mod*1000), HRTIMER_MODE_REL);
 }
 
 void tcpc_disable_timer(struct tcpc_device *tcpc, uint32_t timer_id)
@@ -1280,6 +1205,7 @@ void tcpc_disable_timer(struct tcpc_device *tcpc, uint32_t timer_id)
 		PD_BUG_ON(1);
 		return;
 	}
+
 	if (mask & RT_MASK64(timer_id)) {
 		hrtimer_try_to_cancel(&tcpc->tcpc_timer[timer_id]);
 		tcpc_clear_timer_enable_mask(tcpc, timer_id);
@@ -1350,8 +1276,7 @@ static int tcpc_timer_thread_fn(void *data)
 	sched_setscheduler(current, SCHED_FIFO, &sch_param);
 
 	while (true) {
-		wait_event(tcpc->timer_wait_que, tcpc_get_timer_tick(tcpc) ||
-						 kthread_should_stop());
+		wait_event(tcpc->timer_wait_que, tcpc_get_timer_tick(tcpc) || kthread_should_stop());
 		if (kthread_should_stop())
 			break;
 		tcpc_handle_timer_triggered(tcpc);
@@ -1369,15 +1294,12 @@ int tcpci_timer_init(struct tcpc_device *tcpc)
 	init_waitqueue_head(&tcpc->timer_wait_que);
 	tcpc->timer_tick = 0;
 	tcpc->timer_enable_mask = 0;
-	tcpc->timer_task = kthread_run(tcpc_timer_thread_fn, tcpc,
-				       "tcpc_timer_%s", tcpc->desc.name);
+	tcpc->timer_task = kthread_run(tcpc_timer_thread_fn, tcpc, "tcpc_timer_%s", tcpc->desc.name);
 	for (i = 0; i < PD_TIMER_NR; i++) {
-		hrtimer_init(&tcpc->tcpc_timer[i],
-					CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		hrtimer_init(&tcpc->tcpc_timer[i], CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 		tcpc->tcpc_timer[i].function = tcpc_timer_call[i];
 	}
-	tcpc->wakeup_wake_lock =
-		wakeup_source_register(&tcpc->dev, "tcpc_wakeup_wake_lock");
+	tcpc->wakeup_wake_lock = wakeup_source_register(&tcpc->dev, "tcpc_wakeup_wake_lock");
 	INIT_DELAYED_WORK(&tcpc->wake_up_work, wake_up_work_func);
 	alarm_init(&tcpc->wake_up_timer, ALARM_REALTIME, tcpc_timer_wakeup);
 

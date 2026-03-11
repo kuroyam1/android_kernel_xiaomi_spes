@@ -45,6 +45,8 @@
 #define I2C_ADDR_DEBUG	(0xC4 >> 1)
 
 #define I2C_RETRY_CNT	3
+#define WRITE_TIMEOUT_MS	2000
+#define WRITE_INTERVAL_MS	100
 
 /*
  * pmic revision information
@@ -56,27 +58,102 @@ static struct mfd_cell max77729_devs[] = {
 	{ .name = "max77729-charger", },
 };
 
-int max77729_read_reg(struct i2c_client *i2c, u8 reg, u8 *dest)
+static int __i2c_read_byte(struct i2c_client *i2c, u8 reg, int *out)
 {
-	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
 	int ret, i;
 
-	mutex_lock(&max77729->i2c_lock);
 	for (i = 0; i < I2C_RETRY_CNT; ++i) {
 		ret = i2c_smbus_read_byte_data(i2c, reg);
 		if (ret >= 0)
 			break;
-		/* pr_info("%s:%s reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-				/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-	}
-	mutex_unlock(&max77729->i2c_lock);
-	if (ret < 0) {
-		/* pr_info("%s: %s: reg(0x%x), ret(%d)\n", MFD_DEV_NAME, __func__, reg, ret); */
-		return ret;
+		udelay(200);
 	}
 
-	ret &= 0xff;
-	*dest = ret;
+	*out = ret;
+	return ret;
+}
+
+static int __i2c_read_block(struct i2c_client *i2c, u8 reg, int count, u8 *buf)
+{
+	int ret, i;
+
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = i2c_smbus_read_i2c_block_data(i2c, reg, count, buf);
+		if (ret >= 0)
+			break;
+		udelay(200);
+	}
+
+	return ret;
+}
+
+static int __i2c_read_word(struct i2c_client *i2c, u8 reg, int *out)
+{
+	int ret, i;
+
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = i2c_smbus_read_word_data(i2c, reg);
+		if (ret >= 0)
+			break;
+		udelay(200);
+	}
+
+	*out = ret;
+	return ret;
+}
+
+static int __i2c_write_byte(struct i2c_client *i2c, u8 reg, u8 value)
+{
+	int ret, i;
+
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = i2c_smbus_write_byte_data(i2c, reg, value);
+		if (ret >= 0)
+			break;
+		udelay(200);
+	}
+	return ret;
+}
+
+static int __i2c_write_block(struct i2c_client *i2c, u8 reg, int count, u8 *buf)
+{
+	int ret, i;
+
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = i2c_smbus_write_i2c_block_data(i2c, reg, count, buf);
+		if (ret >= 0)
+			break;
+		udelay(200);
+	}
+	return ret;
+}
+
+static int __i2c_write_word(struct i2c_client *i2c, u8 reg, u16 value)
+{
+	int ret, i;
+
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = i2c_smbus_write_word_data(i2c, reg, value);
+		if (ret >= 0)
+			break;
+		udelay(200);
+	}
+	return ret;
+}
+
+int max77729_read_reg(struct i2c_client *i2c, u8 reg, u8 *dest)
+{
+	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
+	int ret;
+
+	mutex_lock(&max77729->i2c_lock);
+	ret = __i2c_read_byte(i2c, reg, &ret);
+	mutex_unlock(&max77729->i2c_lock);
+
+	if (ret < 0)
+		return ret;
+
+	*dest = ret & 0xff;
 	return 0;
 }
 EXPORT_SYMBOL_GPL(max77729_read_reg);
@@ -84,37 +161,23 @@ EXPORT_SYMBOL_GPL(max77729_read_reg);
 int max77729_bulk_read(struct i2c_client *i2c, u8 reg, int count, u8 *buf)
 {
 	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
-	int ret, i;
+	int ret;
 
 	mutex_lock(&max77729->i2c_lock);
-	for (i = 0; i < I2C_RETRY_CNT; ++i) {
-		ret = i2c_smbus_read_i2c_block_data(i2c, reg, count, buf);
-		if (ret >= 0)
-			break;
-		/* pr_info("%s:%s reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-				/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-	}
+	ret = __i2c_read_block(i2c, reg, count, buf);
 	mutex_unlock(&max77729->i2c_lock);
-	if (ret < 0) {
-		return ret;
-	}
-	return 0;
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(max77729_bulk_read);
 
 int max77729_read_word(struct i2c_client *i2c, u8 reg)
 {
 	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
-	int ret, i;
+	int ret;
 
 	mutex_lock(&max77729->i2c_lock);
-	for (i = 0; i < I2C_RETRY_CNT; ++i) {
-		ret = i2c_smbus_read_word_data(i2c, reg);
-		if (ret >= 0)
-			break;
-		/* pr_info("%s:%s reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-				/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-	}
+	ret = __i2c_read_word(i2c, reg, &ret);
 	mutex_unlock(&max77729->i2c_lock);
 
 	return ret;
@@ -124,32 +187,27 @@ EXPORT_SYMBOL_GPL(max77729_read_word);
 int max77729_write_reg(struct i2c_client *i2c, u8 reg, u8 value)
 {
 	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
-	int ret = -EIO, i;
-	int timeout = 2000; /* 2sec */
-	int interval = 100;
+	int ret = -EIO;
+	int timeout = WRITE_TIMEOUT_MS;
 
 	while (ret == -EIO) {
 		mutex_lock(&max77729->i2c_lock);
-		for (i = 0; i < I2C_RETRY_CNT; ++i) {
-			ret = i2c_smbus_write_byte_data(i2c, reg, value);
-			if ((ret >= 0) || (ret == -EIO))
-				break;
-			/* pr_info("%s:%s reg(0x%02x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-					/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-		}
+		ret = __i2c_write_byte(i2c, reg, value);
 		mutex_unlock(&max77729->i2c_lock);
 
-		if (ret < 0) {
-			pr_info("[%s]: %s: reg(0x%x), ret(%d), timeout %d\n",
-					MFD_DEV_NAME, __func__, reg, ret, timeout);
+		if ((ret >= 0) || (ret != -EIO))
+			break;
 
-			if (timeout < 0)
-				break;
+		pr_info("[%s]: %s: reg(0x%02x), ret(%d), timeout %d\n",
+			MFD_DEV_NAME, __func__, reg, ret, timeout);
 
-			msleep(interval);
-			timeout -= interval;
-		}
+		if (timeout < 0)
+			break;
+
+		msleep(WRITE_INTERVAL_MS);
+		timeout -= WRITE_INTERVAL_MS;
 	}
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(max77729_write_reg);
@@ -157,23 +215,24 @@ EXPORT_SYMBOL_GPL(max77729_write_reg);
 int max77729_write_reg_nolock(struct i2c_client *i2c, u8 reg, u8 value)
 {
 	int ret = -EIO;
-	int timeout = 2000; /* 2sec */
-	int interval = 100;
+	int timeout = WRITE_TIMEOUT_MS;
 
 	while (ret == -EIO) {
-		ret = i2c_smbus_write_byte_data(i2c, reg, value);
+		ret = __i2c_write_byte(i2c, reg, value);
 
-		if (ret < 0) {
-			pr_info("[%s]: %s: reg(0x%x), ret(%d), timeout %d\n",
-					MFD_DEV_NAME, __func__, reg, ret, timeout);
+		if ((ret >= 0) || (ret != -EIO))
+			break;
 
-			if (timeout < 0)
-				break;
+		pr_info("[%s]: %s: reg(0x%02x), ret(%d), timeout %d\n",
+			MFD_DEV_NAME, __func__, reg, ret, timeout);
 
-			msleep(interval);
-			timeout -= interval;
-		}
+		if (timeout < 0)
+			break;
+
+		msleep(WRITE_INTERVAL_MS);
+		timeout -= WRITE_INTERVAL_MS;
 	}
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(max77729_write_reg_nolock);
@@ -181,32 +240,27 @@ EXPORT_SYMBOL_GPL(max77729_write_reg_nolock);
 int max77729_bulk_write(struct i2c_client *i2c, u8 reg, int count, u8 *buf)
 {
 	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
-	int ret = -EIO, i;
-	int timeout = 2000; /* 2sec */
-	int interval = 100;
+	int ret = -EIO;
+	int timeout = WRITE_TIMEOUT_MS;
 
 	while (ret == -EIO) {
 		mutex_lock(&max77729->i2c_lock);
-		for (i = 0; i < I2C_RETRY_CNT; ++i) {
-			ret = i2c_smbus_write_i2c_block_data(i2c, reg, count, buf);
-			if ((ret >= 0) || (ret == -EIO))
-				break;
-			/* pr_info("%s:%s reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-				/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-		}
+		ret = __i2c_write_block(i2c, reg, count, buf);
 		mutex_unlock(&max77729->i2c_lock);
 
-		if (ret < 0) {
-			pr_info("[%s]: %s: reg(0x%x), ret(%d), timeout %d\n",
-					MFD_DEV_NAME, __func__, reg, ret, timeout);
+		if ((ret >= 0) || (ret != -EIO))
+			break;
 
-			if (timeout < 0)
-				break;
+		pr_info("[%s]: %s: reg(0x%02x), ret(%d), timeout %d\n",
+			MFD_DEV_NAME, __func__, reg, ret, timeout);
 
-			msleep(interval);
-			timeout -= interval;
-		}
+		if (timeout < 0)
+			break;
+
+		msleep(WRITE_INTERVAL_MS);
+		timeout -= WRITE_INTERVAL_MS;
 	}
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(max77729_bulk_write);
@@ -214,56 +268,35 @@ EXPORT_SYMBOL_GPL(max77729_bulk_write);
 int max77729_write_word(struct i2c_client *i2c, u8 reg, u16 value)
 {
 	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
-	int ret, i;
+	int ret;
 
 	mutex_lock(&max77729->i2c_lock);
-	for (i = 0; i < I2C_RETRY_CNT; ++i) {
-		ret = i2c_smbus_write_word_data(i2c, reg, value);
-		if (ret >= 0)
-			break;
-		/* pr_info("%s:%s reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-				/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-	}
+	ret = __i2c_write_word(i2c, reg, value);
 	mutex_unlock(&max77729->i2c_lock);
-	if (ret < 0) {
-		return ret;
-	}
-	return 0;
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(max77729_write_word);
 
 int max77729_update_reg(struct i2c_client *i2c, u8 reg, u8 val, u8 mask)
 {
 	struct max77729_dev *max77729 = i2c_get_clientdata(i2c);
-	int ret, i;
+	int ret;
 	u8 old_val, new_val;
+	int tmp;
 
 	mutex_lock(&max77729->i2c_lock);
-	for (i = 0; i < I2C_RETRY_CNT; ++i) {
-		ret = i2c_smbus_read_byte_data(i2c, reg);
-		if (ret >= 0)
-			break;
-		/* pr_info("%s:%s read reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-				/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-	}
-	if (ret < 0) {
-		goto err;
-	}
-	if (ret >= 0) {
-		old_val = ret & 0xff;
-		new_val = (val & mask) | (old_val & (~mask));
-		for (i = 0; i < I2C_RETRY_CNT; ++i) {
-			ret = i2c_smbus_write_byte_data(i2c, reg, new_val);
-			if (ret >= 0)
-				break;
-			/* pr_info("%s:%s write reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n", */
-					/* MFD_DEV_NAME, __func__, reg, ret, i + 1, I2C_RETRY_CNT); */
-		}
-		if (ret < 0) {
-			goto err;
-		}
-	}
-err:
+
+	ret = __i2c_read_byte(i2c, reg, &tmp);
+	if (ret < 0)
+		goto out_unlock;
+
+	old_val = tmp & 0xff;
+	new_val = (val & mask) | (old_val & (~mask));
+
+	ret = __i2c_write_byte(i2c, reg, new_val);
+
+out_unlock:
 	mutex_unlock(&max77729->i2c_lock);
 	return ret;
 }

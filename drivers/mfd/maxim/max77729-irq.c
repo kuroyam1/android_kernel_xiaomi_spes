@@ -253,7 +253,6 @@ static irqreturn_t max77729_irq_thread(int irq, void *data)
 		}
 	}
 
-
 	if (irq_src & MAX77729_IRQSRC_FG) {
 		/* pr_err("[%s] fuelgauge interrupt\n", __func__); */
 		/* pr_debug("[%s]IRQ_BASE(%d), NESTED_IRQ(%d)\n", */

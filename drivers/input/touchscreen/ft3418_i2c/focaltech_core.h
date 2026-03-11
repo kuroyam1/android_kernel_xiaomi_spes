@@ -177,6 +177,7 @@ struct fts_ts_data {
 	struct fts_ts_platform_data *pdata;
 	struct ts_ic_info ic_info;
 	struct workqueue_struct *ts_workqueue;
+	struct workqueue_struct *pm_workqueue;
 	struct work_struct fwupg_work;
 	struct delayed_work esdcheck_work;
 	struct delayed_work prc_work;
@@ -266,12 +267,6 @@ void fts_gesture_recovery(struct fts_ts_data *ts_data);
 int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data);
 int fts_gesture_suspend(struct fts_ts_data *ts_data);
 int fts_gesture_resume(struct fts_ts_data *ts_data);
-
-/* FTS TEST */
-#if FTS_TEST_EN
-int fts_test_init(struct fts_ts_data *ts_data);
-int fts_test_exit(struct fts_ts_data *ts_data);
-#endif
 
 /* Apk and functions */
 int fts_create_apk_debug_channel(struct fts_ts_data *);

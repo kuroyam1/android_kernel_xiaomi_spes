@@ -332,6 +332,7 @@ static int32_t cam_sensor_driver_platform_probe(
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
 
 	return rc;
+
 unreg_subdev:
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));
 free_s_ctrl:
@@ -369,7 +370,6 @@ static struct i2c_driver cam_sensor_driver_i2c = {
 static int __init cam_sensor_driver_init(void)
 {
 	int32_t rc = 0;
-	CAM_INFO(CAM_SENSOR, "[wl2866d DEBUG]cam_sensor_driver_init E");
 
 	rc = platform_driver_register(&cam_sensor_platform_driver);
 	if (rc < 0) {
@@ -382,7 +382,6 @@ static int __init cam_sensor_driver_init(void)
 	if (rc)
 		CAM_ERR(CAM_SENSOR, "i2c_add_driver failed rc = %d", rc);
 
-	CAM_INFO(CAM_SENSOR, "[wl2866d DEBUG]sensor i2c_add_driver successful");
 	return rc;
 }
 
@@ -390,7 +389,6 @@ static void __exit cam_sensor_driver_exit(void)
 {
 	platform_driver_unregister(&cam_sensor_platform_driver);
 	i2c_del_driver(&cam_sensor_driver_i2c);
-	CAM_INFO(CAM_SENSOR, "[wl2866d DEBUG]sensor i2c_del_driver successful");
 }
 
 module_init(cam_sensor_driver_init);

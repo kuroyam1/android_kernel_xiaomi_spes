@@ -37,102 +37,138 @@ enum pd_pe_state_machine {
 #define PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT		(1<<6)
 #define PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER	(1<<7)
 
-#define PE_STATE_WAIT_RESPONSE(pd_port) {\
+#define PE_STATE_WAIT_RESPONSE(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; }
+		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; \
+}
 
-#define PE_STATE_WAIT_MSG(pd_port) {\
+#define PE_STATE_WAIT_MSG(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT |\
-	PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; }
+		PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT | \
+		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; \
+}
 
-#define PE_STATE_WAIT_MSG_HRESET_IF_TOUT(pd_port) {\
+#define PE_STATE_WAIT_MSG_HRESET_IF_TOUT(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_HRESET_IF_SR_TIMEOUT |\
-	PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; }
+		PE_STATE_FLAG_HRESET_IF_SR_TIMEOUT | \
+		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; \
+}
 
-#define PE_STATE_WAIT_MSG_OR_TX_FAILED(pd_port) {\
+#define PE_STATE_WAIT_MSG_OR_TX_FAILED(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_BACK_READY_IF_TX_FAILED |\
-	PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT |\
-	PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; }
+		PE_STATE_FLAG_BACK_READY_IF_TX_FAILED | \
+		PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT | \
+		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; \
+}
 
-#define PE_STATE_WAIT_MSG_OR_RJ(pd_port) {\
+#define PE_STATE_WAIT_MSG_OR_RJ(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_BACK_READY_IF_RECV_REJECT |\
-	PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT |\
-	PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; }
+		PE_STATE_FLAG_BACK_READY_IF_RECV_REJECT | \
+		PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT | \
+		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; \
+}
 
-#define PE_STATE_WAIT_ANSWER_MSG(pd_port)	{\
+#define PE_STATE_WAIT_ANSWER_MSG(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_BACK_READY_IF_RECV_WAIT |\
-	PE_STATE_FLAG_BACK_READY_IF_RECV_REJECT |\
-	PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT |\
-	PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; }
+		PE_STATE_FLAG_BACK_READY_IF_RECV_WAIT | \
+		PE_STATE_FLAG_BACK_READY_IF_RECV_REJECT | \
+		PE_STATE_FLAG_BACK_READY_IF_SR_TIMER_TOUT | \
+		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; \
+}
 
-#define PE_STATE_HRESET_IF_TX_FAILED(pd_port) {\
+#define PE_STATE_HRESET_IF_TX_FAILED(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_HRESET_IF_TX_FAILED; }
+		PE_STATE_FLAG_HRESET_IF_TX_FAILED; \
+}
 
-#define PE_STATE_IGNORE_UNKNOWN_EVENT(pd_port) {\
+#define PE_STATE_IGNORE_UNKNOWN_EVENT(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT; }
+		PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT; \
+}
 
-#define PE_STATE_RECV_SOFT_RESET(pd_port) {\
+#define PE_STATE_RECV_SOFT_RESET(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_HRESET_IF_TX_FAILED | \
-	PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT; }
+		PE_STATE_FLAG_HRESET_IF_TX_FAILED | \
+		PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT; \
+}
 
-#define PE_STATE_SEND_SOFT_RESET(pd_port) {\
+#define PE_STATE_SEND_SOFT_RESET(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags = \
-	PE_STATE_FLAG_HRESET_IF_TX_FAILED |\
-	PE_STATE_FLAG_HRESET_IF_SR_TIMEOUT |\
-	PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT |\
-	PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; }
+		PE_STATE_FLAG_HRESET_IF_TX_FAILED | \
+		PE_STATE_FLAG_HRESET_IF_SR_TIMEOUT | \
+		PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT | \
+		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER; \
+}
 
 #define PE_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC	(1<<0)
 #define PE_STATE_FLAG_BACK_READY_IF_DPM_ACK		(1<<1)
 #define PE_STATE_FLAG_DPM_ACK_IMMEDIATELY		(1<<7)
 
-#define PE_STATE_WAIT_TX_SUCCESS(pd_port)	{\
+#define PE_STATE_WAIT_TX_SUCCESS(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags2 = \
-	PE_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC; }
+		PE_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC; \
+}
 
-#define PE_STATE_DPM_INFORMED(pd_port)	{\
+#define PE_STATE_DPM_INFORMED(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags2 = \
-	PE_STATE_FLAG_BACK_READY_IF_DPM_ACK |\
-	PE_STATE_FLAG_DPM_ACK_IMMEDIATELY; }
+		PE_STATE_FLAG_BACK_READY_IF_DPM_ACK | \
+		PE_STATE_FLAG_DPM_ACK_IMMEDIATELY; \
+}
 
-#define PE_STATE_WAIT_DPM_ACK(pd_port) {\
+#define PE_STATE_WAIT_DPM_ACK(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags2 = \
-	PE_STATE_FLAG_BACK_READY_IF_DPM_ACK; }
+		PE_STATE_FLAG_BACK_READY_IF_DPM_ACK; \
+}
 
-#define PE_STATE_DPM_ACK_IMMEDIATELY(pd_port) {\
+#define PE_STATE_DPM_ACK_IMMEDIATELY(pd_port)	\
+{	\
 	pd_port->pe_data.pe_state_flags2 |= \
-	PE_STATE_FLAG_DPM_ACK_IMMEDIATELY; }
+		PE_STATE_FLAG_DPM_ACK_IMMEDIATELY; \
+}
 
 #define VDM_STATE_FLAG_ENABLE_VDM_RESPONSE_TIMER	(1<<0)
 #define VDM_STATE_FLAG_DPM_ACK_IMMEDIATELY		(1<<4)
 #define VDM_STATE_FLAG_BACK_READY_IF_DPM_ACK		(1<<6)
 #define VDM_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC	(1<<7)
 
-#define VDM_STATE_DPM_INFORMED(pd_port)	{\
+#define VDM_STATE_DPM_INFORMED(pd_port)	\
+{	\
 	pd_port->pe_data.vdm_state_flags = \
-	VDM_STATE_FLAG_BACK_READY_IF_DPM_ACK |\
-	VDM_STATE_FLAG_DPM_ACK_IMMEDIATELY; }
+		VDM_STATE_FLAG_BACK_READY_IF_DPM_ACK | \
+		VDM_STATE_FLAG_DPM_ACK_IMMEDIATELY; \
+}
 
-#define VDM_STATE_REPLY_SVDM_REQUEST(pd_port)	{\
+#define VDM_STATE_REPLY_SVDM_REQUEST(pd_port)	\
+{	\
 	pd_port->pe_data.vdm_state_flags = \
-		VDM_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC; }
+		VDM_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC; \
+}
 
-#define VDM_STATE_NORESP_CMD(pd_port)	{\
+#define VDM_STATE_NORESP_CMD(pd_port)	\
+{	\
 	pd_port->pe_data.vdm_state_flags = \
-		VDM_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC; }
+		VDM_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC; \
+}
 
-#define VDM_STATE_RESPONSE_CMD(pd_port, timer_id)	{\
+#define VDM_STATE_RESPONSE_CMD(pd_port, timer_id)	\
+{	\
 	pd_port->pe_data.vdm_state_flags = \
 		VDM_STATE_FLAG_ENABLE_VDM_RESPONSE_TIMER; \
-	pd_port->pe_data.vdm_state_timer = timer_id; }
+	pd_port->pe_data.vdm_state_timer = timer_id; \
+}
 
 static inline bool pd_check_pe_during_hard_reset(struct pd_port *pd_port)
 {
@@ -433,13 +469,11 @@ enum pd_pe_state {
 
 int pd_policy_engine_run(struct tcpc_device *tcpc);
 
-
 /* ---- Policy Engine (General) ---- */
 
 void pe_power_ready_entry(struct pd_port *pd_port);
 
-static inline void pe_send_swap_request_entry(
-		struct pd_port *pd_port, uint8_t msg)
+static inline void pe_send_swap_request_entry(struct pd_port *pd_port, uint8_t msg)
 {
 	PE_STATE_WAIT_ANSWER_MSG(pd_port);
 	pd_send_sop_ctrl_msg(pd_port, msg);
@@ -447,92 +481,59 @@ static inline void pe_send_swap_request_entry(
 
 /******************* Source *******************/
 #ifdef CONFIG_USB_PD_PE_SOURCE
-void pe_src_startup_entry(
-	struct pd_port *pd_port);
-void pe_src_discovery_entry(
-	struct pd_port *pd_port);
-void pe_src_send_capabilities_entry(
-	struct pd_port *pd_port);
-void pe_src_negotiate_capabilities_entry(
-	struct pd_port *pd_port);
-void pe_src_transition_supply_entry(
-	struct pd_port *pd_port);
-void pe_src_transition_supply_exit(
-	struct pd_port *pd_port);
-void pe_src_transition_supply2_entry(
-	struct pd_port *pd_port);
-void pe_src_ready_entry(
-	struct pd_port *pd_port);
-void pe_src_disabled_entry(
-	struct pd_port *pd_port);
-void pe_src_capability_response_entry(
-	struct pd_port *pd_port);
-void pe_src_hard_reset_entry(
-	struct pd_port *pd_port);
-void pe_src_hard_reset_received_entry(
-	struct pd_port *pd_port);
-void pe_src_transition_to_default_entry(
-	struct pd_port *pd_port);
-void pe_src_transition_to_default_exit(
-	struct pd_port *pd_port);
-void pe_src_get_sink_cap_entry(
-	struct pd_port *pd_port);
-void pe_src_get_sink_cap_exit(
-	struct pd_port *pd_port);
-void pe_src_wait_new_capabilities_entry(
-	struct pd_port *pd_port);
-void pe_src_send_soft_reset_entry(
-	struct pd_port *pd_port);
-void pe_src_soft_reset_entry(
-	struct pd_port *pd_port);
+void pe_src_startup_entry(struct pd_port *pd_port);
+void pe_src_discovery_entry(struct pd_port *pd_port);
+void pe_src_send_capabilities_entry(struct pd_port *pd_port);
+void pe_src_negotiate_capabilities_entry(struct pd_port *pd_port);
+void pe_src_transition_supply_entry(struct pd_port *pd_port);
+void pe_src_transition_supply_exit(struct pd_port *pd_port);
+void pe_src_transition_supply2_entry(struct pd_port *pd_port);
+void pe_src_ready_entry(struct pd_port *pd_port);
+void pe_src_disabled_entry(struct pd_port *pd_port);
+void pe_src_capability_response_entry(struct pd_port *pd_port);
+void pe_src_hard_reset_entry(struct pd_port *pd_port);
+void pe_src_hard_reset_received_entry(struct pd_port *pd_port);
+void pe_src_transition_to_default_entry(struct pd_port *pd_port);
+void pe_src_transition_to_default_exit(struct pd_port *pd_port);
+void pe_src_get_sink_cap_entry(struct pd_port *pd_port);
+void pe_src_get_sink_cap_exit(struct pd_port *pd_port);
+void pe_src_wait_new_capabilities_entry(struct pd_port *pd_port);
+void pe_src_send_soft_reset_entry(struct pd_port *pd_port);
+void pe_src_soft_reset_entry(struct pd_port *pd_port);
 
 /* Source Startup Discover Cable */
 #ifdef CONFIG_USB_PD_SRC_STARTUP_DISCOVER_ID
 #ifdef CONFIG_PD_SRC_RESET_CABLE
-void pe_src_cbl_send_soft_reset_entry(
-	struct pd_port *pd_port);
+void pe_src_cbl_send_soft_reset_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_PD_SRC_RESET_CABLE */
-void pe_src_vdm_identity_request_entry(
-	struct pd_port *pd_port);
-void pe_src_vdm_identity_acked_entry(
-	struct pd_port *pd_port);
-void pe_src_vdm_identity_naked_entry(
-	struct pd_port *pd_port);
+void pe_src_vdm_identity_request_entry(struct pd_port *pd_port);
+void pe_src_vdm_identity_acked_entry(struct pd_port *pd_port);
+void pe_src_vdm_identity_naked_entry(struct pd_port *pd_port);
 #endif	/* PD_CAP_PE_SRC_STARTUP_DISCOVER_ID */
 
 /* Source for PD30 */
 #ifdef CONFIG_USB_PD_REV30
-void pe_src_send_not_supported_entry(
-	struct pd_port *pd_port);
-void pe_src_not_supported_received_entry(
-	struct pd_port *pd_port);
-void pe_src_chunk_received_entry(
-	struct pd_port *pd_port);
+void pe_src_send_not_supported_entry(struct pd_port *pd_port);
+void pe_src_not_supported_received_entry(struct pd_port *pd_port);
+void pe_src_chunk_received_entry(struct pd_port *pd_port);
 #ifdef CONFIG_USB_PD_REV30_ALERT_LOCAL
-void pe_src_send_source_alert_entry(
-	struct pd_port *pd_port);
+void pe_src_send_source_alert_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_ALERT_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_ALERT_REMOTE
-void pe_src_sink_alert_received_entry(
-	struct pd_port *pd_port);
+void pe_src_sink_alert_received_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_ALERT_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_SRC_CAP_EXT_LOCAL
-void pe_src_give_source_cap_ext_entry(
-	struct pd_port *pd_port);
+void pe_src_give_source_cap_ext_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_SRC_CAP_EXT_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_STATUS_LOCAL
-void pe_src_give_source_status_entry(
-	struct pd_port *pd_port);
+void pe_src_give_source_status_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_STATUS_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_STATUS_REMOTE
-void pe_src_get_sink_status_entry(
-	struct pd_port *pd_port);
-void pe_src_get_sink_status_exit(
-	struct pd_port *pd_port);
+void pe_src_get_sink_status_entry(struct pd_port *pd_port);
+void pe_src_get_sink_status_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_STATUS_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_PPS_SOURCE
-void pe_src_give_pps_status_entry(
-	struct pd_port *pd_port);
+void pe_src_give_pps_status_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_PPS_SOURCE */
 #endif	/* CONFIG_USB_PD_REV30 */
 #endif	/* CONFIG_USB_PD_PE_SOURCE */
@@ -540,75 +541,48 @@ void pe_src_give_pps_status_entry(
 /******************* Sink *******************/
 #ifdef CONFIG_USB_PD_PE_SINK
 /* Sink Init */
-void pe_snk_startup_entry(
-	struct pd_port *pd_port);
-void pe_snk_discovery_entry(
-	struct pd_port *pd_port);
-void pe_snk_wait_for_capabilities_entry(
-	struct pd_port *pd_port);
-void pe_snk_evaluate_capability_entry(
-	struct pd_port *pd_port);
-void pe_snk_select_capability_entry(
-	struct pd_port *pd_port);
-void pe_snk_select_capability_exit(
-	struct pd_port *pd_port);
-void pe_snk_transition_sink_entry(
-	struct pd_port *pd_port);
-void pe_snk_transition_sink_exit(
-	struct pd_port *pd_port);
-void pe_snk_ready_entry(
-	struct pd_port *pd_port);
-void pe_snk_hard_reset_entry(
-	struct pd_port *pd_port);
-void pe_snk_transition_to_default_entry(
-	struct pd_port *pd_port);
-void pe_snk_give_sink_cap_entry(
-	struct pd_port *pd_port);
-void pe_snk_get_source_cap_entry(
-	struct pd_port *pd_port);
+void pe_snk_startup_entry(struct pd_port *pd_port);
+void pe_snk_discovery_entry(struct pd_port *pd_port);
+void pe_snk_wait_for_capabilities_entry(struct pd_port *pd_port);
+void pe_snk_evaluate_capability_entry(struct pd_port *pd_port);
+void pe_snk_select_capability_entry(struct pd_port *pd_port);
+void pe_snk_select_capability_exit(struct pd_port *pd_port);
+void pe_snk_transition_sink_entry(struct pd_port *pd_port);
+void pe_snk_transition_sink_exit(struct pd_port *pd_port);
+void pe_snk_ready_entry(struct pd_port *pd_port);
+void pe_snk_hard_reset_entry(struct pd_port *pd_port);
+void pe_snk_transition_to_default_entry(struct pd_port *pd_port);
+void pe_snk_give_sink_cap_entry(struct pd_port *pd_port);
+void pe_snk_get_source_cap_entry(struct pd_port *pd_port);
 
-void pe_snk_send_soft_reset_entry(
-	struct pd_port *pd_port);
-void pe_snk_soft_reset_entry(
-	struct pd_port *pd_port);
+void pe_snk_send_soft_reset_entry(struct pd_port *pd_port);
+void pe_snk_soft_reset_entry(struct pd_port *pd_port);
 
 /* Sink for PD30 */
 #ifdef CONFIG_USB_PD_REV30
-void pe_snk_send_not_supported_entry(
-	struct pd_port *pd_port);
-void pe_snk_not_supported_received_entry(
-	struct pd_port *pd_port);
-void pe_snk_chunk_received_entry(
-	struct pd_port *pd_port);
+void pe_snk_send_not_supported_entry(struct pd_port *pd_port);
+void pe_snk_not_supported_received_entry(struct pd_port *pd_port);
+void pe_snk_chunk_received_entry(struct pd_port *pd_port);
 #ifdef CONFIG_USB_PD_REV30_ALERT_REMOTE
-void pe_snk_source_alert_received_entry(
-	struct pd_port *pd_port);
+void pe_snk_source_alert_received_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_ALERT_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_ALERT_LOCAL
-void pe_snk_send_sink_alert_entry(
-	struct pd_port *pd_port);
+void pe_snk_send_sink_alert_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_ALERT_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_SRC_CAP_EXT_REMOTE
-void pe_snk_get_source_cap_ext_entry(
-	struct pd_port *pd_port);
-void pe_snk_get_source_cap_ext_exit(
-	struct pd_port *pd_port);
+void pe_snk_get_source_cap_ext_entry(struct pd_port *pd_port);
+void pe_snk_get_source_cap_ext_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_SRC_CAP_EXT_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_STATUS_REMOTE
-void pe_snk_get_source_status_entry(
-	struct pd_port *pd_port);
-void pe_snk_get_source_status_exit(
-	struct pd_port *pd_port);
+void pe_snk_get_source_status_entry(struct pd_port *pd_port);
+void pe_snk_get_source_status_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_STATUS_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_STATUS_LOCAL
-void pe_snk_give_sink_status_entry(
-	struct pd_port *pd_port);
+void pe_snk_give_sink_status_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_STATUS_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
-void pe_snk_get_pps_status_entry(
-	struct pd_port *pd_port);
-void pe_snk_get_pps_status_exit(
-	struct pd_port *pd_port);
+void pe_snk_get_pps_status_entry(struct pd_port *pd_port);
+void pe_snk_get_pps_status_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_PPS_SINK */
 #endif	/* CONFIG_USB_PD_REV30 */
 #endif	/* CONFIG_USB_PD_PE_SINK */
@@ -616,318 +590,198 @@ void pe_snk_get_pps_status_exit(
 /******************* DR_SWAP *******************/
 #ifdef CONFIG_USB_PD_DR_SWAP
 /* DR_SWAP_DFP */
-void pe_drs_dfp_ufp_evaluate_dr_swap_entry(
-	struct pd_port *pd_port);
-void pe_drs_dfp_ufp_accept_dr_swap_entry(
-	struct pd_port *pd_port);
-void pe_drs_dfp_ufp_change_to_ufp_entry(
-	struct pd_port *pd_port);
-void pe_drs_dfp_ufp_send_dr_swap_entry(
-	struct pd_port *pd_port);
-void pe_drs_dfp_ufp_reject_dr_swap_entry(
-	struct pd_port *pd_port);
+void pe_drs_dfp_ufp_evaluate_dr_swap_entry(struct pd_port *pd_port);
+void pe_drs_dfp_ufp_accept_dr_swap_entry(struct pd_port *pd_port);
+void pe_drs_dfp_ufp_change_to_ufp_entry(struct pd_port *pd_port);
+void pe_drs_dfp_ufp_send_dr_swap_entry(struct pd_port *pd_port);
+void pe_drs_dfp_ufp_reject_dr_swap_entry(struct pd_port *pd_port);
 /* DR_SWAP_UFP */
-void pe_drs_ufp_dfp_evaluate_dr_swap_entry(
-	struct pd_port *pd_port);
-void pe_drs_ufp_dfp_accept_dr_swap_entry(
-	struct pd_port *pd_port);
-void pe_drs_ufp_dfp_change_to_dfp_entry(
-	struct pd_port *pd_port);
-void pe_drs_ufp_dfp_send_dr_swap_entry(
-	struct pd_port *pd_port);
-void pe_drs_ufp_dfp_reject_dr_swap_entry(
-	struct pd_port *pd_port);
+void pe_drs_ufp_dfp_evaluate_dr_swap_entry(struct pd_port *pd_port);
+void pe_drs_ufp_dfp_accept_dr_swap_entry(struct pd_port *pd_port);
+void pe_drs_ufp_dfp_change_to_dfp_entry(struct pd_port *pd_port);
+void pe_drs_ufp_dfp_send_dr_swap_entry(struct pd_port *pd_port);
+void pe_drs_ufp_dfp_reject_dr_swap_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_DR_SWAP */
 
 /******************* PR_SWAP *******************/
 #ifdef CONFIG_USB_PD_PR_SWAP
 /* PR_SWAP_SRC */
-void pe_prs_src_snk_evaluate_pr_swap_entry(
-	struct pd_port *pd_port);
-void pe_prs_src_snk_accept_pr_swap_entry(
-	struct pd_port *pd_port);
-void pe_prs_src_snk_transition_to_off_entry(
-	struct pd_port *pd_port);
-void pe_prs_src_snk_assert_rd_entry(
-	struct pd_port *pd_port);
-void pe_prs_src_snk_wait_source_on_entry(
-	struct pd_port *pd_port);
-void pe_prs_src_snk_wait_source_on_exit(
-	struct pd_port *pd_port);
-void pe_prs_src_snk_send_swap_entry(
-	struct pd_port *pd_port);
-void pe_prs_src_snk_reject_pr_swap_entry(
-	struct pd_port *pd_port);
+void pe_prs_src_snk_evaluate_pr_swap_entry(struct pd_port *pd_port);
+void pe_prs_src_snk_accept_pr_swap_entry(struct pd_port *pd_port);
+void pe_prs_src_snk_transition_to_off_entry(struct pd_port *pd_port);
+void pe_prs_src_snk_assert_rd_entry(struct pd_port *pd_port);
+void pe_prs_src_snk_wait_source_on_entry(struct pd_port *pd_port);
+void pe_prs_src_snk_wait_source_on_exit(struct pd_port *pd_port);
+void pe_prs_src_snk_send_swap_entry(struct pd_port *pd_port);
+void pe_prs_src_snk_reject_pr_swap_entry(struct pd_port *pd_port);
 
 /* PR_SWAP_SNK */
-void pe_prs_snk_src_evaluate_pr_swap_entry(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_accept_pr_swap_entry(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_transition_to_off_entry(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_transition_to_off_exit(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_assert_rp_entry(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_source_on_entry(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_source_on_exit(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_send_swap_entry(
-	struct pd_port *pd_port);
-void pe_prs_snk_src_reject_swap_entry(
-	struct pd_port *pd_port);
+void pe_prs_snk_src_evaluate_pr_swap_entry(struct pd_port *pd_port);
+void pe_prs_snk_src_accept_pr_swap_entry(struct pd_port *pd_port);
+void pe_prs_snk_src_transition_to_off_entry(struct pd_port *pd_port);
+void pe_prs_snk_src_transition_to_off_exit(struct pd_port *pd_port);
+void pe_prs_snk_src_assert_rp_entry(struct pd_port *pd_port);
+void pe_prs_snk_src_source_on_entry(struct pd_port *pd_port);
+void pe_prs_snk_src_source_on_exit(struct pd_port *pd_port);
+void pe_prs_snk_src_send_swap_entry(struct pd_port *pd_port);
+void pe_prs_snk_src_reject_swap_entry(struct pd_port *pd_port);
 
 /* get same role cap */
-void pe_dr_src_get_source_cap_entry(
-	struct pd_port *pd_port);
-void pe_dr_src_get_source_cap_exit(
-	struct pd_port *pd_port);
-void pe_dr_src_give_sink_cap_entry(
-	struct pd_port *pd_port);
-void pe_dr_snk_get_sink_cap_entry(
-	struct pd_port *pd_port);
-void pe_dr_snk_get_sink_cap_exit(
-	struct pd_port *pd_port);
-void pe_dr_snk_give_source_cap_entry(
-	struct pd_port *pd_port);
+void pe_dr_src_get_source_cap_entry(struct pd_port *pd_port);
+void pe_dr_src_get_source_cap_exit(struct pd_port *pd_port);
+void pe_dr_src_give_sink_cap_entry(struct pd_port *pd_port);
+void pe_dr_snk_get_sink_cap_entry(struct pd_port *pd_port);
+void pe_dr_snk_get_sink_cap_exit(struct pd_port *pd_port);
+void pe_dr_snk_give_source_cap_entry(struct pd_port *pd_port);
 
 /* get same role cap for PD30 */
 #ifdef CONFIG_USB_PD_REV30
 #ifdef CONFIG_USB_PD_REV30_SRC_CAP_EXT_LOCAL
-void pe_dr_snk_give_source_cap_ext_entry(
-	struct pd_port *pd_port);
+void pe_dr_snk_give_source_cap_ext_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_SRC_CAP_EXT_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_SRC_CAP_EXT_REMOTE
-void pe_dr_src_get_source_cap_ext_entry(
-	struct pd_port *pd_port);
-void pe_dr_src_get_source_cap_ext_exit(
-	struct pd_port *pd_port);
+void pe_dr_src_get_source_cap_ext_entry(struct pd_port *pd_port);
+void pe_dr_src_get_source_cap_ext_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_SRC_CAP_EXT_REMOTE */
 #endif	/* CONFIG_USB_PD_REV30 */
 #endif	/* CONFIG_USB_PD_PR_SWAP */
 
 /******************* VCONN_SWAP *******************/
 #ifdef CONFIG_USB_PD_VCONN_SWAP
-void pe_vcs_send_swap_entry(
-	struct pd_port *pd_port);
-void pe_vcs_evaluate_swap_entry(
-	struct pd_port *pd_port);
-void pe_vcs_accept_swap_entry(
-	struct pd_port *pd_port);
-void pe_vcs_reject_vconn_swap_entry(
-	struct pd_port *pd_port);
-void pe_vcs_wait_for_vconn_entry(
-	struct pd_port *pd_port);
-void pe_vcs_wait_for_vconn_exit(
-	struct pd_port *pd_port);
-void pe_vcs_turn_off_vconn_entry(
-	struct pd_port *pd_port);
-void pe_vcs_turn_on_vconn_entry(
-	struct pd_port *pd_port);
-void pe_vcs_send_ps_rdy_entry(
-	struct pd_port *pd_port);
+void pe_vcs_send_swap_entry(struct pd_port *pd_port);
+void pe_vcs_evaluate_swap_entry(struct pd_port *pd_port);
+void pe_vcs_accept_swap_entry(struct pd_port *pd_port);
+void pe_vcs_reject_vconn_swap_entry(struct pd_port *pd_port);
+void pe_vcs_wait_for_vconn_entry(struct pd_port *pd_port);
+void pe_vcs_wait_for_vconn_exit(struct pd_port *pd_port);
+void pe_vcs_turn_off_vconn_entry(struct pd_port *pd_port);
+void pe_vcs_turn_on_vconn_entry(struct pd_port *pd_port);
+void pe_vcs_send_ps_rdy_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_VCONN_SWAP */
 
 /******************* UFP_VDM *******************/
-void pe_ufp_vdm_get_identity_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_send_identity_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_get_identity_nak_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_get_svids_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_send_svids_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_get_svids_nak_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_get_modes_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_send_modes_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_get_modes_nak_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_evaluate_mode_entry_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_mode_entry_ack_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_mode_entry_nak_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_mode_exit_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_mode_exit_ack_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_mode_exit_nak_entry(
-	struct pd_port *pd_port);
+void pe_ufp_vdm_get_identity_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_send_identity_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_get_identity_nak_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_get_svids_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_send_svids_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_get_svids_nak_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_get_modes_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_send_modes_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_get_modes_nak_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_evaluate_mode_entry_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_mode_entry_ack_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_mode_entry_nak_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_mode_exit_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_mode_exit_ack_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_mode_exit_nak_entry(struct pd_port *pd_port);
 
-void pe_ufp_vdm_attention_request_entry(
-	struct pd_port *pd_port);
+void pe_ufp_vdm_attention_request_entry(struct pd_port *pd_port);
 
 #ifdef CONFIG_USB_PD_ALT_MODE
-void pe_ufp_vdm_dp_status_update_entry(
-	struct pd_port *pd_port);
-void pe_ufp_vdm_dp_configure_entry(
-	struct pd_port *pd_port);
+void pe_ufp_vdm_dp_status_update_entry(struct pd_port *pd_port);
+void pe_ufp_vdm_dp_configure_entry(struct pd_port *pd_port);
 #endif/* CONFIG_USB_PD_ALT_MODE */
 /******************* DFP_VDM *******************/
-void pe_dfp_ufp_vdm_identity_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_ufp_vdm_identity_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_ufp_vdm_identity_naked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_cbl_vdm_identity_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_cbl_vdm_identity_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_cbl_vdm_identity_naked_entry(
-	struct pd_port *pd_port);
+void pe_dfp_ufp_vdm_identity_request_entry(struct pd_port *pd_port);
+void pe_dfp_ufp_vdm_identity_acked_entry(struct pd_port *pd_port);
+void pe_dfp_ufp_vdm_identity_naked_entry(struct pd_port *pd_port);
+void pe_dfp_cbl_vdm_identity_request_entry(struct pd_port *pd_port);
+void pe_dfp_cbl_vdm_identity_acked_entry(struct pd_port *pd_port);
+void pe_dfp_cbl_vdm_identity_naked_entry(struct pd_port *pd_port);
 
-void pe_dfp_vdm_svids_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_svids_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_svids_naked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_modes_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_modes_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_modes_naked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_mode_entry_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_mode_entry_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_mode_entry_naked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_mode_exit_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_mode_exit_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_attention_request_entry(
-	struct pd_port *pd_port);
+void pe_dfp_vdm_svids_request_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_svids_acked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_svids_naked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_modes_request_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_modes_acked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_modes_naked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_mode_entry_request_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_mode_entry_acked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_mode_entry_naked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_mode_exit_request_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_mode_exit_acked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_attention_request_entry(struct pd_port *pd_port);
 
 #ifdef CONFIG_PD_DFP_RESET_CABLE
-void pe_dfp_cbl_send_soft_reset_entry(
-	struct pd_port *pd_port);
-void pe_dfp_cbl_send_cable_reset_entry(
-	struct pd_port *pd_port);
+void pe_dfp_cbl_send_soft_reset_entry(struct pd_port *pd_port);
+void pe_dfp_cbl_send_cable_reset_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_PD_DFP_RESET_CABLE */
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-void pe_dfp_vdm_dp_status_update_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_dp_status_update_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_dp_status_update_naked_entry(
-	struct pd_port *pd_port);
+void pe_dfp_vdm_dp_status_update_request_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_dp_status_update_acked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_dp_status_update_naked_entry(struct pd_port *pd_port);
 
-void pe_dfp_vdm_dp_configuration_request_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_dp_configuration_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_vdm_dp_configuration_naked_entry(
-	struct pd_port *pd_port);
+void pe_dfp_vdm_dp_configuration_request_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_dp_configuration_acked_entry(struct pd_port *pd_port);
+void pe_dfp_vdm_dp_configuration_naked_entry(struct pd_port *pd_port);
 #endif/* CONFIG_USB_PD_ALT_MODE_DFP */
 /******************* UVDM & SVDM *******************/
 #ifdef CONFIG_USB_PD_CUSTOM_VDM
-void pe_ufp_uvdm_recv_entry(
-	struct pd_port *pd_port);
-void pe_dfp_uvdm_send_entry(
-	struct pd_port *pd_port);
-void pe_dfp_uvdm_acked_entry(
-	struct pd_port *pd_port);
-void pe_dfp_uvdm_naked_entry(
-	struct pd_port *pd_port);
+void pe_ufp_uvdm_recv_entry(struct pd_port *pd_port);
+void pe_dfp_uvdm_send_entry(struct pd_port *pd_port);
+void pe_dfp_uvdm_acked_entry(struct pd_port *pd_port);
+void pe_dfp_uvdm_naked_entry(struct pd_port *pd_port);
 #endif/* CONFIG_USB_PD_CUSTOM_VDM */
 
 /******************* PD30 Common *******************/
 #ifdef CONFIG_USB_PD_REV30
 #ifdef CONFIG_USB_PD_REV30_BAT_CAP_REMOTE
-void pe_get_battery_cap_entry(
-	struct pd_port *pd_port);
-void pe_get_battery_cap_exit(
-	struct pd_port *pd_port);
+void pe_get_battery_cap_entry(struct pd_port *pd_port);
+void pe_get_battery_cap_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_BAT_CAP_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_BAT_CAP_LOCAL
-void pe_give_battery_cap_entry(
-	struct pd_port *pd_port);
+void pe_give_battery_cap_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_BAT_CAP_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_BAT_STATUS_REMOTE
-void pe_get_battery_status_entry(
-	struct pd_port *pd_port);
-void pe_get_battery_status_exit(
-	struct pd_port *pd_port);
+void pe_get_battery_status_entry(struct pd_port *pd_port);
+void pe_get_battery_status_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_BAT_STATUS_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_BAT_STATUS_LOCAL
-void pe_give_battery_status_entry(
-	struct pd_port *pd_port);
+void pe_give_battery_status_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_BAT_STATUS_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_MFRS_INFO_REMOTE
-void pe_get_manufacturer_info_entry(
-	struct pd_port *pd_port);
-void pe_get_manufacturer_info_exit(
-	struct pd_port *pd_port);
+void pe_get_manufacturer_info_entry(struct pd_port *pd_port);
+void pe_get_manufacturer_info_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_MFRS_INFO_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_MFRS_INFO_LOCAL
-void pe_give_manufacturer_info_entry(
-	struct pd_port *pd_port);
+void pe_give_manufacturer_info_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_MFRS_INFO_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_CODE_REMOTE
-void pe_get_country_codes_entry(
-	struct pd_port *pd_port);
-void pe_get_country_codes_exit(
-	struct pd_port *pd_port);
+void pe_get_country_codes_entry(struct pd_port *pd_port);
+void pe_get_country_codes_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_COUNTRY_CODE_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_CODE_LOCAL
-void pe_give_country_codes_entry(
-	struct pd_port *pd_port);
+void pe_give_country_codes_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_COUNTRY_CODE_LOCAL */
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_INFO_REMOTE
-void pe_get_country_info_entry(
-	struct pd_port *pd_port);
-void pe_get_country_info_exit(
-	struct pd_port *pd_port);
+void pe_get_country_info_entry(struct pd_port *pd_port);
+void pe_get_country_info_exit(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_COUNTRY_INFO_REMOTE */
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_INFO_LOCAL
-void pe_give_country_info_entry(
-	struct pd_port *pd_port);
+void pe_give_country_info_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_REV30_COUNTRY_INFO_LOCAL */
-void pe_vdm_not_supported_entry(
-	struct pd_port *pd_port);
+void pe_vdm_not_supported_entry(struct pd_port *pd_port);
 #endif /* CONFIG_USB_PD_REV30 */
 /******************* Others *******************/
 #ifdef CONFIG_USB_PD_CUSTOM_DBGACC
-void pe_dbg_ready_entry(
-	struct pd_port *pd_port);
+void pe_dbg_ready_entry(struct pd_port *pd_port);
 #endif/* CONFIG_USB_PD_CUSTOM_DBGACC */
 
 #ifdef CONFIG_USB_PD_RECV_HRESET_COUNTER
-void pe_over_recv_hreset_limit_entry(
-	struct pd_port *pd_port);
+void pe_over_recv_hreset_limit_entry(struct pd_port *pd_port);
 #endif/* CONFIG_USB_PD_RECV_HRESET_COUNTER */
-void pe_reject_entry(
-	struct pd_port *pd_port);
-void pe_error_recovery_entry(
-	struct pd_port *pd_port);
+void pe_reject_entry(struct pd_port *pd_port);
+void pe_error_recovery_entry(struct pd_port *pd_port);
 #ifdef CONFIG_USB_PD_ERROR_RECOVERY_ONCE
-void pe_error_recovery_once_entry(
-	struct pd_port *pd_port);
+void pe_error_recovery_once_entry(struct pd_port *pd_port);
 #endif	/* CONFIG_USB_PD_ERROR_RECOVERY_ONCE */
-void pe_bist_test_data_entry(
-	struct pd_port *pd_port);
-void pe_bist_test_data_exit(
-	struct pd_port *pd_port);
-void pe_bist_carrier_mode_2_entry(
-	struct pd_port *pd_port);
-void pe_bist_carrier_mode_2_exit(
-	struct pd_port *pd_port);
+void pe_bist_test_data_entry(struct pd_port *pd_port);
+void pe_bist_test_data_exit(struct pd_port *pd_port);
+void pe_bist_carrier_mode_2_entry(struct pd_port *pd_port);
+void pe_bist_carrier_mode_2_exit(struct pd_port *pd_port);
 /* Wait tx finished */
-void pe_idle1_entry(
-	struct pd_port *pd_port);
-void pe_idle2_entry(
-	struct pd_port *pd_port);
+void pe_idle1_entry(struct pd_port *pd_port);
+void pe_idle2_entry(struct pd_port *pd_port);
 
 #endif /* PD_POLICY_ENGINE_H_ */

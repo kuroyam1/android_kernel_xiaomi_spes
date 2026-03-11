@@ -20,12 +20,12 @@
 
 /* VDM reactions */
 
-#define VDM_CMD_FLAG_CABLE_CMD			(1<<0)
-#define VDM_CMD_FLAG_SEND_BY_UFP			(1<<1)
-#define VDM_CMD_FLAG_SEND_BY_DFP			(1<<2)
-#define VDM_CMD_FLAG_RECV_BY_UFP			(1<<3)
-#define VDM_CMD_FLAG_RECV_BY_DFP			(1<<4)
-#define VDM_CMD_FLAG_PD30_DUPLEX			(1<<5)
+#define VDM_CMD_FLAG_CABLE_CMD		(1<<0)
+#define VDM_CMD_FLAG_SEND_BY_UFP		(1<<1)
+#define VDM_CMD_FLAG_SEND_BY_DFP		(1<<2)
+#define VDM_CMD_FLAG_RECV_BY_UFP		(1<<3)
+#define VDM_CMD_FLAG_RECV_BY_DFP		(1<<4)
+#define VDM_CMD_FLAG_PD30_DUPLEX		(1<<5)
 
 struct vdm_state_transition {
 	uint8_t	vdm_cmd;
@@ -34,34 +34,38 @@ struct vdm_state_transition {
 	uint8_t	vdm_cmd_flags;
 };
 
-#define VDM_CMD_REACTION(cmd, init, req, flags)	{ \
+#define VDM_CMD_REACTION(cmd, init, req, flags)	\
+{	\
 	.vdm_cmd = cmd,	\
-	.vdm_init_state = init, \
+	.vdm_init_state = init,	\
 	.vdm_request_state = req,	\
 	.vdm_cmd_flags = flags, \
 }
 
-#define VDM_DFP_CMD_REACTION(cmd, init, req)		\
-	VDM_CMD_REACTION(cmd, init, req,  \
+#define VDM_DFP_CMD_REACTION(cmd, init, req)	\
+	VDM_CMD_REACTION(cmd, init, req,	\
 		VDM_CMD_FLAG_SEND_BY_DFP | VDM_CMD_FLAG_RECV_BY_UFP)
 
-#define VDM_UFP_CMD_REACTION(cmd, init, req)		\
-	VDM_CMD_REACTION(cmd, init, req, \
+#define VDM_UFP_CMD_REACTION(cmd, init, req)	\
+	VDM_CMD_REACTION(cmd, init, req,	\
 		VDM_CMD_FLAG_SEND_BY_UFP | VDM_CMD_FLAG_RECV_BY_DFP)
 
-#define VDM_CABLE_CMD_REACTION(cmd, init, req)		\
-	VDM_CMD_REACTION(cmd, init, req, \
-		VDM_CMD_FLAG_SEND_BY_UFP | VDM_CMD_FLAG_SEND_BY_DFP \
-		| VDM_CMD_FLAG_CABLE_CMD)
+#define VDM_CABLE_CMD_REACTION(cmd, init, req)	\
+	VDM_CMD_REACTION(cmd, init, req,	\
+		VDM_CMD_FLAG_SEND_BY_UFP |	\
+		VDM_CMD_FLAG_SEND_BY_DFP |	\
+		VDM_CMD_FLAG_CABLE_CMD)
 
-#define VDM_DFP_CMD_REACTION_PD30(cmd, init, req)		\
-	VDM_CMD_REACTION(cmd, init, req,  \
-		VDM_CMD_FLAG_SEND_BY_DFP | VDM_CMD_FLAG_RECV_BY_UFP |	\
+#define VDM_DFP_CMD_REACTION_PD30(cmd, init, req)	\
+	VDM_CMD_REACTION(cmd, init, req,	\
+		VDM_CMD_FLAG_SEND_BY_DFP |	\
+		VDM_CMD_FLAG_RECV_BY_UFP |	\
 		VDM_CMD_FLAG_PD30_DUPLEX)
 
-#define VDM_UFP_CMD_REACTION_PD30(cmd, init, req)		\
-	VDM_CMD_REACTION(cmd, init, req, \
-		VDM_CMD_FLAG_SEND_BY_UFP | VDM_CMD_FLAG_RECV_BY_DFP |	\
+#define VDM_UFP_CMD_REACTION_PD30(cmd, init, req)	\
+	VDM_CMD_REACTION(cmd, init, req,	\
+		VDM_CMD_FLAG_SEND_BY_UFP |	\
+		VDM_CMD_FLAG_RECV_BY_DFP |	\
 		VDM_CMD_FLAG_PD30_DUPLEX)
 
 static const struct vdm_state_transition pe_vdm_state_reactions[] = {
@@ -153,19 +157,16 @@ static inline bool pd_vdm_state_transit_tx(struct pd_port *pd_port,
 	uint8_t next_state = curr_state + 1;
 
 	switch (vdm_cmdt) {
-
 	case CMDT_RSP_NAK:
 		if (curr_state != PE_DFP_VDM_MODE_EXIT_REQUEST)
-			next_state = curr_state+2;
+			next_state = curr_state + 2;
 		break;
-
 	case CMDT_RSP_BUSY:
 		if (curr_state == PE_DFP_VDM_MODE_EXIT_REQUEST)
 			next_state = pe_get_curr_hard_reset_state(pd_port);
 		else
-			next_state = curr_state+2;
+			next_state = curr_state + 2;
 		break;
-
 	default:
 		ret_code = TCP_DPM_RET_VDM_ACK;
 		break;
@@ -182,8 +183,7 @@ bool vdm_is_state_transition_available(struct pd_port *pd_port,
 	uint8_t shift = 1;
 	uint8_t vdm_cmd_flags = state_transition->vdm_cmd_flags;
 
-	if (pd_check_rev30(pd_port) &&
-		(vdm_cmd_flags & VDM_CMD_FLAG_PD30_DUPLEX)) {
+	if (pd_check_rev30(pd_port) && (vdm_cmd_flags & VDM_CMD_FLAG_PD30_DUPLEX)) {
 		return true;
 	}
 
@@ -196,9 +196,8 @@ bool vdm_is_state_transition_available(struct pd_port *pd_port,
 	return vdm_cmd_flags & (1 << shift);
 }
 
-static bool pd_vdm_state_transit(
-	struct pd_port *pd_port, uint8_t vdm_cmdt,
-	const struct vdm_state_transition *state_transition)
+static bool pd_vdm_state_transit(struct pd_port *pd_port,
+	uint8_t vdm_cmdt, const struct vdm_state_transition *state_transition)
 {
 	uint8_t curr_state;
 
@@ -206,29 +205,25 @@ static bool pd_vdm_state_transit(
 
 	if (curr_state == PE_UFP_VDM_ATTENTION_REQUEST) {
 		VDM_STATE_DPM_INFORMED(pd_port);
-		pd_notify_tcp_vdm_event_2nd_result(
-			pd_port, TCP_DPM_RET_TIMEOUT);
+		pd_notify_tcp_vdm_event_2nd_result(pd_port, TCP_DPM_RET_TIMEOUT);
 		return false;
 	}
 
 	if (vdm_cmdt == CMDT_INIT) {	/* Recv */
-		if (!vdm_is_state_transition_available(
-			pd_port, true, state_transition))
+		if (!vdm_is_state_transition_available(pd_port, true, state_transition))
 			return false;
 
 		return pd_vdm_state_transit_rx(pd_port, state_transition);
 	}
 
 	/* Send */
-	if (!vdm_is_state_transition_available(
-				pd_port, false, state_transition))
+	if (!vdm_is_state_transition_available(pd_port, false, state_transition))
 		return false;
 
 	if (curr_state != state_transition->vdm_request_state)
 		return false;
 
-	return pd_vdm_state_transit_tx(
-			pd_port, vdm_cmdt, state_transition);
+	return pd_vdm_state_transit_tx(pd_port, vdm_cmdt, state_transition);
 }
 
 enum {
@@ -239,8 +234,8 @@ enum {
 	VDM_STATE_TRANSIT_CHECK_TX = 3,
 };
 
-static bool pe_check_vdm_state_transit_valid(
-	struct pd_port *pd_port, uint8_t transit_type, uint8_t *vdm_cmdt,
+static bool pe_check_vdm_state_transit_valid(struct pd_port *pd_port,
+	uint8_t transit_type, uint8_t *vdm_cmdt,
 	const struct vdm_state_transition *state_transition)
 {
 	uint8_t curr_state;
@@ -281,33 +276,27 @@ static bool pe_check_vdm_state_transit_valid(
 	return true;
 }
 
-static bool pd_make_vdm_state_transit(
-		struct pd_port *pd_port, uint8_t transit_type)
+static bool pd_make_vdm_state_transit(struct pd_port *pd_port, uint8_t transit_type)
 {
 	int i;
 	bool check_tx;
 	uint8_t vdm_cmdt;
 	const struct vdm_state_transition *state_transition;
-
 	uint8_t nr_transition = ARRAY_SIZE(pe_vdm_state_reactions);
-	const struct vdm_state_transition *state_reaction =
-						pe_vdm_state_reactions;
+	const struct vdm_state_transition *state_reaction = pe_vdm_state_reactions;
 
 	check_tx = transit_type >= VDM_STATE_TRANSIT_CHECK_TX;
 
 	for (i = 0; i < nr_transition; i++) {
 		state_transition = &state_reaction[i];
 
-		if (!pe_check_vdm_state_transit_valid(
-			pd_port, transit_type, &vdm_cmdt, state_transition))
+		if (!pe_check_vdm_state_transit_valid(pd_port, transit_type, &vdm_cmdt, state_transition))
 			continue;
 
 		if (check_tx) {
-			return vdm_is_state_transition_available(
-				pd_port, false, state_transition);
+			return vdm_is_state_transition_available(pd_port, false, state_transition);
 		} else {
-			return pd_vdm_state_transit(
-				pd_port, vdm_cmdt, state_transition);
+			return pd_vdm_state_transit(pd_port, vdm_cmdt, state_transition);
 		}
 	}
 
@@ -316,20 +305,17 @@ static bool pd_make_vdm_state_transit(
 
 static inline bool pd_make_vdm_state_transit_sop(struct pd_port *pd_port)
 {
-	return pd_make_vdm_state_transit(
-		pd_port, VDM_STATE_TRANSIT_SOP_CMD);
+	return pd_make_vdm_state_transit(pd_port, VDM_STATE_TRANSIT_SOP_CMD);
 }
 
 static inline bool pd_make_vdm_state_transit_cable(struct pd_port *pd_port)
 {
-	return pd_make_vdm_state_transit(
-		pd_port, VDM_STATE_TRANSIT_SOP_PRIME_CMD);
+	return pd_make_vdm_state_transit(pd_port, VDM_STATE_TRANSIT_SOP_PRIME_CMD);
 }
 
 static inline bool pd_make_vdm_state_transit_nak(struct pd_port *pd_port)
 {
-	return pd_make_vdm_state_transit(
-		pd_port, VDM_STATE_TRANSIT_NAK);
+	return pd_make_vdm_state_transit(pd_port, VDM_STATE_TRANSIT_NAK);
 }
 
 /* Discover Cable ID */
@@ -337,17 +323,17 @@ static inline bool pd_make_vdm_state_transit_nak(struct pd_port *pd_port)
 #ifdef CONFIG_PD_DISCOVER_CABLE_ID
 DECL_PE_STATE_TRANSITION(PD_DPM_MSG_DISCOVER_CABLE) = {
 #ifdef CONFIG_USB_PD_SRC_STARTUP_DISCOVER_ID
-	{ PE_SRC_STARTUP, PE_SRC_VDM_IDENTITY_REQUEST},
-	{ PE_SRC_DISCOVERY, PE_SRC_VDM_IDENTITY_REQUEST},
+	{ PE_SRC_STARTUP, PE_SRC_VDM_IDENTITY_REQUEST },
+	{ PE_SRC_DISCOVERY, PE_SRC_VDM_IDENTITY_REQUEST },
 #endif
 
 #ifdef CONFIG_USB_PD_DFP_READY_DISCOVER_ID
-	{ PE_SRC_READY, PE_DFP_CBL_VDM_IDENTITY_REQUEST},
-	{ PE_SNK_READY, PE_DFP_CBL_VDM_IDENTITY_REQUEST},
+	{ PE_SRC_READY, PE_DFP_CBL_VDM_IDENTITY_REQUEST },
+	{ PE_SNK_READY, PE_DFP_CBL_VDM_IDENTITY_REQUEST },
 #endif	/* CONFIG_USB_PD_DFP_READY_DISCOVER_ID */
 
 #ifdef CONFIG_PD_SRC_RESET_CABLE
-	{ PE_SRC_CBL_SEND_SOFT_RESET, PE_SRC_VDM_IDENTITY_REQUEST},
+	{ PE_SRC_CBL_SEND_SOFT_RESET, PE_SRC_VDM_IDENTITY_REQUEST },
 #endif	/* CONFIG_PD_SRC_RESET_CABLE */
 };
 DECL_PE_STATE_REACTION(PD_DPM_MSG_DISCOVER_CABLE);
@@ -364,8 +350,7 @@ static inline bool pd_ufp_u_auto_send_attention(struct pd_port *pd_port)
 	struct dp_data *dp_data = pd_get_dp_data(pd_port);
 
 	if (dp_data->local_config != 0) {
-		PE_TRANSIT_STATE(pd_port,
-			PE_UFP_VDM_ATTENTION_REQUEST);
+		PE_TRANSIT_STATE(pd_port, PE_UFP_VDM_ATTENTION_REQUEST);
 		return true;
 	}
 
@@ -374,8 +359,7 @@ static inline bool pd_ufp_u_auto_send_attention(struct pd_port *pd_port)
 #endif	/* CONFIG_USB_PD_DBG_DP_UFP_U_AUTO_ATTENTION */
 #endif	/* CONFIG_USB_PD_ALT_MODE */
 
-static inline bool pd_process_ctrl_msg(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_ctrl_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	struct pe_data *pe_data = &pd_port->pe_data;
 
@@ -384,8 +368,7 @@ static inline bool pd_process_ctrl_msg(
 	if (pd_event->msg != PD_CTRL_GOOD_CRC)
 		return false;
 
-	if (pe_data->vdm_state_flags &
-		VDM_STATE_FLAG_ENABLE_VDM_RESPONSE_TIMER)
+	if (pe_data->vdm_state_flags & VDM_STATE_FLAG_ENABLE_VDM_RESPONSE_TIMER)
 		pd_enable_timer(pd_port, pe_data->vdm_state_timer);
 
 	switch (pd_port->pe_state_curr) {
@@ -398,8 +381,7 @@ static inline bool pd_process_ctrl_msg(
 #endif	/* CONFIG_USB_PD_DBG_DP_UFP_U_AUTO_ATTENTION */
 
 	case PE_UFP_VDM_ATTENTION_REQUEST:
-		pd_notify_tcp_vdm_event_2nd_result(
-			pd_port, TCP_DPM_RET_VDM_ACK);
+		pd_notify_tcp_vdm_event_2nd_result(pd_port, TCP_DPM_RET_VDM_ACK);
 		break;
 #endif	/* CONFIG_USB_PD_ALT_MODE */
 
@@ -425,8 +407,7 @@ static inline bool pd_process_ctrl_msg(
 #endif	/* CONFIG_USB_PD_CUSTOM_VDM */
 	}
 
-	if (pe_data->vdm_state_flags
-		& VDM_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC) {
+	if (pe_data->vdm_state_flags & VDM_STATE_FLAG_BACK_READY_IF_RECV_GOOD_CRC) {
 		pe_transit_ready_state(pd_port);
 		return true;
 	}
@@ -466,8 +447,7 @@ bool pd_process_custom_vdm(struct pd_port *pd_port, bool svdm)
 
 #endif	/* CONFIG_USB_PD_CUSTOM_VDM */
 
-static inline bool pd_process_uvdm(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_uvdm(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
@@ -502,7 +482,7 @@ static const char * const pe_vdm_cmd_name[] = {
 };
 
 #if PE_INFO_ENABLE
-static const char *const pe_vdm_cmd_type_name[] = {
+static const char * const pe_vdm_cmd_type_name[] = {
 	"INIT",
 	"ACK",
 	"NACK",
@@ -521,7 +501,7 @@ static inline const char *assign_vdm_cmd_name(uint8_t cmd)
 }
 
 #ifdef CONFIG_USB_PD_ALT_MODE
-static const char *const pe_vdm_dp_cmd_name[] = {
+static const char * const pe_vdm_dp_cmd_name[] = {
 	"DPStatus",
 	"DPConfig",
 };
@@ -540,8 +520,7 @@ static inline const char *assign_vdm_dp_cmd_name(uint8_t cmd)
 
 #endif /* if (PE_EVT_INFO_VDM_DIS == 0) */
 
-static inline void print_vdm_msg(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline void print_vdm_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 #if (PE_EVT_INFO_VDM_DIS == 0)
 	uint8_t cmd;
@@ -575,8 +554,7 @@ static inline void print_vdm_msg(
 #endif	/* PE_EVT_INFO_VDM_DIS */
 }
 
-static inline bool pd_process_sop_vdm(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_sop_vdm(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
@@ -592,14 +570,12 @@ static inline bool pd_process_sop_vdm(
 	return false;
 }
 
-static inline bool pd_process_sop_prime_vdm(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_sop_prime_vdm(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	return pd_make_vdm_state_transit_cable(pd_port);
 }
 
-static inline bool pd_process_data_msg(
-		struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_data_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	bool ret = false;
 	uint32_t vdm_hdr;
@@ -640,14 +616,12 @@ static inline bool pd_process_data_msg(
  * [BLOCK] Porcess PDM MSG
  */
 
-static inline bool pd_process_dpm_msg(
-		struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_dpm_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	if (pd_event->msg != PD_DPM_ACK)
 		return false;
 
-	if (pd_port->pe_data.vdm_state_flags &
-		VDM_STATE_FLAG_BACK_READY_IF_DPM_ACK) {
+	if (pd_port->pe_data.vdm_state_flags & VDM_STATE_FLAG_BACK_READY_IF_DPM_ACK) {
 		pe_transit_ready_state(pd_port);
 		return true;
 	}
@@ -659,14 +633,12 @@ static inline bool pd_process_dpm_msg(
  * [BLOCK] Porcess HW MSG
  */
 
-static inline bool pd_process_hw_msg(
-		struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_hw_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	struct pe_data *pe_data = &pd_port->pe_data;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
-	if (pd_event->msg == PD_HW_TX_DISCARD &&
-		(pe_data->vdm_discard_retry_count < 10)) {
+	if (pd_event->msg == PD_HW_TX_DISCARD && (pe_data->vdm_discard_retry_count < 10)) {
 		PE_INFO("vdm_discard_retry\n");
 		pe_data->vdm_discard_retry_flag = true;
 		pe_data->vdm_discard_retry_count++;
@@ -676,7 +648,6 @@ static inline bool pd_process_hw_msg(
 	case PD_HW_TX_FAILED:
 	case PD_HW_TX_DISCARD:
 		return pd_make_vdm_state_transit_nak(pd_port);
-
 	case PD_HW_RETRY_VDM:
 		if (pd_port->pe_data.vdm_state_timer)
 			return pd_make_vdm_state_transit_nak(pd_port);
@@ -691,17 +662,14 @@ static inline bool pd_process_hw_msg(
  * [BLOCK] Porcess PE MSG
  */
 
-static inline bool pd_process_pe_msg(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_pe_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	switch (pd_event->msg) {
 	case PD_PE_VDM_NOT_SUPPORT:
 		break;
-
 	case PD_PE_VDM_RESET:
 		pd_port->pe_data.reset_vdm_state = true;
 		break;
-
 	default:
 		return false;
 	}
@@ -713,8 +681,7 @@ static inline bool pd_process_pe_msg(
  * [BLOCK] Porcess Timer MSG
  */
 
-static inline bool pd_process_timer_msg(
-		struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_timer_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	switch (pd_event->msg) {
 	case PD_TIMER_VDM_MODE_ENTRY:
@@ -722,7 +689,6 @@ static inline bool pd_process_timer_msg(
 	case PD_TIMER_VDM_RESPONSE:
 	case PD_TIMER_UVDM_RESPONSE:
 		return pd_make_vdm_state_transit_nak(pd_port);
-
 	default:
 		return false;
 	}
@@ -753,8 +719,7 @@ const uint8_t tcp_vdm_evt_init_state[] = {
 #endif	/* CONFIG_USB_PD_CUSTOM_VDM */
 };
 
-static inline bool pd_process_tcp_cable_event(
-		struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_tcp_cable_event(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	bool ret;
 	int tcp_ret;
@@ -782,16 +747,14 @@ static inline bool pd_process_tcp_cable_event(
 
 #ifdef CONFIG_USB_PD_ALT_MODE
 
-static inline uint32_t tcpc_update_bits(
-	uint32_t var, uint32_t update, uint32_t mask)
+static inline uint32_t tcpc_update_bits(uint32_t var, uint32_t update, uint32_t mask)
 {
 	return (var & (~mask)) | (update & mask);
 }
 
 static inline void pd_parse_tcp_dpm_evt_svdm(struct pd_port *pd_port)
 {
-	struct tcp_dpm_svdm_data *svdm_data =
-		&pd_port->tcp_event.tcp_dpm_data.svdm_data;
+	struct tcp_dpm_svdm_data *svdm_data = &pd_port->tcp_event.tcp_dpm_data.svdm_data;
 
 	pd_port->mode_svid = svdm_data->svid;
 	pd_port->mode_obj_pos = svdm_data->ops;
@@ -799,14 +762,12 @@ static inline void pd_parse_tcp_dpm_evt_svdm(struct pd_port *pd_port)
 
 static inline void pd_parse_tcp_dpm_evt_dp_status(struct pd_port *pd_port)
 {
-	struct tcp_dpm_dp_data *dp_data_tcp =
-		&pd_port->tcp_event.tcp_dpm_data.dp_data;
+	struct tcp_dpm_dp_data *dp_data_tcp = &pd_port->tcp_event.tcp_dpm_data.dp_data;
 
 	struct dp_data *dp_data = pd_get_dp_data(pd_port);
 
 	pd_port->mode_svid = USB_SID_DISPLAYPORT;
-	dp_data->local_status = tcpc_update_bits(
-		dp_data->local_status,
+	dp_data->local_status = tcpc_update_bits(dp_data->local_status,
 		dp_data_tcp->val, dp_data_tcp->mask);
 }
 
@@ -814,13 +775,12 @@ static inline void pd_parse_tcp_dpm_evt_dp_status(struct pd_port *pd_port)
 
 static inline void pd_parse_tcp_dpm_evt_dp_config(struct pd_port *pd_port)
 {
-	struct tcp_dpm_dp_data *dp_data_tcp =
-		&pd_port->tcp_event.tcp_dpm_data.dp_data;
+	struct tcp_dpm_dp_data *dp_data_tcp = &pd_port->tcp_event.tcp_dpm_data.dp_data;
 	struct dp_data *dp_data = pd_get_dp_data(pd_port);
 
 	pd_port->mode_svid = USB_SID_DISPLAYPORT;
-	dp_data->local_config = tcpc_update_bits(
-		dp_data->local_config, dp_data_tcp->val, dp_data_tcp->mask);
+	dp_data->local_config = tcpc_update_bits(dp_data->local_config,
+		dp_data_tcp->val, dp_data_tcp->mask);
 }
 
 #endif	/* CONFIG_USB_PD_ALT_MODE_DFP */
@@ -829,24 +789,20 @@ static inline void pd_parse_tcp_dpm_evt_dp_config(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_CUSTOM_VDM
 static inline void pd_parse_tcp_dpm_evt_uvdm(struct pd_port *pd_port)
 {
-	struct tcp_dpm_custom_vdm_data *vdm_data =
-		&pd_port->tcp_event.tcp_dpm_data.vdm_data;
+	struct tcp_dpm_custom_vdm_data *vdm_data = &pd_port->tcp_event.tcp_dpm_data.vdm_data;
 
 	pd_port->uvdm_cnt = vdm_data->cnt;
 	pd_port->uvdm_wait_resp = vdm_data->wait_resp;
-	memcpy(pd_port->uvdm_data,
-		vdm_data->vdos, sizeof(uint32_t) * vdm_data->cnt);
+	memcpy(pd_port->uvdm_data, vdm_data->vdos, sizeof(uint32_t) * vdm_data->cnt);
 
 #ifdef CONFIG_USB_PD_SVDM
-	if (pd_check_rev30(pd_port) &&
-		(pd_port->uvdm_data[0] & VDO_SVDM_TYPE))
+	if (pd_check_rev30(pd_port) && (pd_port->uvdm_data[0] & VDO_SVDM_TYPE))
 		pd_port->uvdm_data[0] |= VDO_SVDM_VERS(SVDM_REV20);
 #endif	/* CONFIG_USB_PD_SVDM */
 }
 #endif	/* CONFIG_USB_PD_CUSTOM_VDM */
 
-static inline void pd_parse_tcp_dpm_evt_from_tcpm(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline void pd_parse_tcp_dpm_evt_from_tcpm(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	switch (pd_event->msg) {
 #ifdef CONFIG_USB_PD_KEEP_SVIDS
@@ -854,7 +810,6 @@ static inline void pd_parse_tcp_dpm_evt_from_tcpm(
 		pd_port->pe_data.remote_svid_list.cnt = 0;
 		break;
 #endif	/* CONFIG_USB_PD_KEEP_SVIDS */
-
 #ifdef CONFIG_USB_PD_ALT_MODE
 	case TCP_DPM_EVT_DISCOVER_MODES:
 	case TCP_DPM_EVT_ENTER_MODE:
@@ -862,11 +817,9 @@ static inline void pd_parse_tcp_dpm_evt_from_tcpm(
 	case TCP_DPM_EVT_ATTENTION:
 		pd_parse_tcp_dpm_evt_svdm(pd_port);
 		break;
-
 	case TCP_DPM_EVT_DP_ATTENTION:
 		pd_parse_tcp_dpm_evt_dp_status(pd_port);
 		break;
-
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 	case TCP_DPM_EVT_DP_STATUS_UPDATE:
 		pd_parse_tcp_dpm_evt_dp_status(pd_port);
@@ -876,7 +829,6 @@ static inline void pd_parse_tcp_dpm_evt_from_tcpm(
 		break;
 #endif	/* CONFIG_USB_PD_ALT_MODE_DFP */
 #endif	/* CONFIG_USB_PD_ALT_MODE */
-
 #ifdef CONFIG_USB_PD_CUSTOM_VDM
 	case TCP_DPM_EVT_UVDM:
 		pd_parse_tcp_dpm_evt_uvdm(pd_port);
@@ -885,14 +837,12 @@ static inline void pd_parse_tcp_dpm_evt_from_tcpm(
 	}
 }
 
-static inline bool pd_check_tcp_msg_valid(
-		struct pd_port *pd_port, uint8_t new_state)
+static inline bool pd_check_tcp_msg_valid(struct pd_port *pd_port, uint8_t new_state)
 {
 	return pd_make_vdm_state_transit(pd_port, new_state);
 }
 
-static inline bool pd_process_tcp_msg(
-		struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_tcp_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	uint8_t new_state;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
@@ -901,10 +851,8 @@ static inline bool pd_process_tcp_msg(
 		return pd_process_tcp_cable_event(pd_port, pd_event);
 
 	if (!pd_check_pe_state_ready(pd_port)) {
-		pd_notify_tcp_event_1st_result(
-			pd_port, TCP_DPM_RET_DENIED_NOT_READY);
-		PE_DBG("skip vdm_request, not ready_state (%d)\n",
-					pd_port->pe_state_curr);
+		pd_notify_tcp_event_1st_result(pd_port, TCP_DPM_RET_DENIED_NOT_READY);
+		PE_DBG("skip vdm_request, not ready_state (%d)\n", pd_port->pe_state_curr);
 		return false;
 	}
 
@@ -917,8 +865,7 @@ static inline bool pd_process_tcp_msg(
 	new_state = tcp_vdm_evt_init_state[new_state];
 
 	if (!pd_check_tcp_msg_valid(pd_port, new_state)) {
-		pd_notify_tcp_event_1st_result(
-			pd_port, TCP_DPM_RET_DENIED_WRONG_DATA_ROLE);
+		pd_notify_tcp_event_1st_result(pd_port, TCP_DPM_RET_DENIED_WRONG_DATA_ROLE);
 		PE_DBG("skip vdm_request, WRONG DATA ROLE\n");
 		return false;
 	}
@@ -942,22 +889,16 @@ bool pd_process_event_vdm(struct pd_port *pd_port, struct pd_event *pd_event)
 	switch (pd_event->event_type) {
 	case PD_EVT_CTRL_MSG:
 		return pd_process_ctrl_msg(pd_port, pd_event);
-
 	case PD_EVT_DATA_MSG:
 		return pd_process_data_msg(pd_port, pd_event);
-
 	case PD_EVT_DPM_MSG:
 		return pd_process_dpm_msg(pd_port, pd_event);
-
 	case PD_EVT_HW_MSG:
 		return pd_process_hw_msg(pd_port, pd_event);
-
 	case PD_EVT_PE_MSG:
 		return pd_process_pe_msg(pd_port, pd_event);
-
 	case PD_EVT_TIMER_MSG:
 		return pd_process_timer_msg(pd_port, pd_event);
-
 	case PD_EVT_TCP_MSG:
 		return pd_process_tcp_msg(pd_port, pd_event);
 	}

@@ -335,7 +335,7 @@
 #define BQ2589X_TSPCT_MASK          0x7F
 #define BQ2589X_TSPCT_SHIFT         0
 #define BQ2589X_TSPCT_BASE          21
-#define BQ2589X_TSPCT_LSB           465//should be 0.465,kernel does not support float
+#define BQ2589X_TSPCT_LSB           465 //should be 0.465,kernel does not support float
 
 /* Register 0x11*/
 #define BQ2589X_REG_11              0x11

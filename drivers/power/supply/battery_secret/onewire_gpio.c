@@ -596,18 +596,19 @@ static const struct file_operations onewire_dev_fops = {
 };
 
 static const struct of_device_id onewire_gpio_dt_match[] = {
-	{.compatible = "xiaomi,onewire_gpio"},
-	{},
+	{ .compatible = "xiaomi,onewire_gpio", },
+	{ },
 };
+MODULE_DEVICE_TABLE(of, onewire_gpio_dt_match);
 
 static struct platform_driver onewire_gpio_driver = {
 	.driver = {
-		.owner = THIS_MODULE,
-		.name = "onewire_gpio",
-		.of_match_table = onewire_gpio_dt_match,
+		.owner		= THIS_MODULE,
+		.name		= "onewire_gpio",
+		.of_match_table	= of_match_ptr(onewire_gpio_dt_match),
 	},
-	.probe = onewire_gpio_probe,
-	.remove = onewire_gpio_remove,
+	.probe		= onewire_gpio_probe,
+	.remove	= onewire_gpio_remove,
 };
 
 static int __init onewire_gpio_init(void)

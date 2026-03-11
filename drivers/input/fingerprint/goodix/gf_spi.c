@@ -926,10 +926,11 @@ static int gf_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id gx_match_table[] = {
-	{.compatible = GF_SPIDEV_NAME},
-	{},
+static const struct of_device_id gx_match_table[] = {
+	{ .compatible = GF_SPIDEV_NAME, },
+	{ },
 };
+MODULE_DEVICE_TABLE(of, gx_match_table);
 
 #if defined(USE_SPI_BUS)
 static struct spi_driver gf_driver = {
@@ -937,12 +938,12 @@ static struct spi_driver gf_driver = {
 static struct platform_driver gf_driver = {
 #endif
 	.driver = {
-		.name = GF_DEV_NAME,
-		.owner = THIS_MODULE,
-		.of_match_table = gx_match_table,
+		.owner		= THIS_MODULE,
+		.name		= GF_DEV_NAME,
+		.of_match_table	= of_match_ptr(gx_match_table),
 	},
-	.probe = gf_probe,
-	.remove = gf_remove,
+	.probe		= gf_probe,
+	.remove	= gf_remove,
 };
 
 static int __init gf_init(void)
@@ -954,7 +955,7 @@ static int __init gf_init(void)
 	 * the driver which manages those device numbers.
 	 */
 	if (fpsensor != 2) {
-		pr_err("hml gf_init failed as fpsensor = %d(2=gdx)\n", fpsensor);
+		pr_err("gf_init failed as fpsensor = %d(2=gdx)\n", fpsensor);
 		return -1;
 	}
 

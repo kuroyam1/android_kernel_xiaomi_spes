@@ -6,23 +6,25 @@
  ************************************************************************/
 
 #include "xiaomi_touch.h"
+
 static struct xiaomi_touch_pdata *touch_pdata;
+
 static int xiaomi_touch_dev_open(struct inode *inode, struct file *file)
 {
-	struct xiaomi_touch *dev = NULL;
-	int i = MINOR(inode->i_rdev);
-	struct xiaomi_touch_pdata *touch_pdata;
+	struct xiaomi_touch *touch_dev;
+	struct xiaomi_touch_pdata *pdata;
+	int minor = MINOR(inode->i_rdev);
 
 	pr_info("%s\n", __func__);
 
-	dev = xiaomi_touch_dev_get(i);
-	if (!dev) {
+	touch_dev = xiaomi_touch_dev_get(minor);
+	if (!touch_dev) {
 		pr_err("%s: cant get dev\n", __func__);
 		return -ENOMEM;
 	}
 
-	touch_pdata = dev_get_drvdata(dev->dev);
-	file->private_data = touch_pdata;
+	pdata = dev_get_drvdata(touch_dev->dev);
+	file->private_data = pdata;
 
 	return 0;
 }
@@ -52,9 +54,9 @@ static long xiaomi_touch_dev_ioctl(struct file *file,
 	int err = 0;
 	int buf[VALUE_TYPE_SIZE] = {0, };
 	struct xiaomi_touch_pdata *pdata;
-	void __user *argp = (void __user *)arg;
 	struct xiaomi_touch_interface *touch_data;
-	struct xiaomi_touch *dev;
+	struct xiaomi_touch *touch_dev;
+	void __user *argp = (void __user *)arg;
 	int user_cmd = _IOC_NR(cmd);
 
 	if (!file)
@@ -65,17 +67,17 @@ static long xiaomi_touch_dev_ioctl(struct file *file,
 		return -ENODEV;
 
 	touch_data = pdata->touch_data;
-	dev = pdata->device;
-	if (!touch_data || !dev)
+	touch_dev = &pdata->touch_dev;
+	if (!touch_data || !touch_dev)
 		return -ENODEV;
 
 	if (copy_from_user(buf, argp, sizeof(buf)))
 		return -EFAULT;
 
-	mutex_lock(&dev->mutex);
-
 	pr_info("%s: cmd: %d, mode: %d, value: %d\n",
-		__func__, user_cmd, buf[1], buf[2]);
+			__func__, user_cmd, buf[1], buf[2]);
+
+	mutex_lock(&touch_dev->mutex);
 
 	switch (user_cmd) {
 	case SET_CUR_VALUE:
@@ -103,7 +105,6 @@ static long xiaomi_touch_dev_ioctl(struct file *file,
 			err = -ENOTTY;
 		}
 		break;
-
 	case RESET_MODE:
 		if (touch_data->resetMode) {
 			int r = touch_data->resetMode(buf[1]);
@@ -130,81 +131,75 @@ static long xiaomi_touch_dev_ioctl(struct file *file,
 		break;
 	}
 
+	mutex_unlock(&touch_dev->mutex);
+
 	if (!err) {
-		if (copy_to_user(argp, buf, sizeof(buf))) {
+		if (copy_to_user(argp, buf, sizeof(buf)))
 			err = -EFAULT;
-		}
 	} else {
 		pr_err("%s: driver operation failed: %d\n", __func__, err);
 	}
 
-	mutex_unlock(&dev->mutex);
 	return err;
 }
 
-static int xiaomi_touch_dev_release(struct inode *inode,
-				    struct file *file)
+static int xiaomi_touch_dev_release(struct inode *inode, struct file *file)
 {
 	if (file->private_data)
 		file->private_data = NULL;
 
 	return 0;
 }
-static const struct file_operations xiaomitouch_dev_fops = {
-	.owner = THIS_MODULE,
-	.open = xiaomi_touch_dev_open,
-	.read = xiaomi_touch_dev_read,
-	.write = xiaomi_touch_dev_write,
-	.poll = xiaomi_touch_dev_poll,
-	.unlocked_ioctl = xiaomi_touch_dev_ioctl,
-	.compat_ioctl = xiaomi_touch_dev_ioctl,
-	.release = xiaomi_touch_dev_release,
-	.llseek	= no_llseek,
-};
 
-static struct xiaomi_touch xiaomi_touch_dev = {
-	.misc_dev = {
-		.minor = MISC_DYNAMIC_MINOR,
-		.name = "xiaomi-touch",
-		.fops = &xiaomitouch_dev_fops,
-		.parent = NULL,
-	},
-	.mutex = __MUTEX_INITIALIZER(xiaomi_touch_dev.mutex),
-	.palm_mutex = __MUTEX_INITIALIZER(xiaomi_touch_dev.palm_mutex),
-	.psensor_mutex = __MUTEX_INITIALIZER(xiaomi_touch_dev.psensor_mutex),
-	.wait_queue = __WAIT_QUEUE_HEAD_INITIALIZER(xiaomi_touch_dev.wait_queue),
+static const struct file_operations xiaomitouch_dev_fops = {
+	.owner		= THIS_MODULE,
+	.open		= xiaomi_touch_dev_open,
+	.read		= xiaomi_touch_dev_read,
+	.write		= xiaomi_touch_dev_write,
+	.poll		= xiaomi_touch_dev_poll,
+	.unlocked_ioctl	= xiaomi_touch_dev_ioctl,
+	.compat_ioctl	= xiaomi_touch_dev_ioctl,
+	.release	= xiaomi_touch_dev_release,
+	.llseek		= no_llseek,
 };
 
 struct xiaomi_touch *xiaomi_touch_dev_get(int minor)
 {
-	if (xiaomi_touch_dev.misc_dev.minor == minor)
-		return &xiaomi_touch_dev;
-	else
-		return NULL;
+	if (touch_pdata &&
+	    touch_pdata->touch_dev.misc_dev.minor == minor)
+		return &touch_pdata->touch_dev;
+
+	return NULL;
 }
 
 struct class *get_xiaomi_touch_class(void)
 {
-	return xiaomi_touch_dev.class;
+	return touch_pdata ? touch_pdata->touch_dev.class : NULL;
 }
 
 struct device *get_xiaomi_touch_dev(void)
 {
-	return xiaomi_touch_dev.dev;
+	return touch_pdata ? touch_pdata->touch_dev.dev : NULL;
 }
 
 int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data)
 {
-	int ret = 0;
-	struct xiaomi_touch_interface *touch_data = NULL;
+	struct xiaomi_touch_interface *touch_data;
 
-	if (!touch_pdata)
-		ret = -ENOMEM;
+	if (!touch_pdata) {
+		pr_err("%s: touch_pdata not ready\n", __func__);
+		return -ENOMEM;
+	}
 
 	touch_data = touch_pdata->touch_data;
+	if (!touch_data) {
+		pr_err("%s: touch_data not allocated\n", __func__);
+		return -ENOMEM;
+	}
+
 	pr_info("%s\n", __func__);
 
-	mutex_lock(&xiaomi_touch_dev.mutex);
+	mutex_lock(&touch_pdata->touch_dev.mutex);
 
 	touch_data->setModeValue = data->setModeValue;
 	touch_data->getModeValue = data->getModeValue;
@@ -212,38 +207,27 @@ int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data)
 	touch_data->getModeAll = data->getModeAll;
 	touch_data->palm_sensor_read = data->palm_sensor_read;
 	touch_data->palm_sensor_write = data->palm_sensor_write;
-	//touch_data->p_sensor_read = data->p_sensor_read;
-	//touch_data->p_sensor_write = data->p_sensor_write;
-	//touch_data->panel_vendor_read = data->panel_vendor_read;
-	//touch_data->panel_color_read = data->panel_color_read;
-	//touch_data->panel_display_read = data->panel_display_read;
-	//touch_data->touch_vendor_read = data->touch_vendor_read;
 
-	mutex_unlock(&xiaomi_touch_dev.mutex);
-	return ret;
+	mutex_unlock(&touch_pdata->touch_dev.mutex);
+	return 0;
 }
 
 int update_palm_sensor_value(int value)
 {
-	struct xiaomi_touch *dev = NULL;
-
-	mutex_lock(&xiaomi_touch_dev.palm_mutex);
-
-	if (!touch_pdata) {
-		mutex_unlock(&xiaomi_touch_dev.palm_mutex);
+	if (!touch_pdata)
 		return -ENODEV;
-	}
 
-	dev = touch_pdata->device;
+	mutex_lock(&touch_pdata->touch_dev.palm_mutex);
 
 	if (value != touch_pdata->palm_value) {
 		pr_info("%s: value: %d\n", __func__, value);
-		touch_pdata->palm_value = value;
+		touch_pdata->palm_value   = value;
 		touch_pdata->palm_changed = true;
-		sysfs_notify(&xiaomi_touch_dev.dev->kobj, NULL, "palm_sensor");
+		sysfs_notify(&touch_pdata->touch_dev.dev->kobj,
+			     NULL, "palm_sensor");
 	}
 
-	mutex_unlock(&xiaomi_touch_dev.palm_mutex);
+	mutex_unlock(&touch_pdata->touch_dev.palm_mutex);
 	return 0;
 }
 
@@ -283,11 +267,6 @@ static struct attribute *touch_attr_group[] = {
 	NULL,
 };
 
-static const struct of_device_id xiaomi_touch_of_match[] = {
-	{ .compatible = "xiaomi-touch", },
-	{ },
-};
-
 static int xiaomi_touch_parse_dt(struct device *dev,
 				 struct xiaomi_touch_pdata *data)
 {
@@ -311,12 +290,19 @@ static int xiaomi_touch_probe(struct platform_device *pdev)
 	int ret = 0;
 	struct device *dev = &pdev->dev;
 	struct xiaomi_touch_pdata *pdata;
+	struct xiaomi_touch *touch_dev;
 
-	pdata = devm_kzalloc(dev, sizeof(struct xiaomi_touch_pdata), GFP_KERNEL);
+	pr_info("%s: enter\n", __func__);
+
+	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
 		return -ENOMEM;
 
-	pr_info("%s: enter\n", __func__);
+	touch_dev = &pdata->touch_dev;
+	mutex_init(&touch_dev->mutex);
+	mutex_init(&touch_dev->palm_mutex);
+	mutex_init(&touch_dev->psensor_mutex);
+	init_waitqueue_head(&touch_dev->wait_queue);
 
 	ret = xiaomi_touch_parse_dt(dev, pdata);
 	if (ret < 0) {
@@ -324,62 +310,68 @@ static int xiaomi_touch_probe(struct platform_device *pdev)
 		goto parse_dt_err;
 	}
 
-	ret = misc_register(&xiaomi_touch_dev.misc_dev);
+	touch_dev->misc_dev.minor = MISC_DYNAMIC_MINOR;
+	touch_dev->misc_dev.name = "xiaomi-touch";
+	touch_dev->misc_dev.fops = &xiaomitouch_dev_fops;
+	touch_dev->misc_dev.parent = NULL;
+
+	ret = misc_register(&touch_dev->misc_dev);
 	if (ret) {
 		pr_err("%s: create misc device err: %d\n", __func__, ret);
 		goto parse_dt_err;
 	}
 
-	if (!xiaomi_touch_dev.class)
-		xiaomi_touch_dev.class = class_create(THIS_MODULE, "touch");
-
-	if (!xiaomi_touch_dev.class) {
+	touch_dev->class = class_create(THIS_MODULE, "touch");
+	if (!touch_dev->class) {
 		pr_err("%s: create device class err\n", __func__);
 		goto class_create_err;
 	}
 
-	xiaomi_touch_dev.dev = device_create(xiaomi_touch_dev.class, NULL, 'T', NULL, "touch_dev");
-	if (!xiaomi_touch_dev.dev) {
+	touch_dev->dev = device_create(touch_dev->class, NULL, 'T',
+				       NULL, "touch_dev");
+	if (!touch_dev->dev) {
 		pr_err("%s: create device dev err\n", __func__);
 		goto device_create_err;
 	}
 
-	pdata->touch_data = (struct xiaomi_touch_interface *)kzalloc(sizeof(struct xiaomi_touch_interface), GFP_KERNEL);
-	if (pdata->touch_data == NULL) {
+	pdata->touch_data = kzalloc(sizeof(struct xiaomi_touch_interface),
+				    GFP_KERNEL);
+	if (!pdata->touch_data) {
 		ret = -ENOMEM;
 		pr_err("%s: alloc mem for touch_data\n", __func__);
 		goto data_mem_err;
 	}
 
-	pdata->device = &xiaomi_touch_dev;
-	dev_set_drvdata(xiaomi_touch_dev.dev, pdata);
+	dev_set_drvdata(touch_dev->dev, pdata);
+	platform_set_drvdata(pdev, pdata);
 
 	touch_pdata = pdata;
 
-	xiaomi_touch_dev.attrs.attrs = touch_attr_group;
-	ret = sysfs_create_group(&xiaomi_touch_dev.dev->kobj, &xiaomi_touch_dev.attrs);
+	touch_dev->attrs.attrs = touch_attr_group;
+	ret = sysfs_create_group(&touch_dev->dev->kobj, &touch_dev->attrs);
 	if (ret) {
-		pr_err("%s ERROR: Cannot create sysfs structure!: %d\n", __func__, ret);
+		pr_err("%s ERROR: Cannot create sysfs structure!: %d\n",
+		       __func__, ret);
 		ret = -ENODEV;
 		goto sys_group_err;
 	}
 
 	pr_info("%s: over\n", __func__);
-
 	return 0;
 
 sys_group_err:
-	if (pdata->touch_data) {
-		kfree(pdata->touch_data);
-		pdata->touch_data = NULL;
-	}
+	kfree(pdata->touch_data);
+	pdata->touch_data = NULL;
 data_mem_err:
-	device_destroy(xiaomi_touch_dev.class, 0);
+	device_destroy(touch_dev->class, touch_dev->dev->devt);
 device_create_err:
-	class_destroy(xiaomi_touch_dev.class);
+	class_destroy(touch_dev->class);
 class_create_err:
-	misc_deregister(&xiaomi_touch_dev.misc_dev);
+	misc_deregister(&touch_dev->misc_dev);
 parse_dt_err:
+	mutex_destroy(&touch_dev->mutex);
+	mutex_destroy(&touch_dev->palm_mutex);
+	mutex_destroy(&touch_dev->psensor_mutex);
 	touch_pdata = NULL;
 	pr_err("%s: fail!\n", __func__);
 	return ret;
@@ -387,45 +379,57 @@ parse_dt_err:
 
 static int xiaomi_touch_remove(struct platform_device *pdev)
 {
-	struct xiaomi_touch_pdata *pdata;
+	struct xiaomi_touch_pdata *pdata = platform_get_drvdata(pdev);
+	struct xiaomi_touch *touch_dev;
 
-	if (xiaomi_touch_dev.dev)
-		pdata = dev_get_drvdata(xiaomi_touch_dev.dev);
-	else
-		pdata = touch_pdata;
+	if (!pdata)
+		return 0;
 
-	if (xiaomi_touch_dev.dev && xiaomi_touch_dev.attrs.attrs)
-		sysfs_remove_group(&xiaomi_touch_dev.dev->kobj, &xiaomi_touch_dev.attrs);
+	touch_dev = &pdata->touch_dev;
 
-	if (xiaomi_touch_dev.dev) {
-		device_destroy(xiaomi_touch_dev.class, xiaomi_touch_dev.dev->devt);
-		xiaomi_touch_dev.dev = NULL;
+	if (touch_dev->dev && touch_dev->attrs.attrs)
+		sysfs_remove_group(&touch_dev->dev->kobj, &touch_dev->attrs);
+
+	if (touch_dev->dev) {
+		device_destroy(touch_dev->class, touch_dev->dev->devt);
+		touch_dev->dev = NULL;
 	}
 
-	if (xiaomi_touch_dev.class) {
-		class_destroy(xiaomi_touch_dev.class);
-		xiaomi_touch_dev.class = NULL;
+	if (touch_dev->class) {
+		class_destroy(touch_dev->class);
+		touch_dev->class = NULL;
 	}
 
-	misc_deregister(&xiaomi_touch_dev.misc_dev);
+	misc_deregister(&touch_dev->misc_dev);
 
-	if (pdata && pdata->touch_data) {
+	if (pdata->touch_data) {
 		kfree(pdata->touch_data);
 		pdata->touch_data = NULL;
 	}
 
+	mutex_destroy(&touch_dev->mutex);
+	mutex_destroy(&touch_dev->palm_mutex);
+	mutex_destroy(&touch_dev->psensor_mutex);
 	touch_pdata = NULL;
+	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
 
+static const struct of_device_id xiaomi_touch_of_match[] = {
+	{ .compatible = "xiaomi-touch", },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, xiaomi_touch_of_match);
+
 static struct platform_driver xiaomi_touch_device_driver = {
+	.driver = {
+		.owner		= THIS_MODULE,
+		.name		= "xiaomi-touch",
+		.of_match_table	= of_match_ptr(xiaomi_touch_of_match),
+	},
 	.probe		= xiaomi_touch_probe,
-	.remove		= xiaomi_touch_remove,
-	.driver		= {
-		.name	= "xiaomi-touch",
-		.of_match_table = of_match_ptr(xiaomi_touch_of_match),
-	}
+	.remove	= xiaomi_touch_remove,
 };
 
 static int __init xiaomi_touch_init(void)

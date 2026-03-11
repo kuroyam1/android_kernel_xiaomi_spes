@@ -84,7 +84,6 @@ static void fts_prc_func(struct work_struct *work)
 *****************************************************************************/
 void fts_prc_queue_work(struct fts_ts_data *ts_data)
 {
-	cancel_delayed_work_sync(&ts_data->prc_work);
 	queue_delayed_work(ts_data->ts_workqueue, &ts_data->prc_work,
 			   msecs_to_jiffies(POINT_REPORT_CHECK_WAIT_TIME));
 }
@@ -121,7 +120,7 @@ int fts_point_report_check_init(struct fts_ts_data *ts_data)
 int fts_point_report_check_exit(struct fts_ts_data *ts_data)
 {
 	FTS_FUNC_ENTER();
-
+	cancel_delayed_work_sync(&ts_data->prc_work);
 	FTS_FUNC_EXIT();
 	return 0;
 }

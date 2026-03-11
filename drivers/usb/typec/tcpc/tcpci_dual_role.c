@@ -59,8 +59,8 @@ static int tcpc_dual_role_get_prop(struct dual_role_phy_instance *dual_role,
 	return ret;
 }
 
-static	int tcpc_dual_role_prop_is_writeable(
-	struct dual_role_phy_instance *dual_role, enum dual_role_property prop)
+static int tcpc_dual_role_prop_is_writeable(struct dual_role_phy_instance *dual_role,
+			enum dual_role_property prop)
 {
 	int retval = -EINVAL;
 	struct tcpc_device *tcpc = dev_get_drvdata(dual_role->dev.parent);
@@ -73,8 +73,7 @@ static	int tcpc_dual_role_prop_is_writeable(
 #else
 	case DUAL_ROLE_PROP_MODE:
 #endif	/* CONFIG_USB_POWER_DELIVERY */
-		if (tcpc->dual_role_supported_modes ==
-			DUAL_ROLE_SUPPORTED_MODES_DFP_AND_UFP)
+		if (tcpc->dual_role_supported_modes == DUAL_ROLE_SUPPORTED_MODES_DFP_AND_UFP)
 			retval = 1;
 		break;
 	default:
@@ -85,8 +84,7 @@ static	int tcpc_dual_role_prop_is_writeable(
 
 #ifdef CONFIG_USB_POWER_DELIVERY
 
-static int tcpc_dual_role_set_prop_pr(
-	struct tcpc_device *tcpc, unsigned int val)
+static int tcpc_dual_role_set_prop_pr(struct tcpc_device *tcpc, unsigned int val)
 {
 	int ret;
 	uint8_t role;
@@ -121,8 +119,7 @@ static int tcpc_dual_role_set_prop_pr(
 	return ret;
 }
 
-static int tcpc_dual_role_set_prop_dr(
-	struct tcpc_device *tcpc, unsigned int val)
+static int tcpc_dual_role_set_prop_dr(struct tcpc_device *tcpc, unsigned int val)
 {
 	int ret;
 	uint8_t role;
@@ -151,8 +148,7 @@ static int tcpc_dual_role_set_prop_dr(
 	return ret;
 }
 
-static int tcpc_dual_role_set_prop_vconn(
-	struct tcpc_device *tcpc, unsigned int val)
+static int tcpc_dual_role_set_prop_vconn(struct tcpc_device *tcpc, unsigned int val)
 {
 	int ret;
 	uint8_t role;
@@ -183,8 +179,7 @@ static int tcpc_dual_role_set_prop_vconn(
 
 #else	/* TypeC Only */
 
-static int tcpc_dual_role_set_prop_mode(
-	struct tcpc_device *tcpc, unsigned int val)
+static int tcpc_dual_role_set_prop_mode(struct tcpc_device *tcpc, unsigned int val)
 {
 	int ret;
 
@@ -242,8 +237,7 @@ static void tcpc_get_dual_desc(struct tcpc_device *tcpc)
 
 	if (of_property_read_u32(np, "tcpc-dual,supported_modes", &val) >= 0) {
 		if (val > DUAL_ROLE_PROP_SUPPORTED_MODES_TOTAL)
-			tcpc->dual_role_supported_modes =
-					DUAL_ROLE_SUPPORTED_MODES_DFP_AND_UFP;
+			tcpc->dual_role_supported_modes = DUAL_ROLE_SUPPORTED_MODES_DFP_AND_UFP;
 		else
 			tcpc->dual_role_supported_modes = val;
 	}
@@ -251,15 +245,15 @@ static void tcpc_get_dual_desc(struct tcpc_device *tcpc)
 	of_node_put(np);
 }
 
-int tcpc_dual_role_phy_init(
-			struct tcpc_device *tcpc)
+int tcpc_dual_role_phy_init(struct tcpc_device *tcpc)
 {
 	struct dual_role_phy_desc *dual_desc;
 	int len;
 	char *str_name;
 
-	tcpc->dr_usb = devm_kzalloc(&tcpc->dev,
-				sizeof(*tcpc->dr_usb), GFP_KERNEL);
+	tcpc->dr_usb = devm_kzalloc(&tcpc->dev, sizeof(*tcpc->dr_usb), GFP_KERNEL);
+	if (!tcpc->dr_usb)
+		return -ENOMEM;
 
 	dual_desc = devm_kzalloc(&tcpc->dev, sizeof(*dual_desc), GFP_KERNEL);
 	if (!dual_desc)
@@ -268,7 +262,7 @@ int tcpc_dual_role_phy_init(
 	tcpc_get_dual_desc(tcpc);
 
 	len = strlen(tcpc->desc.name);
-	str_name = devm_kzalloc(&tcpc->dev, len+11, GFP_KERNEL);
+	str_name = devm_kzalloc(&tcpc->dev, len + 11, GFP_KERNEL);
 	snprintf(str_name, PAGE_SIZE, "dual-role-%s", tcpc->desc.name);
 	dual_desc->name = str_name;
 
@@ -283,6 +277,7 @@ int tcpc_dual_role_phy_init(
 		dev_err(&tcpc->dev, "%s: tcpc fail to register dual role usb\n", __func__);
 		return -EINVAL;
 	}
+
 	/* init dual role phy instance property */
 	tcpc->dual_role_pr = DUAL_ROLE_PROP_PR_NONE;
 	tcpc->dual_role_dr = DUAL_ROLE_PROP_DR_NONE;

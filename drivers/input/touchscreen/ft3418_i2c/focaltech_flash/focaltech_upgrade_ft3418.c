@@ -59,7 +59,7 @@ static int fts_ft5452_upgrade(u8 *buf, u32 len)
 	/* enter into upgrade environment */
 	ret = fts_fwupg_enter_into_boot();
 	if (ret < 0) {
-		FTS_ERROR("enter into pramboot/bootloader fail,ret=%d", ret);
+		FTS_ERROR("enter into pramboot/bootloader fail, ret=%d", ret);
 		goto fw_reset;
 	}
 
@@ -95,7 +95,7 @@ static int fts_ft5452_upgrade(u8 *buf, u32 len)
 		goto fw_reset;
 	}
 
-	FTS_INFO("**********read out checksum**********");
+	FTS_DEBUG("**********read out checksum**********");
 
 	/* check sum init */
 	wbuf[0] = FTS_CMD_ECC_INIT;
@@ -129,7 +129,7 @@ static int fts_ft5452_upgrade(u8 *buf, u32 len)
 		wbuf[0] = FTS_CMD_FLASH_STATUS;
 		reg_val[0] = reg_val[1] = 0x00;
 		fts_read(wbuf, 1, reg_val, 2);
-		FTS_DEBUG("[UPGRADE]: reg_val[0]=%02x reg_val[0]=%02x!!", reg_val[0], reg_val[1]);
+		FTS_DEBUG("[UPGRADE]: reg_val[0]=%02x, reg_val[1]=%02x", reg_val[0], reg_val[1]);
 		if ((0xF0 == reg_val[0]) && (0x55 == reg_val[1])) {
 			break;
 		}
@@ -145,27 +145,27 @@ static int fts_ft5452_upgrade(u8 *buf, u32 len)
 	}
 	ecc_in_tp = reg_val[0];
 
-	FTS_INFO("ecc in tp:%x, host:%x", ecc_in_tp, ecc_in_host);
+	FTS_DEBUG("ecc in tp:%x, host:%x", ecc_in_tp, ecc_in_host);
 	if (ecc_in_tp != ecc_in_host) {
 		FTS_ERROR("ecc check fail");
 		goto fw_reset;
 	}
 
-	FTS_INFO("upgrade success, reset to normal boot");
+	FTS_DEBUG("upgrade success, reset to normal boot");
 	ret = fts_fwupg_reset_in_boot();
 	if (ret < 0) {
 		FTS_ERROR("reset to normal boot fail");
+		return -EIO;
 	}
 
 	msleep(200);
 	return 0;
 
 fw_reset:
-	FTS_INFO("upgrade fail, reset to normal boot");
+	FTS_ERROR("upgrade fail, reset to normal boot");
 	ret = fts_fwupg_reset_in_boot();
-	if (ret < 0) {
+	if (ret < 0)
 		FTS_ERROR("reset to normal boot fail");
-	}
 	return -EIO;
 }
 

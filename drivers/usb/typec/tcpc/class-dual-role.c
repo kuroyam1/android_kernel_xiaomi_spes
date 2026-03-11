@@ -53,23 +53,6 @@ EXPORT_SYMBOL_GPL(dual_role_class);
 
 static struct device_type dual_role_dev_type;
 
-/*static char *kstrdupcase(const char *str, gfp_t gfp, bool to_upper)
-{
-	char *ret, *ustr;
-
-	ustr = ret = kmalloc(strlen(str) + 1, gfp);
-
-	if (!ret)
-		return NULL;
-
-	while (*str)
-		*ustr++ = to_upper ? toupper(*str++) : tolower(*str++);
-
-	*ustr = 0;
-
-	return ret;
-}*/
-
 static char *kstrdupcase(const char *str, gfp_t gfp, bool to_upper)
 {
 	char *ret, *p;
@@ -467,67 +450,6 @@ void dual_role_init_attrs(struct device_type *dev_type)
 	for (i = 0; i < ARRAY_SIZE(dual_role_attrs); i++)
 		__dual_role_attrs[i] = &dual_role_attrs[i].attr;
 }
-
-/*int dual_role_uevent(struct device *dev, struct kobj_uevent_env *env)
-{
-	struct dual_role_phy_instance *dual_role = dev_get_drvdata(dev);
-	int ret = 0, j;
-	char *prop_buf;
-	char *attrname;
-
-	dev_dbg(dev, "uevent\n");
-
-	if (!dual_role || !dual_role->desc) {
-		dev_dbg(dev, "No dual_role phy yet\n");
-		return ret;
-	}
-
-	dev_dbg(dev, "DUAL_ROLE_NAME=%s\n", dual_role->desc->name);
-
-	ret = add_uevent_var(env, "DUAL_ROLE_NAME=%s", dual_role->desc->name);
-	if (ret)
-		return ret;
-
-	prop_buf = (char *)get_zeroed_page(GFP_KERNEL);
-	if (!prop_buf)
-		return -ENOMEM;
-
-	for (j = 0; j < dual_role->desc->num_properties; j++) {
-		struct device_attribute *attr;
-		char *line;
-
-		attr = &dual_role_attrs[dual_role->desc->properties[j]];
-
-		ret = dual_role_show_property(dev, attr, prop_buf);
-		if (ret == -ENODEV || ret == -ENODATA) {
-			ret = 0;
-			continue;
-		}
-
-		if (ret < 0)
-			goto out;
-		line = strnchr(prop_buf, PAGE_SIZE, '\n');
-		if (line)
-			*line = 0;
-
-		attrname = kstrdupcase(attr->attr.name, GFP_KERNEL, true);
-		if (!attrname)
-			ret = -ENOMEM;
-
-		dev_dbg(dev, "prop %s=%s\n", attrname, prop_buf);
-
-		ret = add_uevent_var(env, "DUAL_ROLE_%s=%s", attrname,
-					prop_buf);
-		kfree(attrname);
-		if (ret)
-			goto out;
-	}
-
-out:
-	free_page((unsigned long)prop_buf);
-
-	return ret;
-}*/
 
 int dual_role_uevent(struct device *dev, struct kobj_uevent_env *env)
 {

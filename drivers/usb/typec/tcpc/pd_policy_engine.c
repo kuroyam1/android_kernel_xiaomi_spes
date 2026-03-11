@@ -542,11 +542,8 @@ static const char *const pe_state_name[] = {
 #endif /* PE_DBG_ENABLE | PE_STATE_INFO_ENABLE */
 
 struct pe_state_actions {
-	void (*entry_action)
-		(struct pd_port *pd_port);
-	/* const void (*exit_action)
-	 * (struct pd_port *pd_port, struct pd_event *pd_event);
-	 */
+	void (*entry_action)(struct pd_port *pd_port);
+	/* const void (*exit_action)(struct pd_port *pd_port, struct pd_event *pd_event); */
 };
 
 #define PE_STATE_ACTIONS(state) { .entry_action = state##_entry, }
@@ -808,8 +805,7 @@ static const struct pe_state_actions pe_state_actions[] = {
 };
 
 /* pd_state_action_fcn_t pe_get_exit_action(uint8_t pe_state) */
-void (*pe_get_exit_action(uint8_t pe_state))
-		(struct pd_port *)
+void (*pe_get_exit_action(uint8_t pe_state))(struct pd_port *)
 {
 	void (*retval)(struct pd_port *) = NULL;
 
@@ -899,7 +895,6 @@ void (*pe_get_exit_action(uint8_t pe_state))
 		break;
 #endif	/* CONFIG_USB_PD_REV30_MFRS_INFO_REMOTE */
 
-
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_CODE_REMOTE
 	case PE_GET_COUNTRY_CODES:
 		retval = pe_get_country_codes_exit;
@@ -926,8 +921,7 @@ void (*pe_get_exit_action(uint8_t pe_state))
 	return retval;
 }
 
-static inline void print_state(
-	struct pd_port *pd_port, uint8_t state)
+static inline void print_state(struct pd_port *pd_port, uint8_t state)
 {
 	/*
 	 * Source (P, Provider), Sink (C, Consumer)
@@ -949,8 +943,7 @@ static inline void print_state(
 #endif	/* PE_DBG_ENABLE */
 }
 
-static void pe_reset_vdm_state_variable(
-	struct pd_port *pd_port, struct pe_data *pe_data)
+static void pe_reset_vdm_state_variable(struct pd_port *pd_port, struct pe_data *pe_data)
 {
 	if (pe_data->vdm_state_timer)
 		pd_disable_timer(pd_port, pe_data->vdm_state_timer);
@@ -959,8 +952,7 @@ static void pe_reset_vdm_state_variable(
 	pe_data->vdm_state_timer = 0;
 }
 
-static inline void pd_pe_state_change(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline void pd_pe_state_change(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	void (*prev_exit_action)(struct pd_port *pd_port);
 	void (*next_entry_action)(struct pd_port *pd_port);
@@ -983,11 +975,12 @@ static inline void pd_pe_state_change(
 
 #if PE_STATE_INFO_VDM_DIS
 	if (!pd_curr_is_vdm_evt(pd_port))
-#endif	/* PE_STATE_INFO_VDM_DIS */
 		print_state(pd_port, new_state);
+#else
+	print_state(pd_port, new_state);
+#endif	/* PE_STATE_INFO_VDM_DIS */
 
-	if (pe_data->pe_state_flags &
-		PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER) {
+	if (pe_data->pe_state_flags & PE_STATE_FLAG_ENABLE_SENDER_RESPONSE_TIMER) {
 		pd_disable_timer(pd_port, PD_TIMER_SENDER_RESPONSE);
 	}
 
@@ -1017,17 +1010,15 @@ static inline void pd_pe_state_change(
 		pd_set_rx_enable(pd_port, PD_RX_CAP_PE_SWAP);
 }
 
-static int pd_handle_event(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static int pd_handle_event(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	bool dpm_imme;
 	struct pe_data *pe_data = &pd_port->pe_data;
 
 	if (pd_curr_is_vdm_evt(pd_port)) {
-		dpm_imme = pd_port->pe_data.vdm_state_flags
-			& VDM_STATE_FLAG_DPM_ACK_IMMEDIATELY;
+		dpm_imme = pd_port->pe_data.vdm_state_flags & VDM_STATE_FLAG_DPM_ACK_IMMEDIATELY;
 		if ((pe_data->reset_vdm_state && (!dpm_imme)) ||
-			(pd_event->event_type == PD_EVT_TCP_MSG)) {
+		    (pd_event->event_type == PD_EVT_TCP_MSG)) {
 			pe_data->reset_vdm_state = false;
 			pd_port->pe_vdm_state = pd_port->pe_pd_state;
 			pe_reset_vdm_state_variable(pd_port, pe_data);
@@ -1055,8 +1046,7 @@ enum PE_NEW_EVT_TYPE {
 	PE_NEW_EVT_VDM = 2,
 };
 
-static inline bool pd_try_get_vdm_event(
-	struct tcpc_device *tcpc, struct pd_event *pd_event)
+static inline bool pd_try_get_vdm_event(struct tcpc_device *tcpc, struct pd_event *pd_event)
 {
 	bool ret = false;
 	struct pd_port *pd_port = &tcpc->pd_port;
@@ -1198,8 +1188,7 @@ static inline bool pd_check_tx_ready(struct pd_port *pd_port)
 
 static inline uint8_t pd_try_get_deferred_tcp_event(struct pd_port *pd_port)
 {
-	if (!pd_get_deferred_tcp_event(
-		pd_port->tcpc, &pd_port->tcp_event))
+	if (!pd_get_deferred_tcp_event(pd_port->tcpc, &pd_port->tcp_event))
 		return DPM_READY_REACTION_BUSY;
 
 #ifdef CONFIG_USB_PD_TCPM_CB_2ND
@@ -1221,8 +1210,7 @@ static inline uint8_t pd_try_get_deferred_tcp_event(struct pd_port *pd_port)
  * Returns PE_NEW_EVT_TYPE.
  */
 
-static inline uint8_t pd_try_get_active_event(
-	struct tcpc_device *tcpc, struct pd_event *pd_event)
+static inline uint8_t pd_try_get_active_event(struct tcpc_device *tcpc, struct pd_event *pd_event)
 {
 	uint8_t ret;
 	uint8_t from_pe = PD_TCP_FROM_PE;
@@ -1271,8 +1259,7 @@ static inline uint8_t pd_try_get_active_event(
  * Returns PE_NEW_EVT_TYPE.
  */
 
-static inline uint8_t pd_try_get_next_event(
-	struct tcpc_device *tcpc, struct pd_event *pd_event)
+static inline uint8_t pd_try_get_next_event(struct tcpc_device *tcpc, struct pd_event *pd_event)
 {
 	uint8_t ret = 0;
 	struct pd_port *pd_port = &tcpc->pd_port;
@@ -1294,18 +1281,15 @@ static inline uint8_t pd_try_get_next_event(
  * Richtek Policy Engine
  */
 
-static inline int pd_handle_dpm_immediately(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline int pd_handle_dpm_immediately(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	bool dpm_immediately;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (pd_curr_is_vdm_evt(pd_port)) {
-		dpm_immediately = pd_port->pe_data.vdm_state_flags
-			& VDM_STATE_FLAG_DPM_ACK_IMMEDIATELY;
+		dpm_immediately = pd_port->pe_data.vdm_state_flags & VDM_STATE_FLAG_DPM_ACK_IMMEDIATELY;
 	} else {
-		dpm_immediately = pd_port->pe_data.pe_state_flags2
-			& PE_STATE_FLAG_DPM_ACK_IMMEDIATELY;
+		dpm_immediately = pd_port->pe_data.pe_state_flags2 & PE_STATE_FLAG_DPM_ACK_IMMEDIATELY;
 	}
 
 	if (dpm_immediately) {

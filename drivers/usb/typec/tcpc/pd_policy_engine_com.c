@@ -159,8 +159,7 @@ static inline uint8_t pe20_power_ready_entry(struct pd_port *pd_port)
 	if (pd_port->data_role == PD_ROLE_DFP)
 		rx_cap = PD_RX_CAP_PE_READY_DFP;
 
-	pd_port->pe_data.pe_state_flags |=
-		PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT;
+	pd_port->pe_data.pe_state_flags |= PE_STATE_FLAG_IGNORE_UNKNOWN_EVENT;
 
 	return rx_cap;
 }
@@ -198,8 +197,7 @@ void pe_power_ready_entry(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_BAT_CAP_REMOTE
 void pe_get_battery_cap_entry(struct pd_port *pd_port)
 {
-	struct pd_get_battery_capabilities *gbcdb =
-		pd_get_tcp_event_data_object(pd_port);
+	struct pd_get_battery_capabilities *gbcdb = pd_get_tcp_event_data_object(pd_port);
 
 	PE_STATE_WAIT_MSG(pd_port);
 	pd_send_sop_ext_msg(pd_port,
@@ -232,8 +230,7 @@ void pe_give_battery_cap_entry(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_BAT_STATUS_REMOTE
 void pe_get_battery_status_entry(struct pd_port *pd_port)
 {
-	struct pd_get_battery_status *gbsdb =
-		pd_get_tcp_event_data_object(pd_port);
+	struct pd_get_battery_status *gbsdb = pd_get_tcp_event_data_object(pd_port);
 
 	PE_STATE_WAIT_MSG(pd_port);
 	pd_send_sop_ext_msg(pd_port,
@@ -267,8 +264,7 @@ void pe_give_battery_status_entry(struct pd_port *pd_port)
 
 void pe_get_manufacturer_info_entry(struct pd_port *pd_port)
 {
-	struct pd_get_manufacturer_info *gmidb =
-		pd_get_tcp_event_data_object(pd_port);
+	struct pd_get_manufacturer_info *gmidb = pd_get_tcp_event_data_object(pd_port);
 
 	PE_STATE_WAIT_MSG(pd_port);
 	pd_send_sop_ext_msg(pd_port,
@@ -335,8 +331,7 @@ void pe_give_country_codes_entry(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_INFO_REMOTE
 void pe_get_country_info_entry(struct pd_port *pd_port)
 {
-	uint32_t *ccdo =
-		pd_get_tcp_event_data_object(pd_port);
+	uint32_t *ccdo = pd_get_tcp_event_data_object(pd_port);
 
 	PE_STATE_WAIT_MSG(pd_port);
 	pd_send_sop_data_msg(pd_port,

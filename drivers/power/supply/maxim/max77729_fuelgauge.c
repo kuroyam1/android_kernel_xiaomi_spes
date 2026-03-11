@@ -1983,6 +1983,9 @@ static int max77729_fg_get_property(struct power_supply *psy,
 		val->intval = b_val.intval;
 		break;
 #endif
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = fuelgauge->cable_type;
+		break;
 	case POWER_SUPPLY_PROP_RESISTANCE:
 		val->intval = 0;
 		break;

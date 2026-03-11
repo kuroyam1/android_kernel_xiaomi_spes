@@ -343,8 +343,7 @@ static int tcpc_match_device_by_name(struct device *dev, const void *data)
 
 struct tcpc_device *tcpc_dev_get_by_name(const char *name)
 {
-	struct device *dev = class_find_device(tcpc_class,
-			NULL, (const void *)name, tcpc_match_device_by_name);
+	struct device *dev = class_find_device(tcpc_class, NULL, (const void *)name, tcpc_match_device_by_name);
 	return dev ? dev_get_drvdata(dev) : NULL;
 }
 
@@ -422,10 +421,8 @@ struct tcpc_device *tcpc_device_register(struct device *parent,
 	/* If system support "WAKE_LOCK_IDLE",
 	 * please use it instead of "WAKE_LOCK_SUSPEND"
 	 */
-	tcpc->attach_wake_lock =
-		wakeup_source_register(&tcpc->dev, "tcpc_attach_wake_lock");
-	tcpc->detach_wake_lock =
-		wakeup_source_register(&tcpc->dev, "tcpc_detach_wake_lock");
+	tcpc->attach_wake_lock = wakeup_source_register(&tcpc->dev, "tcpc_attach_wake_lock");
+	tcpc->detach_wake_lock = wakeup_source_register(&tcpc->dev, "tcpc_detach_wake_lock");
 
 	tcpci_timer_init(tcpc);
 #ifdef CONFIG_USB_POWER_DELIVERY
@@ -449,8 +446,7 @@ static int tcpc_device_irq_enable(struct tcpc_device *tcpc)
 	int ret;
 
 	if (!tcpc->ops->init) {
-		pr_notice("%s: Please implment tcpc ops init function\n",
-			  __func__);
+		pr_notice("%s: Please implment tcpc ops init function\n", __func__);
 		return -EINVAL;
 	}
 
@@ -476,8 +472,7 @@ static int tcpc_device_irq_enable(struct tcpc_device *tcpc)
 }
 
 #ifdef CONFIG_USB_PD_REV30
-static int bat_nb_call_func(
-	struct notifier_block *nb, unsigned long val, void *v)
+static int bat_nb_call_func(struct notifier_block *nb, unsigned long val, void *v)
 {
 	struct tcpc_device *tcpc = container_of(nb, struct tcpc_device, bat_nb);
 	struct power_supply *psy = (struct power_supply *)v;
@@ -493,8 +488,8 @@ static int bat_nb_call_func(
 	}
 
 	if (val == PSY_EVENT_PROP_CHANGED &&
-	    strcmp(psy->desc->name, "battery") == 0 &&
-	    tcpc->bat_work_inited) {
+			strcmp(psy->desc->name, "battery") == 0 &&
+			tcpc->bat_work_inited) {
 		schedule_delayed_work(&tcpc->bat_update_work, 0);
 	}
 
@@ -503,8 +498,7 @@ static int bat_nb_call_func(
 
 static void bat_update_work_func(struct work_struct *work)
 {
-	struct tcpc_device *tcpc = container_of(work,
-		struct tcpc_device, bat_update_work.work);
+	struct tcpc_device *tcpc = container_of(work, struct tcpc_device, bat_update_work.work);
 	union power_supply_propval value;
 	int ret;
 
@@ -567,16 +561,15 @@ static void bat_update_work_func(struct work_struct *work)
 	}
 
 out:
-	tcpm_update_bat_status_soc(tcpc,
-		PD_BAT_REF_FIXED0, tcpc->charging_status, tcpc->bat_soc * 10);
+	tcpm_update_bat_status_soc(tcpc, PD_BAT_REF_FIXED0,
+		tcpc->charging_status, tcpc->bat_soc * 10);
 }
 #endif /* CONFIG_USB_PD_REV30 */
 
 static void tcpc_event_init_work(struct work_struct *work)
 {
 #ifdef CONFIG_USB_POWER_DELIVERY
-	struct tcpc_device *tcpc = container_of(
-			work, struct tcpc_device, event_init_work.work);
+	struct tcpc_device *tcpc = container_of(work, struct tcpc_device, event_init_work.work);
 #ifdef CONFIG_USB_PD_REV30
 	int retval;
 #endif /* CONFIG_USB_PD_REV30 */
@@ -629,8 +622,7 @@ static void tcpc_event_init_work(struct work_struct *work)
 
 static void tcpc_init_work(struct work_struct *work)
 {
-	struct tcpc_device *tcpc = container_of(
-		work, struct tcpc_device, init_work.work);
+	struct tcpc_device *tcpc = container_of(work, struct tcpc_device, init_work.work);
 
 #ifndef CONFIG_TCPC_NOTIFIER_LATE_SYNC
 	if (tcpc->desc.notifier_supply_num == 0)
@@ -650,8 +642,7 @@ int tcpc_schedule_init_work(struct tcpc_device *tcpc)
 
 	TCPC_INFO("wait %d num\n", tcpc->desc.notifier_supply_num);
 
-	schedule_delayed_work(
-		&tcpc->init_work, msecs_to_jiffies(30 * 1000));
+	schedule_delayed_work(&tcpc->init_work, msecs_to_jiffies(30 * 1000));
 #endif
 	return 0;
 }
@@ -664,8 +655,7 @@ struct tcp_notifier_block_wrapper {
 static int tcp_notifier_func_stub(struct notifier_block *nb,
 	unsigned long action, void *data)
 {
-	struct tcp_notifier_block_wrapper *nb_wrapper =
-		container_of(nb, struct tcp_notifier_block_wrapper, stub_nb);
+	struct tcp_notifier_block_wrapper *nb_wrapper = container_of(nb, struct tcp_notifier_block_wrapper, stub_nb);
 	struct notifier_block *action_nb = nb_wrapper->action_nb;
 
 	return nb_wrapper->action_nb->notifier_call(action_nb, action, data);
@@ -678,7 +668,6 @@ struct tcpc_managed_res {
 	struct tcpc_managed_res *next;
 };
 
-
 static int __add_wrapper_to_managed_res_list(struct tcpc_device *tcp_dev,
 	void *res, void *key, int prv_id)
 {
@@ -688,6 +677,7 @@ static int __add_wrapper_to_managed_res_list(struct tcpc_device *tcp_dev,
 	mres = devm_kzalloc(&tcp_dev->dev, sizeof(*mres), GFP_KERNEL);
 	if (!mres)
 		return -ENOMEM;
+
 	mres->res = res;
 	mres->key = key;
 	mres->prv_id = prv_id;
@@ -710,23 +700,21 @@ static int __register_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 	struct tcp_notifier_block_wrapper *nb_wrapper;
 	int retval;
 
-	nb_wrapper = devm_kzalloc(
-		&tcp_dev->dev, sizeof(*nb_wrapper), GFP_KERNEL);
+	nb_wrapper = devm_kzalloc(&tcp_dev->dev, sizeof(*nb_wrapper), GFP_KERNEL);
 	if (!nb_wrapper)
 		return -ENOMEM;
+
 	nb_wrapper->action_nb = nb;
 	nb_wrapper->stub_nb.notifier_call = tcp_notifier_func_stub;
-	retval = srcu_notifier_chain_register(
-		tcp_dev->evt_nh + idx, &nb_wrapper->stub_nb);
+	retval = srcu_notifier_chain_register(tcp_dev->evt_nh + idx, &nb_wrapper->stub_nb);
 	if (retval < 0) {
 		devm_kfree(&tcp_dev->dev, nb_wrapper);
 		return retval;
 	}
-	retval = __add_wrapper_to_managed_res_list(
-				tcp_dev, nb_wrapper, nb, idx);
+
+	retval = __add_wrapper_to_managed_res_list(tcp_dev, nb_wrapper, nb, idx);
 	if (retval < 0)
-		dev_warn(&tcp_dev->dev,
-			"%s: Failed to add resource to manager(%d)\n", __func__, retval);
+		dev_warn(&tcp_dev->dev, "%s: Failed to add resource to manager(%d)\n", __func__, retval);
 
 	return 0;
 }
@@ -742,15 +730,14 @@ static bool __is_mulit_bits_set(uint32_t flags)
 }
 
 int register_tcp_dev_notifier(struct tcpc_device *tcp_dev,
-			struct notifier_block *nb, uint8_t flags)
+	struct notifier_block *nb, uint8_t flags)
 {
 	int ret = 0, i = 0;
 
 	if (__is_mulit_bits_set(flags)) {
 		for (i = 0; i < TCP_NOTIFY_IDX_NR; i++) {
 			if (flags & (1 << i)) {
-				ret = __register_tcp_dev_notifier(
-							tcp_dev, nb, i);
+				ret = __register_tcp_dev_notifier(tcp_dev, nb, i);
 				if (ret < 0)
 					return ret;
 			}
@@ -758,8 +745,7 @@ int register_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 	} else { /* single bit */
 		for (i = 0; i < TCP_NOTIFY_IDX_NR; i++) {
 			if (flags & (1 << i)) {
-				ret = srcu_notifier_chain_register(
-				&tcp_dev->evt_nh[i], nb);
+				ret = srcu_notifier_chain_register(&tcp_dev->evt_nh[i], nb);
 				break;
 			}
 		}
@@ -820,8 +806,7 @@ static int __unregister_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 
 	nb_wrapper = __remove_wrapper_from_managed_res_list(tcp_dev, nb, idx);
 	if (nb_wrapper) {
-		retval = srcu_notifier_chain_unregister(
-			tcp_dev->evt_nh + idx, &nb_wrapper->stub_nb);
+		retval = srcu_notifier_chain_unregister(tcp_dev->evt_nh + idx, &nb_wrapper->stub_nb);
 		devm_kfree(&tcp_dev->dev, nb_wrapper);
 		return retval;
 	}
@@ -830,7 +815,7 @@ static int __unregister_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 }
 
 int unregister_tcp_dev_notifier(struct tcpc_device *tcp_dev,
-				struct notifier_block *nb, uint8_t flags)
+	struct notifier_block *nb, uint8_t flags)
 {
 	int i = 0, ret = 0;
 
@@ -838,8 +823,7 @@ int unregister_tcp_dev_notifier(struct tcpc_device *tcp_dev,
 		if (flags & (1 << i)) {
 			ret = __unregister_tcp_dev_notifier(tcp_dev, nb, i);
 			if (ret == -ENOENT)
-				ret = srcu_notifier_chain_unregister(
-					tcp_dev->evt_nh + i, nb);
+				ret = srcu_notifier_chain_unregister(tcp_dev->evt_nh + i, nb);
 			if (ret < 0)
 				return ret;
 		}
@@ -952,7 +936,7 @@ module_exit(tcpc_class_exit);
 #ifdef CONFIG_TCPC_NOTIFIER_LATE_SYNC
 #ifdef CONFIG_RECV_BAT_ABSENT_NOTIFY
 static int fg_bat_notifier_call(struct notifier_block *nb,
-				unsigned long event, void *data)
+		unsigned long event, void *data)
 {
 	struct pd_port *pd_port = container_of(nb, struct pd_port, fg_bat_nb);
 	struct tcpc_device *tcpc = pd_port->tcpc;
@@ -987,8 +971,7 @@ static int __tcpc_class_complete_work(struct device *dev, void *data)
 #if 1
 		tcpc_device_irq_enable(tcpc);
 #else
-		schedule_delayed_work(&tcpc->init_work,
-			msecs_to_jiffies(1000));
+		schedule_delayed_work(&tcpc->init_work, msecs_to_jiffies(1000));
 #endif
 
 #ifdef CONFIG_USB_POWER_DELIVERY

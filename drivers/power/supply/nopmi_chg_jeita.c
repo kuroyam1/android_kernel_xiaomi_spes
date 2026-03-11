@@ -3,17 +3,16 @@
 #include "nopmi_chg_jeita.h"
 
 struct nopmi_chg_jeita_st *g_nopmi_chg_jeita;
-#define JEITA_CHG_VOTER		"JEITA_CHG_VOTER"
+#define JEITA_CHG_VOTER	"JEITA_CHG_VOTER"
 
 bool g_ffc_disable = true;
 
-static int nopmi_chg_jeita_get_bat_temperature(struct nopmi_chg_jeita_st *nopmi_chg_jeita)
+static int nopmi_chg_jeita_get_batt_temperature(struct nopmi_chg_jeita_st *nopmi_chg_jeita)
 {
 	union power_supply_propval prop = {0, };
 	int ret = 0;
 	int temp;
 
-	//pr_err("start\n");
 	if (!nopmi_chg_jeita->bms_psy) {
 		nopmi_chg_jeita->bms_psy = power_supply_get_by_name("bms");
 		if (!nopmi_chg_jeita->bms_psy) {
@@ -30,7 +29,7 @@ static int nopmi_chg_jeita_get_bat_temperature(struct nopmi_chg_jeita_st *nopmi_
 	}
 	temp = prop.intval / 10;
 
-	pr_info("bat_temperature is %d\n", temp);
+	pr_info("batt_temperature is %d\n", temp);
 	return temp;
 }
 
@@ -40,7 +39,6 @@ static int nopmi_chg_jeita_get_charger_voltage(struct nopmi_chg_jeita_st *nopmi_
 	int ret = 0;
 	int voltage;
 
-	//pr_err("start\n");
 	if (!nopmi_chg_jeita->bbc_psy) {
 		nopmi_chg_jeita->bbc_psy = power_supply_get_by_name("bbc");
 		if (!nopmi_chg_jeita->bbc_psy) {
@@ -70,7 +68,7 @@ static int nopmi_chg_jeita_get_batt_id(struct nopmi_chg_jeita_st *nopmi_chg_jeit
 	if (!nopmi_chg_jeita->bms_psy) {
 		nopmi_chg_jeita->bms_psy = power_supply_get_by_name("bms");
 		if (!nopmi_chg_jeita->bms_psy) {
-			pr_err("usb supply not found, defer probe\n");
+			pr_err("bms supply not found, defer probe\n");
 			return -EINVAL;
 		}
 	}
@@ -144,7 +142,6 @@ static int nopmi_chg_jeita_set_charger_current(struct nopmi_chg_jeita_st *nopmi_
 	union power_supply_propval prop = {0, };
 	int ret = 0;
 
-	//pr_err("start\n", cc);
 	if (!nopmi_chg_jeita->bbc_psy) {
 		nopmi_chg_jeita->bbc_psy = power_supply_get_by_name("bbc");
 		if (!nopmi_chg_jeita->bbc_psy) {
@@ -170,7 +167,6 @@ static int nopmi_chg_jeita_set_charger_voltage(struct nopmi_chg_jeita_st *nopmi_
 	union power_supply_propval prop = {0, };
 	int ret = 0;
 
-	//pr_err("start\n", cv);
 	if (!nopmi_chg_jeita->bbc_psy) {
 		nopmi_chg_jeita->bbc_psy = power_supply_get_by_name("bbc");
 		if (!nopmi_chg_jeita->bbc_psy) {
@@ -246,17 +242,12 @@ static int nopmi_chg_jeita_set_charger_term_current(struct nopmi_chg_jeita_st *n
 static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_jeita)
 {
 	int ret = 0;
-	static int jeita_current_limit = TEMP_T2_TO_T3_FCC;
 	int chg1_cv = 0;
 	int term_curr_pre = 0;
 	int pd_active = 0;
 	struct sw_jeita_data *sw_jeita = nopmi_chg_jeita->sw_jeita;
 	union power_supply_propval prop = {0, };
-	static int fast_charge_mode = 0;
-	//struct power_supply *sc8551_psy;
-	//union power_supply_propval pval = {0, };
-	//sc8551_charge_enable_flag = 0;
-	bool cp_work_flag;
+	bool cp_work_flag = false;
 	//this flag used by jeta:nopmi_chg_jeita.c to set sw_chip fv && used by fg_chip do another soc
 
 	sw_jeita->pre_sm = sw_jeita->sm;
@@ -279,7 +270,7 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 				nopmi_chg_jeita->dt.temp_t3_thres,
 				nopmi_chg_jeita->dt.temp_t4_thres);
 			sw_jeita->sm = TEMP_T3_TO_T4;
-			jeita_current_limit = nopmi_chg_jeita->dt.temp_t3_to_t4_fcc;
+			nopmi_chg_jeita->jeita_current_limit = nopmi_chg_jeita->dt.temp_t3_to_t4_fcc;
 		}
 	} else if (nopmi_chg_jeita->battery_temp >= nopmi_chg_jeita->dt.temp_t2_thres) {
 		if (((sw_jeita->sm == TEMP_T3_TO_T4) && (nopmi_chg_jeita->battery_temp >= nopmi_chg_jeita->dt.temp_t3_thres_minus_x_degree)) ||
@@ -290,7 +281,7 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 				nopmi_chg_jeita->dt.temp_t2_thres,
 				nopmi_chg_jeita->dt.temp_t3_thres);
 			sw_jeita->sm = TEMP_T2_TO_T3;
-			jeita_current_limit = nopmi_chg_jeita->dt.temp_t2_to_t3_fcc;
+			nopmi_chg_jeita->jeita_current_limit = nopmi_chg_jeita->dt.temp_t2_to_t3_fcc;
 		}
 	} else if (nopmi_chg_jeita->battery_temp >= nopmi_chg_jeita->dt.temp_t1p5_thres) {
 		if ((sw_jeita->sm == TEMP_T1_TO_T1P5 || sw_jeita->sm == TEMP_T0_TO_T1) &&
@@ -305,17 +296,12 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 					nopmi_chg_jeita->dt.temp_t1_thres_plus_x_degree,
 					nopmi_chg_jeita->dt.temp_t1p5_thres);
 			}
-			if (sw_jeita->sm == TEMP_TN1_TO_T0) {
-				pr_err("[SW_JEITA] Battery Temperature between %d and %d\n",
-					nopmi_chg_jeita->dt.temp_t0_thres_plus_x_degree,
-					nopmi_chg_jeita->dt.temp_tn1_thres);
-			}
 		} else {
 			pr_err("[SW_JEITA] Battery Temperature between %d and %d\n",
 				nopmi_chg_jeita->dt.temp_t1p5_thres,
 				nopmi_chg_jeita->dt.temp_t2_thres);
 			sw_jeita->sm = TEMP_T1P5_TO_T2;
-			jeita_current_limit = nopmi_chg_jeita->dt.temp_t1p5_to_t2_fcc;
+			nopmi_chg_jeita->jeita_current_limit = nopmi_chg_jeita->dt.temp_t1p5_to_t2_fcc;
 		}
 	} else if (nopmi_chg_jeita->battery_temp >= nopmi_chg_jeita->dt.temp_t1_thres) {
 		if ((sw_jeita->sm == TEMP_T0_TO_T1 || sw_jeita->sm == TEMP_BELOW_T0 || sw_jeita->sm == TEMP_TN1_TO_T0) &&
@@ -336,7 +322,7 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 				nopmi_chg_jeita->dt.temp_t1_thres,
 				nopmi_chg_jeita->dt.temp_t1p5_thres);
 			sw_jeita->sm = TEMP_T1_TO_T1P5;
-			jeita_current_limit = nopmi_chg_jeita->dt.temp_t1_to_t1p5_fcc;
+			nopmi_chg_jeita->jeita_current_limit = nopmi_chg_jeita->dt.temp_t1_to_t1p5_fcc;
 		}
 	} else if (nopmi_chg_jeita->battery_temp >= nopmi_chg_jeita->dt.temp_t0_thres) {
 		if ((sw_jeita->sm == TEMP_BELOW_T0 || sw_jeita->sm == TEMP_TN1_TO_T0) &&
@@ -356,7 +342,7 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 				nopmi_chg_jeita->dt.temp_t0_thres,
 				nopmi_chg_jeita->dt.temp_t1_thres);
 			sw_jeita->sm = TEMP_T0_TO_T1;
-			jeita_current_limit = nopmi_chg_jeita->dt.temp_t0_to_t1_fcc;
+			nopmi_chg_jeita->jeita_current_limit = nopmi_chg_jeita->dt.temp_t0_to_t1_fcc;
 		}
 	} else if (nopmi_chg_jeita->battery_temp >= nopmi_chg_jeita->dt.temp_tn1_thres) {
 		if ((sw_jeita->sm == TEMP_BELOW_T0) &&
@@ -370,19 +356,19 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 				nopmi_chg_jeita->dt.temp_t0_thres,
 				nopmi_chg_jeita->dt.temp_tn1_thres);
 			sw_jeita->sm = TEMP_TN1_TO_T0;
-			jeita_current_limit = nopmi_chg_jeita->dt.temp_tn1_to_t0_fcc;
+			nopmi_chg_jeita->jeita_current_limit = nopmi_chg_jeita->dt.temp_tn1_to_t0_fcc;
 		}
 	} else {
 		pr_err("[SW_JEITA] Battery Cold Temperature(%d)!!\n",
-			nopmi_chg_jeita->dt.temp_t0_thres);
+			nopmi_chg_jeita->dt.temp_tn1_thres);
 		sw_jeita->sm = TEMP_BELOW_T0;
 		sw_jeita->charging = false;
 	}
 
 	if (nopmi_chg_jeita->fcc_votable) {
-		vote(nopmi_chg_jeita->fcc_votable, JEITA_VOTER, true, jeita_current_limit);
+		vote(nopmi_chg_jeita->fcc_votable, JEITA_VOTER, true, nopmi_chg_jeita->jeita_current_limit);
 	} else {
-		ret = nopmi_chg_jeita_set_charger_current(nopmi_chg_jeita, jeita_current_limit);
+		ret = nopmi_chg_jeita_set_charger_current(nopmi_chg_jeita, nopmi_chg_jeita->jeita_current_limit);
 	}
 
 	/*add for update fastcharge mode, start*/
@@ -394,17 +380,17 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 		if (ret < 0) {
 			pr_err("get fastcharge mode fail\n");
 		}
-		fast_charge_mode = prop.intval;
+		nopmi_chg_jeita->fast_charge_mode = prop.intval;
 	}
 
-	if (!g_ffc_disable && fast_charge_mode && (sw_jeita->sm != TEMP_T2_TO_T3)) {
+	if (!g_ffc_disable && nopmi_chg_jeita->fast_charge_mode && (sw_jeita->sm != TEMP_T2_TO_T3)) {
 		prop.intval = 0;
-		fast_charge_mode = 0;
+		nopmi_chg_jeita->fast_charge_mode = 0;
 		power_supply_set_property(nopmi_chg_jeita->bms_psy,
 				POWER_SUPPLY_PROP_FASTCHARGE_MODE, &prop);
-	} else if (!g_ffc_disable && !fast_charge_mode && (sw_jeita->sm == TEMP_T2_TO_T3)) {
+	} else if (!g_ffc_disable && !nopmi_chg_jeita->fast_charge_mode && (sw_jeita->sm == TEMP_T2_TO_T3)) {
 		prop.intval = 1;
-		fast_charge_mode = 1;
+		nopmi_chg_jeita->fast_charge_mode = 1;
 		power_supply_set_property(nopmi_chg_jeita->bms_psy,
 				POWER_SUPPLY_PROP_FASTCHARGE_MODE, &prop);
 	}
@@ -432,7 +418,7 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 		else
 			sw_jeita->cv = nopmi_chg_jeita->dt.normal_charge_voltage;
 	} else {
-		if (fast_charge_mode && !g_ffc_disable) {
+		if (nopmi_chg_jeita->fast_charge_mode && !g_ffc_disable) {
 			if (NOPMI_CHARGER_IC_MAXIM == nopmi_get_charger_ic_type()) {
 				sw_jeita->cv = 4470;
 			} else {
@@ -507,7 +493,7 @@ static void nopmi_chg_handle_jeita_current(struct nopmi_chg_jeita_st *nopmi_chg_
 
 static void nopmi_chg_handle_jeita(struct nopmi_chg_jeita_st *nopmi_chg_jeita)
 {
-	nopmi_chg_jeita->battery_temp = nopmi_chg_jeita_get_bat_temperature(nopmi_chg_jeita);
+	nopmi_chg_jeita->battery_temp = nopmi_chg_jeita_get_batt_temperature(nopmi_chg_jeita);
 	nopmi_chg_handle_jeita_current(nopmi_chg_jeita);
 	if (nopmi_chg_jeita->sw_jeita->charging == false) {
 		nopmi_chg_jeita->sw_jeita->can_recharging = true;
@@ -574,6 +560,7 @@ void stop_nopmi_chg_jeita_workfunc(void)
 	if (g_nopmi_chg_jeita) {
 		cancel_delayed_work_sync(&g_nopmi_chg_jeita->jeita_work);
 		vote(g_nopmi_chg_jeita->fcc_votable, JEITA_VOTER, false, 0);
+		vote(g_nopmi_chg_jeita->fv_votable, JEITA_VOTER, true, 4450);
 	}
 }
 
@@ -582,7 +569,7 @@ static void nopmi_chg_jeita_state_init(struct nopmi_chg_jeita_st *nopmi_chg_jeit
 	struct sw_jeita_data *sw_jeita = nopmi_chg_jeita->sw_jeita;
 
 	if (nopmi_chg_jeita->dt.enable_sw_jeita == true) {
-		nopmi_chg_jeita->battery_temp = nopmi_chg_jeita_get_bat_temperature(nopmi_chg_jeita);
+		nopmi_chg_jeita->battery_temp = nopmi_chg_jeita_get_batt_temperature(nopmi_chg_jeita);
 		if (nopmi_chg_jeita->battery_temp >= nopmi_chg_jeita->dt.temp_t4_thres)
 			sw_jeita->sm = TEMP_ABOVE_T4;
 		else if (nopmi_chg_jeita->battery_temp > nopmi_chg_jeita->dt.temp_t3_thres)
@@ -611,7 +598,7 @@ static int nopmi_chg_jeita_get_psy(struct nopmi_chg_jeita_st *nopmi_chg_jeita)
 		pr_warn("bms psy not ready, get it later!\n");
 
 	nopmi_chg_jeita->batt_psy = power_supply_get_by_name("battery");
-	if (!nopmi_chg_jeita->bms_psy)
+	if (!nopmi_chg_jeita->batt_psy)
 		pr_warn("batt psy not ready, get it later!\n");
 
 	nopmi_chg_jeita->bbc_psy = power_supply_get_by_name("bbc");
@@ -653,6 +640,9 @@ int nopmi_chg_jeita_init(struct nopmi_chg_jeita_st *nopmi_chg_jeita)
 			return -ENOMEM;
 		}
 	}
+
+	nopmi_chg_jeita->jeita_current_limit = TEMP_T2_TO_T3_FCC;
+	nopmi_chg_jeita->fast_charge_mode = 0;
 
 	g_nopmi_chg_jeita = nopmi_chg_jeita;
 	nopmi_chg_jeita_get_psy(nopmi_chg_jeita);

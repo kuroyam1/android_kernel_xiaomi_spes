@@ -45,21 +45,17 @@ DECL_PE_STATE_TRANSITION(PD_DPM_MSG_NAK) = {
 };
 DECL_PE_STATE_REACTION(PD_DPM_MSG_NAK);
 
-
 /*
  * [BLOCK] Porcess PD Ctrl MSG
  */
 
-static inline bool pd_process_ctrl_msg(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_ctrl_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	switch (pd_event->msg) {
 	case PD_CTRL_GOOD_CRC:
 		return PE_MAKE_STATE_TRANSIT(PD_CTRL_MSG_GOOD_CRC);
-
 	case PD_CTRL_ACCEPT:
 		return PE_MAKE_STATE_TRANSIT(PD_CTRL_MSG_ACCEPT);
-
 	default:
 		return false;
 	}
@@ -69,13 +65,11 @@ static inline bool pd_process_ctrl_msg(
  * [BLOCK] Porcess DPM MSG
  */
 
-static inline bool pd_process_dpm_msg(
-	struct pd_port *pd_port, struct pd_event *pd_event)
+static inline bool pd_process_dpm_msg(struct pd_port *pd_port, struct pd_event *pd_event)
 {
 	switch (pd_event->msg) {
 	case PD_DPM_ACK:
 		return PE_MAKE_STATE_TRANSIT(PD_DPM_MSG_ACK);
-
 	case PD_DPM_NAK:
 		return PE_MAKE_STATE_TRANSIT(PD_DPM_MSG_NAK);
 	}
@@ -92,10 +86,8 @@ bool pd_process_event_drs(struct pd_port *pd_port, struct pd_event *pd_event)
 	switch (pd_event->event_type) {
 	case PD_EVT_CTRL_MSG:
 		return pd_process_ctrl_msg(pd_port, pd_event);
-
 	case PD_EVT_DPM_MSG:
 		return pd_process_dpm_msg(pd_port, pd_event);
-
 	default:
 		return false;
 	}

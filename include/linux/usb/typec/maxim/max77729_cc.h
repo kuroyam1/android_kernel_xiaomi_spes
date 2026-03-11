@@ -16,9 +16,7 @@
 #define __LINUX_MFD_MAX77729_CC_H
 #define MAX77729_CC_NAME	"max77729_CC"
 
-
 struct max77729_cc_data {
-
 	/* interrupt pin */
 	int irq_vconncop;
 	int irq_vsafe0v;
@@ -56,8 +54,8 @@ struct max77729_cc_data {
 	/* CC Pin State Machine Detection */
 	u8 ccstat;
 
-	enum max77729_vcon_role	current_vcon;
-	enum max77729_vcon_role	previous_vcon;
+	enum max77729_vcon_role current_vcon;
+	enum max77729_vcon_role previous_vcon;
 	enum max77729_power_role current_pr;
 	enum max77729_power_role previous_pr;
 };

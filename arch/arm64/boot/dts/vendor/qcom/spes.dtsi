@@ -1,6 +1,6 @@
 #include "khaje-idp.dtsi"
 
-/*&dsi_td4330_truly_v2_video {
+&dsi_td4330_truly_v2_video {
 	/delete-property/ qcom,esd-check-enabled;
 };
 
@@ -10,7 +10,7 @@
 
 &dsi_nt36672e_fhd_plus_90hz_video {
 	/delete-property/ qcom,esd-check-enabled;
-}; */
+};
 
 &qupv3_se2_i2c {
 	synaptics_tcm@20 {
@@ -259,7 +259,7 @@
 	};
 
 	cp_manager: cp_manager {
-		compatible = "qcom,cp_manager";
+		compatible = "xiaomi,cp_manager";
 		label = "cp_manager";
 		status = "okay";
 	};

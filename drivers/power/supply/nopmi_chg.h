@@ -85,9 +85,13 @@ struct nopmi_chg {
 	bool last_thermal_icl_disabled;
 	bool last_thermal_icl_valid;
 
-	int last_real_online;
-
 	u8 is_awake;
 	s32 last_cc_cv_votfcc;
+	u32 cv_step_count[STEP_TABLE_MAX];
+	int last_batt_status;
+	int last_usb_present;
+	struct workqueue_struct *usb_present_wq;
+	struct delayed_work usb_present_work;
 };
+
 #endif

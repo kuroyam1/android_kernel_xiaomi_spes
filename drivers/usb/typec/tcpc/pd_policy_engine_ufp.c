@@ -49,8 +49,7 @@ void pe_ufp_vdm_get_modes_entry(struct pd_port *pd_port)
  * [PD2.0] Figure 8-61 UFP Structured VDM Enter Mode State Diagram
  */
 
-void pe_ufp_vdm_evaluate_mode_entry_entry(
-			struct pd_port *pd_port)
+void pe_ufp_vdm_evaluate_mode_entry_entry(struct pd_port *pd_port)
 {
 	pd_dpm_ufp_request_enter_mode(pd_port);
 }
@@ -68,8 +67,7 @@ void pe_ufp_vdm_mode_exit_entry(struct pd_port *pd_port)
  * [PD2.0] Figure 8-63 UFP VDM Attention State Diagram
  */
 
-void pe_ufp_vdm_attention_request_entry(
-	struct pd_port *pd_port)
+void pe_ufp_vdm_attention_request_entry(struct pd_port *pd_port)
 {
 	VDM_STATE_NORESP_CMD(pd_port);
 

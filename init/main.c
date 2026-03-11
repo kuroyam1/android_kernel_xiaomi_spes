@@ -570,9 +570,11 @@ static void __init mm_init(void)
 	pti_init();
 }
 
-int fpsensor=1;
 void __init init_sync_kmem_pool(void);
 void __init init_dma_buf_kmem_pool(void);
+
+int fpsensor=1;
+
 asmlinkage __visible void __init start_kernel(void)
 {
 	char *command_line;

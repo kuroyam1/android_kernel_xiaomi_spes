@@ -4,6 +4,7 @@
 #include <linux/pmic-voter.h>
 #include "../../../usb/typec/tcpc/inc/tcpm.h"
 #include "../../../usb/typec/tcpc/inc/tcpci_core.h"
+#include "sm5602_fg.h"
 
 enum bq2589x_vbus_type {
 	BQ2589X_VBUS_NONE,
@@ -78,6 +79,19 @@ struct bq2589x_config {
 	bool	use_absolute_vindpm;
 };
 
+struct pe_ctrl {
+	bool enable;
+	bool tune_up_volt;
+	bool tune_down_volt;
+	bool tune_done;
+	bool tune_fail;
+	int tune_count;
+	int target_volt;
+	int high_volt_level; /* vbus volt > this threshold means tune up successfully */
+	int low_volt_level; /* vbus volt < this threshold means tune down successfully */
+	int vbat_min_volt; /* to tune up voltage only when vbat > this threshold */
+};
+
 struct bq2589x {
 	struct device *dev;
 	struct i2c_client *client;
@@ -103,12 +117,12 @@ struct bq2589x {
 	struct mutex i2c_rw_lock;
 	struct mutex usb_switch_lock;
 	spinlock_t usb_switch_lock_spin;
-	struct mutex dpdm_lock;
 	struct mutex irq_complete;
 	//atomic_t dpdm_running;
 
 	struct bq2589x_config cfg;
-	//struct work_struct irq_work;
+	struct pe_ctrl pe;
+
 	struct work_struct adapter_in_work;
 	struct work_struct adapter_out_work;
 	struct work_struct start_charging_work;
@@ -121,8 +135,8 @@ struct bq2589x {
 	struct delayed_work usb_changed_work;
 	//struct delayed_work period_work;
 
-	struct delayed_work irq_work;
 	struct workqueue_struct *irq_wq;
+	struct work_struct irq_work;
 
 	struct power_supply_desc usb;
 	struct power_supply_desc wall;
@@ -150,28 +164,17 @@ struct bq2589x {
 
 	// pm ops
 	int irq;
-	bool resume_completed;
-	bool irq_disabled;
-	bool irq_waiting;
-	bool shutting_down;
+	atomic_t irq_pending;
+	atomic_t is_awake;
+	atomic_t resume_completed;
+	atomic_t irq_disabled;
+	atomic_t irq_waiting;
+	atomic_t shutting_down;
 
 	struct wakeup_source *bq_ws;
 
-	atomic_t irq_pending;
-	atomic_t is_awake;
-};
-
-struct pe_ctrl {
-	bool enable;
-	bool tune_up_volt;
-	bool tune_down_volt;
-	bool tune_done;
-	bool tune_fail;
-	int tune_count;
-	int target_volt;
-	int high_volt_level; /* vbus volt > this threshold means tune up successfully */
-	int low_volt_level; /* vbus volt < this threshold means tune down successfully */
-	int vbat_min_volt; /* to tune up voltage only when vbat > this threshold */
+	bool vbus_on;
+	bool otg_attached;
 };
 
 extern int main_set_hiz_mode(bool en);

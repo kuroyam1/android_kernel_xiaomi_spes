@@ -31,9 +31,8 @@
 /* From DTS */
 
 #ifdef CONFIG_USB_PD_REV30_BAT_INFO
-static inline void pd_parse_pdata_bat_info(
-	struct pd_port *pd_port, struct device_node *sub,
-	struct pd_battery_info *bat_info)
+static inline void pd_parse_pdata_bat_info(struct pd_port *pd_port,
+	struct device_node *sub, struct pd_battery_info *bat_info)
 {
 	int ret = 0;
 	u32 design_cap;
@@ -67,8 +66,8 @@ static inline void pd_parse_pdata_bat_info(
 		pr_err("get bat,mfrs fail\n");
 		mstring = "no_bat_mfrs_string";
 	}
-	ret = snprintf(mfrs_info->mfrs_string,
-		sizeof(mfrs_info->mfrs_string), "%s", mstring);
+
+	ret = snprintf(mfrs_info->mfrs_string, sizeof(mfrs_info->mfrs_string), "%s", mstring);
 	if (ret < 0 || ret >= sizeof(mfrs_info->mfrs_string))
 		pr_info("snprintf fail\n");
 #endif	/* CONFIG_USB_PD_REV30_MFRS_INFO_LOCAL */
@@ -78,20 +77,17 @@ static inline void pd_parse_pdata_bat_info(
 		bat_cap->bat_design_cap = PD_BCDB_BAT_CAP_UNKNOWN;
 		pr_err("get bat,design_cap fail\n");
 	} else {
-		bat_cap->bat_design_cap = (uint16_t)
-			PD_BCDB_BAT_CAP_RAW(design_cap);
+		bat_cap->bat_design_cap = (uint16_t)PD_BCDB_BAT_CAP_RAW(design_cap);
 	}
 
 	bat_cap->vid = vid;
 	bat_cap->pid = pid;
 	bat_cap->bat_last_full_cap = PD_BCDB_BAT_CAP_UNKNOWN;
 
-	bat_info->bat_status = BSDO(
-		BSDO_BAT_CAP_UNKNOWN, BSDO_BAT_INFO_IDLE);
+	bat_info->bat_status = BSDO(BSDO_BAT_CAP_UNKNOWN, BSDO_BAT_INFO_IDLE);
 }
 
-static inline int pd_parse_pdata_bats(
-	struct pd_port *pd_port, struct device_node *np)
+static inline int pd_parse_pdata_bats(struct pd_port *pd_port, struct device_node *np)
 {
 	u32 val;
 	int ret = 0, i;
@@ -107,11 +103,8 @@ static inline int pd_parse_pdata_bats(
 
 	pd_port->bat_nr = val;
 	pr_info("Battery NR = %d\n", pd_port->bat_nr);
-
 	pd_port->fix_bat_info = devm_kzalloc(&pd_port->tcpc->dev,
-		sizeof(struct pd_battery_info)*pd_port->bat_nr,
-		GFP_KERNEL);
-
+		sizeof(struct pd_battery_info)*pd_port->bat_nr, GFP_KERNEL);
 	if (!pd_port->fix_bat_info) {
 		pr_err("fix_bat_info memory alloc fail\n");
 		return -ENOMEM;
@@ -125,8 +118,7 @@ static inline int pd_parse_pdata_bats(
 			return -ENODEV;
 		}
 
-		pd_parse_pdata_bat_info(
-			pd_port, sub, &pd_port->fix_bat_info[i]);
+		pd_parse_pdata_bat_info(pd_port, sub, &pd_port->fix_bat_info[i]);
 		of_node_put(sub);
 	}
 
@@ -136,8 +128,7 @@ static inline int pd_parse_pdata_bats(
 			pd_port->fix_bat_info[i].mfrs_info.vid,
 			pd_port->fix_bat_info[i].mfrs_info.pid,
 			pd_port->fix_bat_info[i].mfrs_info.mfrs_string,
-			PD_BCDB_BAT_CAP_VAL(
-			pd_port->fix_bat_info[i].bat_cap.bat_design_cap));
+			PD_BCDB_BAT_CAP_VAL(pd_port->fix_bat_info[i].bat_cap.bat_design_cap));
 	}
 
 	return 0;
@@ -145,8 +136,7 @@ static inline int pd_parse_pdata_bats(
 #endif	/* CONFIG_USB_PD_REV30_BAT_INFO */
 
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_AUTHORITY
-static inline int pd_parse_pdata_country(
-	struct pd_port *pd_port,  struct device_node *sub,
+static inline int pd_parse_pdata_country(struct pd_port *pd_port, struct device_node *sub,
 	struct pd_country_authority *country_info)
 {
 	u32 val;
@@ -160,7 +150,6 @@ static inline int pd_parse_pdata_country(
 	}
 
 	country_info->code = (uint16_t)val;
-
 	ret = of_property_read_u32(sub, "pd,country_len", &val);
 	if (ret < 0) {
 		pr_err("get country len fail\n");
@@ -168,11 +157,8 @@ static inline int pd_parse_pdata_country(
 	}
 
 	country_info->len = (uint16_t)val;
-
 	country_info->data = devm_kzalloc(&pd_port->tcpc->dev,
-		sizeof(uint8_t)*country_info->len,
-		GFP_KERNEL);
-
+		sizeof(uint8_t)*country_info->len, GFP_KERNEL);
 	if (!country_info->data) {
 		pr_err("country info data memory alloc fail\n");
 		return -ENOMEM;
@@ -180,10 +166,8 @@ static inline int pd_parse_pdata_country(
 
 	temp_u32 = devm_kzalloc(&pd_port->tcpc->dev,
 		sizeof(u32)*country_info->len, GFP_KERNEL);
-
 	ret = of_property_read_u32_array(sub, "pd,country_data",
-		temp_u32,
-		country_info->len);
+		temp_u32, country_info->len);
 	if (ret < 0)
 		pr_err("get country data fail\n");
 
@@ -195,8 +179,7 @@ static inline int pd_parse_pdata_country(
 	return 0;
 }
 
-static inline int pd_parse_pdata_countries(
-	struct pd_port *pd_port, struct device_node *np)
+static inline int pd_parse_pdata_countries(struct pd_port *pd_port, struct device_node *np)
 {
 	int ret = 0, i, j;
 	struct device_node *sub;
@@ -211,11 +194,8 @@ static inline int pd_parse_pdata_countries(
 	}
 
 	pr_info("Country NR = %d\n", pd_port->country_nr);
-
 	pd_port->country_info = devm_kzalloc(&pd_port->tcpc->dev,
-		sizeof(struct pd_country_authority)*pd_port->country_nr,
-		GFP_KERNEL);
-
+		sizeof(struct pd_country_authority)*pd_port->country_nr, GFP_KERNEL);
 	if (!pd_port->country_info) {
 		pr_err("country info memory alloc fail\n");
 		return -ENOMEM;
@@ -229,8 +209,7 @@ static inline int pd_parse_pdata_countries(
 			return -ENODEV;
 		}
 
-		ret = pd_parse_pdata_country(pd_port,  sub,
-			&pd_port->country_info[i]);
+		ret = pd_parse_pdata_country(pd_port, sub, &pd_port->country_info[i]);
 		of_node_put(sub);
 		if (ret < 0)
 			return ret;
@@ -275,8 +254,7 @@ static void pd_parse_log_src_cap_ext(struct pd_source_cap_ext *cap)
 }
 #endif /* CONFIG_USB_PD_REV30_SRC_CAP_EXT_LOCAL	*/
 
-static inline void pd_parse_pdata_src_cap_ext(
-	struct pd_port *pd_port, struct device_node *np)
+static inline void pd_parse_pdata_src_cap_ext(struct pd_port *pd_port, struct device_node *np)
 {
 #ifdef CONFIG_USB_PD_REV30_SRC_CAP_EXT_LOCAL
 	int ret = 0;
@@ -298,8 +276,7 @@ static inline void pd_parse_pdata_src_cap_ext(
 #endif	/* CONFIG_USB_PD_REV30_SRC_CAP_EXT_LOCAL */
 }
 
-static inline void pd_parse_pdata_mfrs(
-	struct pd_port *pd_port, struct device_node *np)
+static inline void pd_parse_pdata_mfrs(struct pd_port *pd_port, struct device_node *np)
 {
 	int ret = 0;
 	uint32_t vid, pid;
@@ -350,8 +327,7 @@ static inline void pd_parse_pdata_mfrs(
 	pd_port->id_vdos[0] &= ~PD_IDH_VID_MASK;
 	pd_port->id_vdos[0] |= PD_IDH_VID(vid);
 
-	pd_port->id_vdos[2] = VDO_PRODUCT(
-		pid, PD_PRODUCT_BCD(pd_port->id_vdos[2]));
+	pd_port->id_vdos[2] = VDO_PRODUCT(pid, PD_PRODUCT_BCD(pd_port->id_vdos[2]));
 
 	pd_port->id_header = pd_port->id_vdos[0];
 }
@@ -564,8 +540,7 @@ static void pd_core_power_flags_init(struct pd_port *pd_port)
 #ifdef CONFIG_RECV_BAT_ABSENT_NOTIFY
 static void fg_bat_absent_work(struct work_struct *work)
 {
-	struct pd_port *pd_port = container_of(work, struct pd_port,
-					       fg_bat_work);
+	struct pd_port *pd_port = container_of(work, struct pd_port, fg_bat_work);
 	struct tcpc_device *tcpc = pd_port->tcpc;
 	int ret = 0;
 
@@ -675,8 +650,7 @@ uint32_t pd_reset_pdo_power(struct tcpc_device *tcpc,
 
 uint32_t pd_get_cable_curr_lvl(struct pd_port *pd_port)
 {
-	return PD_VDO_CABLE_CURR(
-		pd_port->pe_data.cable_vdos[VDO_DISCOVER_ID_CABLE]);
+	return PD_VDO_CABLE_CURR(pd_port->pe_data.cable_vdos[VDO_DISCOVER_ID_CABLE]);
 }
 
 uint32_t pd_get_cable_current_limit(struct pd_port *pd_port)
@@ -692,8 +666,7 @@ uint32_t pd_get_cable_current_limit(struct pd_port *pd_port)
 	}
 }
 
-static inline bool pd_is_cable_communication_available(
-	struct pd_port *pd_port)
+static inline bool pd_is_cable_communication_available(struct pd_port *pd_port)
 {
 	/*
 	 * After pr_swap or fr_swap,
@@ -992,7 +965,7 @@ int pd_reset_local_hw(struct pd_port *pd_port)
 	pd_set_rx_enable(pd_port, PD_RX_CAP_PE_HARDRESET);
 
 	pd_port->pe_data.explicit_contract = false;
-	pd_port->pe_data.pd_connected  = false;
+	pd_port->pe_data.pd_connected = false;
 	pd_port->pe_data.pe_ready = false;
 
 #ifdef CONFIG_USB_PD_VCONN_SAFE5V_ONLY
@@ -1094,8 +1067,7 @@ int pd_send_message(struct pd_port *pd_port, uint8_t sop_type,
 	}
 
 	if (sop_type == TCPC_TX_SOP)
-		msg_hdr_private = PD_HEADER_ROLE(
-			pd_port->power_role, pd_port->data_role);
+		msg_hdr_private = PD_HEADER_ROLE(pd_port->power_role, pd_port->data_role);
 	else
 		msg_hdr_private = 0;
 
@@ -1107,8 +1079,7 @@ int pd_send_message(struct pd_port *pd_port, uint8_t sop_type,
 #endif	/* CONFIG_USB_PD_REV30 */
 
 	msg_id = pe_data->msg_id_tx[sop_type];
-	msg_hdr = PD_HEADER_COMMON(
-		msg, pd_rev, msg_id, count, ext, msg_hdr_private);
+	msg_hdr = PD_HEADER_COMMON(msg, pd_rev, msg_id, count, ext, msg_hdr_private);
 
 	/* ext-cmd 15 is reserved */
 	if ((count > 0) && (msg == PD_DATA_VENDOR_DEF))
@@ -1131,17 +1102,18 @@ int pd_send_data_msg(struct pd_port *pd_port,
 		sop_type, msg, false, cnt, payload);
 }
 
-int pd_send_sop_ctrl_msg(
-	struct pd_port *pd_port, uint8_t msg)
+int pd_send_sop_ctrl_msg(struct pd_port *pd_port,
+	uint8_t msg)
 {
-	return pd_send_message(
-		pd_port, TCPC_TX_SOP, msg, false, 0, NULL);
+	return pd_send_message(pd_port,
+		TCPC_TX_SOP, msg, false, 0, NULL);
 }
 
-int pd_send_sop_prime_ctrl_msg(struct pd_port *pd_port, uint8_t msg)
+int pd_send_sop_prime_ctrl_msg(struct pd_port *pd_port,
+	uint8_t msg)
 {
-	return pd_send_message(
-		pd_port, TCPC_TX_SOP_PRIME, msg, false, 0, NULL);
+	return pd_send_message(pd_port,
+		TCPC_TX_SOP_PRIME, msg, false, 0, NULL);
 }
 
 int pd_send_sop_data_msg(struct pd_port *pd_port,
@@ -1177,7 +1149,7 @@ int pd_send_ext_msg(struct pd_port *pd_port,
 	uint16_t *ext_hdr = (uint16_t *)payload;
 
 	cnt = ((size + PD_EXT_HEADER_PAYLOAD_INDEX - 1) / 4) + 1;
-	payload[cnt-1] = 0;		/* Padding Byte should be 0 */
+	payload[cnt-1] = 0;	/* Padding Byte should be 0 */
 
 	*ext_hdr = PD_EXT_HEADER_CK(size, request, chunk_nr, true);
 	memcpy(&ext_hdr[1], data, size);
@@ -1239,8 +1211,7 @@ int pd_send_bist_mode2(struct pd_port *pd_port)
 int pd_disable_bist_mode2(struct pd_port *pd_port)
 {
 #ifndef CONFIG_USB_PD_TRANSMIT_BIST2
-	return tcpci_set_bist_carrier_mode(
-		pd_port->tcpc, 0);
+	return tcpci_set_bist_carrier_mode(pd_port->tcpc, 0);
 #else
 	return 0;
 #endif
@@ -1284,8 +1255,8 @@ int pd_send_svdm_request(struct pd_port *pd_port,
 	}
 #endif	/* CONFIG_USB_PD_STOP_SEND_VDM_IF_RX_BUSY */
 
-	ret = pd_send_data_msg(
-			pd_port, sop_type, PD_DATA_VENDOR_DEF, 1+cnt, payload);
+	ret = pd_send_data_msg(pd_port, sop_type,
+		PD_DATA_VENDOR_DEF, 1 + cnt, payload);
 
 	if (ret == 0 && timer_id != 0)
 		VDM_STATE_RESPONSE_CMD(pd_port, timer_id);
@@ -1480,8 +1451,8 @@ bool pd_is_multi_chunk_msg(struct pd_port *pd_port)
 	return false;
 }
 
-struct pd_battery_info *pd_get_battery_info(
-	struct pd_port *pd_port, enum pd_battery_reference ref)
+struct pd_battery_info *pd_get_battery_info(struct pd_port *pd_port,
+	enum pd_battery_reference ref)
 {
 #ifdef CONFIG_USB_PD_REV30_BAT_INFO
 	if (ref < pd_get_fix_battery_nr(pd_port))

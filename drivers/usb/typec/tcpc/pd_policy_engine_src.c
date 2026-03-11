@@ -63,8 +63,7 @@ void pe_src_send_capabilities_entry(struct pd_port *pd_port)
 	pd_port->pe_data.cap_counter++;
 }
 
-void pe_src_negotiate_capabilities_entry(
-				struct pd_port *pd_port)
+void pe_src_negotiate_capabilities_entry(struct pd_port *pd_port)
 {
 	pd_handle_first_pd_command(pd_port);
 	pd_dpm_src_evaluate_request(pd_port);
@@ -76,7 +75,7 @@ void pe_src_transition_supply_entry(struct pd_port *pd_port)
 	struct pd_event *pd_event = pd_get_curr_pd_event(pd_port);
 
 	/* goto-min */
-	if (pd_event->event_type == PD_EVT_TCP_MSG)	 {
+	if (pd_event->event_type == PD_EVT_TCP_MSG) {
 		msg = PD_CTRL_GOTO_MIN;
 		pd_port->request_i_new = pd_port->request_i_op;
 	}
@@ -146,8 +145,7 @@ void pe_src_get_sink_cap_exit(struct pd_port *pd_port)
 	pd_dpm_dr_inform_sink_cap(pd_port);
 }
 
-void pe_src_wait_new_capabilities_entry(
-			struct pd_port *pd_port)
+void pe_src_wait_new_capabilities_entry(struct pd_port *pd_port)
 {
 	/* Wait for new Source Capabilities */
 }

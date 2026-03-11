@@ -74,8 +74,7 @@ void pe_prs_snk_src_evaluate_pr_swap_entry(struct pd_port *pd_port)
 	pd_dpm_prs_evaluate_swap(pd_port, PD_ROLE_SOURCE);
 }
 
-void pe_prs_snk_src_accept_pr_swap_entry(
-			struct pd_port *pd_port)
+void pe_prs_snk_src_accept_pr_swap_entry(struct pd_port *pd_port)
 {
 	pd_notify_pe_execute_pr_swap(pd_port, true);
 	pd_send_sop_ctrl_msg(pd_port, PD_CTRL_ACCEPT);

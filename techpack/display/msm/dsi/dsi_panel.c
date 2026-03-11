@@ -3313,9 +3313,7 @@ static int dsi_panel_parse_esd_config(struct dsi_panel *panel)
 	esd_config->esd_enabled = utils->read_bool(utils->data,
 		"qcom,esd-check-enabled");
 
-	if (!esd_config->esd_enabled)
-		return 0;
-
+	/* ESD err will be parsed and prioritized */
 	gpio = of_get_named_gpio_flags(panel->panel_of_node,
 			"qcom,esd-err-irq-gpio", 0,
 			(enum of_gpio_flags *)&irqflags);
@@ -3341,6 +3339,9 @@ static int dsi_panel_parse_esd_config(struct dsi_panel *panel)
 			}
 		}
 	}
+
+	if (!esd_config->esd_enabled)
+		return 0;
 
 	rc = utils->read_string(utils->data,
 			"qcom,mdss-dsi-panel-status-check-mode", &string);
@@ -4508,9 +4509,6 @@ int dsi_panel_enable(struct dsi_panel *panel)
 		return -EINVAL;
 	}
 
-	if (panel->hbm_mode)
-		dsi_panel_apply_hbm_mode(panel);
-
 	mutex_lock(&panel->panel_lock);
 
 	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_ON);
@@ -4520,6 +4518,10 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	else
 		panel->panel_initialized = true;
 	mutex_unlock(&panel->panel_lock);
+
+	if (panel->hbm_mode)
+		dsi_panel_apply_hbm_mode(panel);
+
 	return rc;
 }
 

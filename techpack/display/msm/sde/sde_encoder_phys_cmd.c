@@ -39,7 +39,7 @@
 #define AUTOREFRESH_SEQ2_POLL_TIMEOUT	1000000
 
 static inline int _sde_encoder_phys_cmd_get_idle_timeout(
-		struct sde_encoder_phys_cmd *cmd_enc)
+		struct sde_encoder_phys_cmd *cmd_enc __maybe_unused)
 {
 	return cmd_enc->autorefresh.cfg.frame_count ?
 			cmd_enc->autorefresh.cfg.frame_count *
@@ -78,7 +78,7 @@ static void _sde_encoder_phys_cmd_config_autorefresh(
 		struct sde_encoder_phys *phys_enc,
 		u32 new_frame_count)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_hw_pingpong *hw_pp = phys_enc->hw_pp;
 	struct sde_hw_intf *hw_intf = phys_enc->hw_intf;
@@ -115,7 +115,7 @@ static void _sde_encoder_phys_cmd_config_autorefresh(
 static void _sde_encoder_phys_cmd_update_flush_mask(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 	struct sde_hw_ctl *ctl;
 
 	if (!phys_enc || !phys_enc->hw_intf || !phys_enc->hw_pp)
@@ -147,7 +147,7 @@ static void _sde_encoder_phys_cmd_update_flush_mask(
 static void _sde_encoder_phys_cmd_update_intf_cfg(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_hw_ctl *ctl;
 
@@ -204,7 +204,7 @@ static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
 static void sde_encoder_phys_cmd_autorefresh_done_irq(void *arg, int irq_idx)
 {
 	struct sde_encoder_phys *phys_enc = arg;
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	unsigned long lock_flags;
 	int new_cnt;
@@ -229,7 +229,7 @@ static void sde_encoder_phys_cmd_autorefresh_done_irq(void *arg, int irq_idx)
 static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 {
 	struct sde_encoder_phys *phys_enc = arg;
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 	u32 scheduler_status = INVALID_CTL_STATUS;
 	struct sde_hw_ctl *ctl;
 	struct sde_hw_pp_vsync_info info[MAX_CHANNELS_PER_ENC] = {{0}};
@@ -396,7 +396,7 @@ static void sde_encoder_phys_cmd_cont_splash_mode_set(
 {
 	struct sde_hw_intf *hw_intf;
 	struct sde_hw_pingpong *hw_pp;
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 
 	if (!phys_enc || !adj_mode) {
 		SDE_ERROR("invalid args\n");
@@ -436,7 +436,7 @@ static void sde_encoder_phys_cmd_mode_set(
 		struct drm_display_mode *mode,
 		struct drm_display_mode *adj_mode)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_rm *rm = &phys_enc->sde_kms->rm;
 	struct sde_rm_hw_iter iter;
@@ -486,7 +486,7 @@ static int _sde_encoder_phys_cmd_handle_ppdone_timeout(
 		struct sde_encoder_phys *phys_enc,
 		bool recovery_events)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	u32 frame_event = SDE_ENCODER_FRAME_EVENT_ERROR
 				| SDE_ENCODER_FRAME_EVENT_SIGNAL_RELEASE_FENCE;
@@ -590,7 +590,7 @@ static bool _sde_encoder_phys_is_disabling_ppsplit_slave(
 static int _sde_encoder_phys_cmd_poll_write_pointer_started(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_hw_pingpong *hw_pp = phys_enc->hw_pp;
 	struct sde_hw_intf *hw_intf = phys_enc->hw_intf;
@@ -692,7 +692,7 @@ static bool _sde_encoder_phys_cmd_is_scheduler_idle(
 	bool wr_ptr_wait_success = true;
 	unsigned long lock_flags;
 	bool ret = false;
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_hw_ctl *ctl = phys_enc->hw_ctl;
 
@@ -731,7 +731,7 @@ static bool _sde_encoder_phys_cmd_is_scheduler_idle(
 static int _sde_encoder_phys_cmd_wait_for_idle(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_encoder_wait_info wait_info = {0};
 	bool recovery_events;
@@ -784,7 +784,7 @@ static int _sde_encoder_phys_cmd_wait_for_idle(
 static int _sde_encoder_phys_cmd_wait_for_autorefresh_done(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_encoder_wait_info wait_info = {0};
 	int ret = 0;
@@ -821,7 +821,7 @@ static int sde_encoder_phys_cmd_control_vblank_irq(
 		struct sde_encoder_phys *phys_enc,
 		bool enable)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 	int ret = 0;
 	int refcount;
@@ -880,7 +880,7 @@ end:
 void sde_encoder_phys_cmd_irq_control(struct sde_encoder_phys *phys_enc,
 		bool enable)
 {
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 
 	if (!phys_enc)
 		return;
@@ -929,7 +929,7 @@ static int _get_tearcheck_threshold(struct sde_encoder_phys *phys_enc,
 	u32 qsync_mode;
 	struct drm_display_mode *mode;
 	u32 threshold_lines = 0;
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 
 	*extra_frame_trigger_time = 0;
@@ -998,7 +998,7 @@ exit:
 static void sde_encoder_phys_cmd_tearcheck_config(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_hw_tear_check tc_cfg = { 0 };
 	struct drm_display_mode *mode;
@@ -1113,7 +1113,7 @@ static void sde_encoder_phys_cmd_tearcheck_config(
 static void _sde_encoder_phys_cmd_pingpong_config(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 
 	if (!phys_enc || !phys_enc->hw_ctl || !phys_enc->hw_pp) {
@@ -1158,7 +1158,7 @@ skip_flush:
 
 static void sde_encoder_phys_cmd_enable(struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 
 	if (!phys_enc || !phys_enc->hw_pp) {
@@ -1181,7 +1181,7 @@ static void sde_encoder_phys_cmd_enable(struct sde_encoder_phys *phys_enc)
 static bool sde_encoder_phys_cmd_is_autorefresh_enabled(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 	struct sde_hw_pingpong *hw_pp;
 	struct sde_hw_intf *hw_intf;
 	struct sde_hw_autorefresh cfg;
@@ -1303,7 +1303,7 @@ static int sde_encoder_phys_cmd_get_write_line_count(
 
 static void sde_encoder_phys_cmd_disable(struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 
 	if (!phys_enc || !phys_enc->hw_pp || !phys_enc->hw_intf) {
@@ -1336,7 +1336,7 @@ static void sde_encoder_phys_cmd_disable(struct sde_encoder_phys *phys_enc)
 
 static void sde_encoder_phys_cmd_destroy(struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 
 	if (!phys_enc) {
@@ -1351,7 +1351,7 @@ static void sde_encoder_phys_cmd_get_hw_resources(
 		struct sde_encoder_hw_resources *hw_res,
 		struct drm_connector_state *conn_state)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 
 	if (!phys_enc) {
@@ -1373,7 +1373,7 @@ static int sde_encoder_phys_cmd_prepare_for_kickoff(
 		struct sde_encoder_kickoff_params *params)
 {
 	struct sde_hw_tear_check tc_cfg = {0};
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	int ret = 0;
 	u32 extra_frame_trigger_time;
@@ -1428,7 +1428,7 @@ static int sde_encoder_phys_cmd_prepare_for_kickoff(
 static bool _sde_encoder_phys_cmd_needs_vsync_change(
 		struct sde_encoder_phys *phys_enc, ktime_t profile_timestamp)
 {
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 	struct sde_encoder_phys_cmd_te_timestamp *cur;
 	struct sde_encoder_phys_cmd_te_timestamp *prev = NULL;
 	ktime_t time_diff;
@@ -1476,7 +1476,7 @@ static bool _sde_encoder_phys_cmd_needs_vsync_change(
 static int _sde_encoder_phys_cmd_wait_for_wr_ptr(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	struct sde_encoder_wait_info wait_info = {0};
 	int ret;
@@ -1539,7 +1539,7 @@ static int sde_encoder_phys_cmd_wait_for_tx_complete(
 		struct sde_encoder_phys *phys_enc)
 {
 	int rc;
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 
 	if (!phys_enc)
 		return -EINVAL;
@@ -1567,7 +1567,7 @@ static int _sde_encoder_phys_cmd_handle_wr_ptr_timeout(
 		struct sde_encoder_phys *phys_enc,
 		ktime_t profile_timestamp)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	bool switch_te;
 	int ret = -ETIMEDOUT;
@@ -1621,7 +1621,7 @@ static int sde_encoder_phys_cmd_wait_for_commit_done(
 		struct sde_encoder_phys *phys_enc)
 {
 	int rc = 0, i, pending_cnt;
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 	ktime_t profile_timestamp = ktime_get();
 	u32 scheduler_status = INVALID_CTL_STATUS;
 	struct sde_hw_ctl *ctl;
@@ -1690,7 +1690,7 @@ static int sde_encoder_phys_cmd_wait_for_vblank(
 		struct sde_encoder_phys *phys_enc)
 {
 	int rc = 0;
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 	struct sde_encoder_wait_info wait_info = {0};
 
 	if (!phys_enc)
@@ -1718,7 +1718,7 @@ static void sde_encoder_phys_cmd_update_split_role(
 		struct sde_encoder_phys *phys_enc,
 		enum sde_enc_split_role role)
 {
-	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused;
 	enum sde_enc_split_role old_role;
 	bool is_ppsplit;
 
@@ -1751,7 +1751,7 @@ static void _sde_encoder_autorefresh_disable_seq1(
 		struct sde_encoder_phys *phys_enc)
 {
 	int trial = 0;
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 				to_sde_encoder_phys_cmd(phys_enc);
 
 	/*
@@ -1785,7 +1785,7 @@ static void _sde_encoder_autorefresh_disable_seq2(
 	int trial = 0;
 	struct sde_hw_mdp *hw_mdp = phys_enc->hw_mdptop;
 	u32 autorefresh_status = 0;
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 				to_sde_encoder_phys_cmd(phys_enc);
 	struct intf_tear_status tear_status;
 	struct sde_hw_intf *hw_intf = phys_enc->hw_intf;
@@ -1857,7 +1857,7 @@ static void _sde_encoder_autorefresh_disable_seq2(
 static void sde_encoder_phys_cmd_prepare_commit(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 		to_sde_encoder_phys_cmd(phys_enc);
 
 	if (!phys_enc)
@@ -1883,7 +1883,7 @@ static void sde_encoder_phys_cmd_prepare_commit(
 static void sde_encoder_phys_cmd_trigger_start(
 		struct sde_encoder_phys *phys_enc)
 {
-	struct sde_encoder_phys_cmd *cmd_enc =
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused =
 			to_sde_encoder_phys_cmd(phys_enc);
 	u32 frame_cnt;
 
@@ -1955,7 +1955,7 @@ struct sde_encoder_phys *sde_encoder_phys_cmd_init(
 		struct sde_enc_phys_init_params *p)
 {
 	struct sde_encoder_phys *phys_enc = NULL;
-	struct sde_encoder_phys_cmd *cmd_enc = NULL;
+	struct sde_encoder_phys_cmd *cmd_enc __maybe_unused = NULL;
 	struct sde_hw_mdp *hw_mdp;
 	struct sde_encoder_irq *irq;
 	int i, ret = 0;

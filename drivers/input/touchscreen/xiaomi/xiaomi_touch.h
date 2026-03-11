@@ -20,10 +20,10 @@
 #include <linux/poll.h>
 #include <linux/slab.h>
 
-
 /*CUR,DEFAULT,MIN,MAX*/
 #define VALUE_TYPE_SIZE 6
 #define VALUE_GRIP_SIZE 9
+
 enum MODE_CMD {
 	SET_CUR_VALUE = 0,
 	GET_CUR_VALUE,
@@ -74,8 +74,8 @@ struct xiaomi_touch {
 	wait_queue_head_t wait_queue;
 };
 
-struct xiaomi_touch_pdata{
-	struct xiaomi_touch *device;
+struct xiaomi_touch_pdata {
+	struct xiaomi_touch touch_dev;
 	struct xiaomi_touch_interface *touch_data;
 	int palm_value;
 	bool palm_changed;
@@ -83,14 +83,9 @@ struct xiaomi_touch_pdata{
 };
 
 struct xiaomi_touch *xiaomi_touch_dev_get(int minor);
-
-extern struct class *get_xiaomi_touch_class(void);
-
+extern struct class  *get_xiaomi_touch_class(void);
 extern struct device *get_xiaomi_touch_dev(void);
-
 extern int update_palm_sensor_value(int value);
-
 int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data);
 
 #endif
-

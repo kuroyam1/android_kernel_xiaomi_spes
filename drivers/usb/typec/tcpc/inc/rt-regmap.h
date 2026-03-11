@@ -89,7 +89,6 @@ enum rt_data_format {
 /* create node for each regisetr map by register address */
 #define RT_DBG_SPECIAL		(1 << 5)
 
-
 /* struct rt_register
  *
  * Ricktek register map structure for storing mapping data

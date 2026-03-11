@@ -218,4 +218,4 @@ void pe_dfp_uvdm_naked_entry(struct pd_port *pd_port)
 	pd_dpm_dfp_inform_uvdm(pd_port, false);
 }
 
-#endif      /* CONFIG_USB_PD_CUSTOM_VDM */
+#endif	/* CONFIG_USB_PD_CUSTOM_VDM */

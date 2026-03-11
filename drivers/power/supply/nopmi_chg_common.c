@@ -23,7 +23,7 @@ int nopmi_chg_is_usb_present(struct power_supply *usb_psy)
 		got_local = true;
 	}
 
-	ret = power_supply_get_property(usb_psy, POWER_SUPPLY_PROP_ONLINE, &prop);
+	ret = power_supply_get_property(usb_psy, POWER_SUPPLY_PROP_PRESENT, &prop);
 	if (ret < 0) {
 		pr_err("couldn't read usb_present property, ret=%d\n", ret);
 		if (got_local)
@@ -96,8 +96,7 @@ struct quick_charge adapter_cap[10] = {
 int nopmi_get_quick_charge_type(struct power_supply *usb_psy)
 {
 	union power_supply_propval prop = {0, };
-	int i = 0;
-	int ret;
+	int i = 0, ret = 0;
 	enum power_supply_type chg_type;
 	struct power_supply *batt_psy = NULL;
 	bool batt_got_local = false;
@@ -121,14 +120,12 @@ int nopmi_get_quick_charge_type(struct power_supply *usb_psy)
 	}
 	chg_type = prop.intval;
 
+	batt_psy = power_supply_get_by_name("battery");
 	if (!batt_psy) {
-		batt_psy = power_supply_get_by_name("battery");
-		if (!batt_psy) {
-			pr_err("battery supply not found\n");
-			return 0;
-		}
-		batt_got_local = true;
+		pr_err("battery supply not found\n");
+		goto out_put_usb;
 	}
+	batt_got_local = true;
 
 	ret = power_supply_get_property(batt_psy, POWER_SUPPLY_PROP_TEMP, &prop);
 	if (ret < 0) {

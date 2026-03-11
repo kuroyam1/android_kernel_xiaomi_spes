@@ -49,8 +49,8 @@
 #define FLAG_HID_BIT		10
 #define FLAG_IDC_BIT		11
 
-#define IC_SERIALS			(FTS_CHIP_TYPE & FLAGBITS(0, FLAG_ICSERIALS_LEN-1))
-#define IC_TO_SERIALS(x)		((x) & FLAGBITS(0, FLAG_ICSERIALS_LEN-1))
+#define IC_SERIALS			(FTS_CHIP_TYPE & FLAGBITS(0, FLAG_ICSERIALS_LEN - 1))
+#define IC_TO_SERIALS(x)		((x) & FLAGBITS(0, FLAG_ICSERIALS_LEN - 1))
 #define FTS_CHIP_IDC			((FTS_CHIP_TYPE & FLAGBIT(FLAG_IDC_BIT)) == FLAGBIT(FLAG_IDC_BIT))
 #define FTS_HID_SUPPORTTED	((FTS_CHIP_TYPE & FLAGBIT(FLAG_HID_BIT)) == FLAGBIT(FLAG_HID_BIT))
 
@@ -141,24 +141,23 @@ struct ts_ic_info {
 *****************************************************************************/
 #if FTS_DEBUG_EN
 #define FTS_DEBUG(fmt, args...) \
-	printk("[FTS_TS]%s: " fmt "\n", __func__, ##args)
+	pr_info("[FTS_TS/D]: %s: " fmt "\n", __func__, ##args)
 
 #define FTS_FUNC_ENTER() \
-	printk("[FTS_TS]%s: Enter\n", __func__)
+	pr_info("[FTS_TS/D]: %s: Enter\n", __func__)
 
 #define FTS_FUNC_EXIT() \
-	printk("[FTS_TS]%s: Exit(%d)\n", __func__, __LINE__)
-
-#define FTS_INFO(fmt, args...) \
-	printk(KERN_INFO "[FTS_TS/I]%s: " fmt "\n", __func__, ##args)
-
-#define FTS_ERROR(fmt, args...) \
-	printk(KERN_ERR "[FTS_TS/E]%s: " fmt "\n", __func__, ##args)
+	pr_info("[FTS_TS/D]: %s: Exit\n", __func__)
 #else
 #define FTS_DEBUG(fmt, args...)		((void)0)
 #define FTS_FUNC_ENTER()			((void)0)
 #define FTS_FUNC_EXIT()			((void)0)
-#define FTS_INFO(fmt, args...)		((void)0)
-#define FTS_ERROR(fmt, args...)		((void)0)
 #endif
+
+#define FTS_INFO(fmt, args...) \
+	pr_info("[FTS_TS/I]: %s: " fmt "\n", __func__, ##args)
+
+#define FTS_ERROR(fmt, args...) \
+	pr_err("[FTS_TS/E]: %s: " fmt "\n", __func__, ##args)
+
 #endif /* __LINUX_FOCALTECH_COMMON_H__ */

@@ -71,21 +71,18 @@ static int fts_ex_mode_switch(enum _ex_mode mode, u8 value)
 	switch (mode) {
 	case MODE_GLOVE:
 		ret = fts_write_reg(FTS_REG_GLOVE_MODE_EN, m_val);
-		if (ret < 0) {
+		if (ret < 0)
 			FTS_ERROR("MODE_GLOVE switch to %d fail", m_val);
-		}
 		break;
 	case MODE_COVER:
 		ret = fts_write_reg(FTS_REG_COVER_MODE_EN, m_val);
-		if (ret < 0) {
+		if (ret < 0)
 			FTS_ERROR("MODE_COVER switch to %d fail", m_val);
-		}
 		break;
 	case MODE_CHARGER:
 		ret = fts_write_reg(FTS_REG_CHARGER_MODE_EN, m_val);
-		if (ret < 0) {
+		if (ret < 0)
 			FTS_ERROR("MODE_CHARGER switch to %d fail", m_val);
-		}
 		break;
 	default:
 		FTS_ERROR("mode(%d) unsupport", mode);
@@ -125,21 +122,20 @@ static ssize_t fts_glove_mode_store(struct device *dev,
 		if (!ts_data->glove_mode) {
 			FTS_DEBUG("enter glove mode");
 			ret = fts_ex_mode_switch(MODE_GLOVE, ENABLE);
-			if (ret >= 0) {
+			if (!ret)
 				ts_data->glove_mode = ENABLE;
-			}
 		}
 	} else if (FTS_SYSFS_ECHO_OFF(buf)) {
 		if (ts_data->glove_mode) {
 			FTS_DEBUG("exit glove mode");
 			ret = fts_ex_mode_switch(MODE_GLOVE, DISABLE);
-			if (ret >= 0) {
+			if (!ret) {
 				ts_data->glove_mode = DISABLE;
 			}
 		}
 	}
 
-	FTS_DEBUG("glove mode:%d", ts_data->glove_mode);
+	FTS_DEBUG("glove mode: %d", ts_data->glove_mode);
 	return count;
 }
 
@@ -173,21 +169,19 @@ static ssize_t fts_cover_mode_store(struct device *dev,
 		if (!ts_data->cover_mode) {
 			FTS_DEBUG("enter cover mode");
 			ret = fts_ex_mode_switch(MODE_COVER, ENABLE);
-			if (ret >= 0) {
+			if (!ret)
 				ts_data->cover_mode = ENABLE;
-			}
 		}
 	} else if (FTS_SYSFS_ECHO_OFF(buf)) {
 		if (ts_data->cover_mode) {
 			FTS_DEBUG("exit cover mode");
 			ret = fts_ex_mode_switch(MODE_COVER, DISABLE);
-			if (ret >= 0) {
+			if (!ret)
 				ts_data->cover_mode = DISABLE;
-			}
 		}
 	}
 
-	FTS_DEBUG("cover mode:%d", ts_data->cover_mode);
+	FTS_DEBUG("cover mode: %d", ts_data->cover_mode);
 	return count;
 }
 
@@ -220,21 +214,19 @@ static ssize_t fts_charger_mode_store(struct device *dev,
 		if (!ts_data->charger_mode) {
 			FTS_DEBUG("enter charger mode");
 			ret = fts_ex_mode_switch(MODE_CHARGER, ENABLE);
-			if (ret >= 0) {
+			if (!ret)
 				ts_data->charger_mode = ENABLE;
-			}
 		}
 	} else if (FTS_SYSFS_ECHO_OFF(buf)) {
 		if (ts_data->charger_mode) {
 			FTS_DEBUG("exit charger mode");
 			ret = fts_ex_mode_switch(MODE_CHARGER, DISABLE);
-			if (ret >= 0) {
+			if (!ret)
 				ts_data->charger_mode = DISABLE;
-			}
 		}
 	}
 
-	FTS_DEBUG("charger mode:%d", ts_data->charger_mode);
+	FTS_DEBUG("charger mode: %d", ts_data->charger_mode);
 	return count;
 }
 
@@ -291,7 +283,6 @@ int fts_ex_mode_init(struct fts_ts_data *ts_data)
 	ret = sysfs_create_group(&ts_data->dev->kobj, &fts_touch_mode_group);
 	if (ret < 0) {
 		FTS_ERROR("create sysfs(ex_mode) fail");
-		sysfs_remove_group(&ts_data->dev->kobj, &fts_touch_mode_group);
 		return ret;
 	} else {
 		FTS_DEBUG("create sysfs(ex_mode) succeedfully");

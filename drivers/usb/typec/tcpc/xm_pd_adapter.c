@@ -43,28 +43,29 @@
 #include "inc/tcpm.h"
 
 #define PROBE_CNT_MAX	50
+#define ADAPTER_PREFIX "[xm_pd_adapter]: "
 static int log_level = 0;
 int get_apdo_regain;
 
-#define adapter_err(fmt, ...)						\
-do {									\
-	printk(KERN_ERR "[xm_pd_adapter]: " fmt, ##__VA_ARGS__);	\
+#define adapter_err(fmt, ...)				\
+do {							\
+	pr_err(ADAPTER_PREFIX fmt, ##__VA_ARGS__);	\
 } while (0)
 
-#define adapter_info(fmt, ...)							\
-do {										\
-	if (log_level >= 1)							\
-		printk(KERN_ERR "[xm_pd_adapter]: " fmt, ##__VA_ARGS__);	\
-	else									\
-		printk(KERN_INFO "[xm_pd_adapter]: " fmt, ##__VA_ARGS__);	\
+#define adapter_info(fmt, ...)					\
+do {								\
+	if (log_level >= 1)					\
+		pr_err(ADAPTER_PREFIX fmt, ##__VA_ARGS__);	\
+	else							\
+		pr_info(ADAPTER_PREFIX fmt, ##__VA_ARGS__);	\
 } while (0)
 
-#define adapter_dbg(fmt, ...)							\
-do {										\
-	if (log_level >= 2)							\
-		printk(KERN_ERR "[xm_pd_adapter]: " fmt, ##__VA_ARGS__);	\
-	else									\
-		printk(KERN_DEBUG "[xm_pd_adapter]: " fmt, ##__VA_ARGS__);	\
+#define adapter_dbg(fmt, ...)					\
+do {								\
+	if (log_level >= 2)					\
+		pr_err(ADAPTER_PREFIX fmt, ##__VA_ARGS__);	\
+	else							\
+		pr_debug(ADAPTER_PREFIX fmt, ##__VA_ARGS__);	\
 } while (0)
 
 struct xm_pd_adapter_info {
@@ -78,7 +79,8 @@ struct xm_pd_adapter_info {
 	struct adapter_device *pd_adapter;
 };
 
-static void usbpd_mi_vdm_received(struct xm_pd_adapter_info *pinfo, struct tcp_ny_uvdm uvdm)
+static void usbpd_mi_vdm_received(struct xm_pd_adapter_info *pinfo,
+			struct tcp_ny_uvdm uvdm)
 {
 	int i, cmd;
 
@@ -127,7 +129,7 @@ static void usbpd_mi_vdm_received(struct xm_pd_adapter_info *pinfo, struct tcp_n
 }
 
 static int pd_tcp_notifier_call(struct notifier_block *pnb,
-				unsigned long event, void *data)
+			unsigned long event, void *data)
 {
 	struct tcp_notify *noti = data;
 	struct xm_pd_adapter_info *pinfo;
@@ -135,11 +137,11 @@ static int pd_tcp_notifier_call(struct notifier_block *pnb,
 	pinfo = container_of(pnb, struct xm_pd_adapter_info, pd_nb);
 
 	adapter_dbg("%s: PD charger event: %d %d\n", __func__,
-		(int)event, (int)noti->pd_state.connected);
+			(int)event, (int)noti->pd_state.connected);
 	switch (event) {
 	case TCP_NOTIFY_PD_STATE:
 		switch (noti->pd_state.connected) {
-		case  PD_CONNECT_NONE:
+		case PD_CONNECT_NONE:
 			pinfo->adapter_dev->adapter_id = 0;
 			pinfo->adapter_dev->adapter_svid = 0;
 			pinfo->adapter_dev->uvdm_state = USBPD_UVDM_DISCONNECT;
@@ -213,8 +215,7 @@ static int pd_get_svid(struct adapter_device *dev)
 			}
 		}
 	} else {
-		ret = tcpm_dpm_pd_get_source_cap_ext(info->tcpc,
-			NULL, &cap_ext);
+		ret = tcpm_dpm_pd_get_source_cap_ext(info->tcpc, NULL, &cap_ext);
 		if (ret == TCPM_SUCCESS) {
 			info->adapter_dev->adapter_svid = cap_ext.vid & 0x0000FFFF;
 			info->adapter_dev->adapter_id = cap_ext.pid & 0x0000FFFF;
@@ -233,11 +234,11 @@ static int pd_get_svid(struct adapter_device *dev)
 	return 0;
 }
 
-#define BSWAP_32(x) \
-	(u32)((((u32)(x) & 0xff000000) >> 24) | \
-			(((u32)(x) & 0x00ff0000) >> 8) | \
-			(((u32)(x) & 0x0000ff00) << 8) | \
-			(((u32)(x) & 0x000000ff) << 24))
+#define BSWAP_32(x)				\
+	(u32)((((u32)(x) & 0xff000000) >> 24) |	\
+	(((u32)(x) & 0x00ff0000) >> 8) |	\
+	(((u32)(x) & 0x0000ff00) << 8) |	\
+	(((u32)(x) & 0x000000ff) << 24))
 
 static void usbpd_sha256_bitswap32(unsigned int *array, int len)
 {
@@ -268,7 +269,7 @@ void charToint(char *str, int input_len, unsigned int *out, unsigned int *outlen
 }
 
 static int tcp_dpm_event_cb_uvdm(struct tcpc_device *tcpc, int ret,
-				 struct tcp_dpm_event *event)
+			struct tcp_dpm_event *event)
 {
 	int i;
 	struct tcp_dpm_custom_vdm_data vdm_data = event->tcp_dpm_data.vdm_data;
@@ -485,7 +486,7 @@ APDO_REGAIN:
 				tacap->minwatt[i], tacap->maxwatt[i],
 				tacap->type[i], pd_cap.type[i]);*/
 		}
-	}  else if (type == XM_PD_APDO_REGAIN) {
+	} else if (type == XM_PD_APDO_REGAIN) {
 		get_apdo_regain = 0;
 		ret = tcpm_dpm_pd_get_source_cap(info->tcpc, NULL);
 		if (ret == TCPM_SUCCESS) {
@@ -520,8 +521,7 @@ static struct adapter_ops adapter_ops = {
 	.set_pd_verify_process = pd_set_pd_verify_process,
 };
 
-static int adapter_parse_dt(struct xm_pd_adapter_info *info,
-	struct device *dev)
+static int adapter_parse_dt(struct xm_pd_adapter_info *info, struct device *dev)
 {
 	struct device_node *np = dev->of_node;
 
@@ -532,8 +532,7 @@ static int adapter_parse_dt(struct xm_pd_adapter_info *info,
 		return -EINVAL;
 	}
 
-	if (of_property_read_string(np, "adapter_name",
-		&info->adapter_dev_name) < 0)
+	if (of_property_read_string(np, "adapter_name", &info->adapter_dev_name) < 0)
 		adapter_err("%s: no adapter name\n", __func__);
 
 	return 0;
@@ -547,8 +546,8 @@ static int xm_pd_adapter_probe(struct platform_device *pdev)
 
 	adapter_err("%s: entry, probe_cnt = %d\n", __func__, ++probe_cnt);
 
-	info = devm_kzalloc(&pdev->dev, sizeof(struct xm_pd_adapter_info),
-			    GFP_KERNEL);
+	info = devm_kzalloc(&pdev->dev,
+			sizeof(struct xm_pd_adapter_info), GFP_KERNEL);
 	if (!info)
 		return -ENOMEM;
 
@@ -569,7 +568,7 @@ static int xm_pd_adapter_probe(struct platform_device *pdev)
 	adapter_parse_dt(info, &pdev->dev);
 
 	info->adapter_dev = adapter_device_register(info->adapter_dev_name,
-			    &pdev->dev, info, &adapter_ops, NULL);
+			&pdev->dev, info, &adapter_ops, NULL);
 	if (IS_ERR(info->adapter_dev)) {
 		ret = PTR_ERR(info->adapter_dev);
 		info->adapter_dev = NULL;
@@ -586,7 +585,7 @@ static int xm_pd_adapter_probe(struct platform_device *pdev)
 	info->pd_adapter = get_adapter_by_name("pd_adapter");
 	if (info->pd_adapter)
 		adapter_info("%s: Found PD adapter [%s]\n", __func__,
-			     info->pd_adapter->props.alias_name);
+				info->pd_adapter->props.alias_name);
 	else
 		adapter_err("%s: Error: can't find PD adapter\n", __func__);
 
@@ -638,19 +637,19 @@ static int xm_pd_adapter_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id xm_pd_adapter_of_match[] = {
-	{.compatible = "xiaomi,pd_adapter",},
-	{},
+	{ .compatible = "xiaomi,pd_adapter", },
+	{ },
 };
 MODULE_DEVICE_TABLE(of, xm_pd_adapter_of_match);
 
 static struct platform_driver xm_pd_adapter_driver = {
-	.probe = xm_pd_adapter_probe,
-	.remove = xm_pd_adapter_remove,
 	.driver = {
-		   .name = "xm_pd_adapter",
-		   .owner = THIS_MODULE,
-		   .of_match_table = xm_pd_adapter_of_match,
+		.owner		= THIS_MODULE,
+		.name		= "xm_pd_adapter",
+		.of_match_table	= of_match_ptr(xm_pd_adapter_of_match),
 	},
+	.probe		= xm_pd_adapter_probe,
+	.remove	= xm_pd_adapter_remove,
 };
 
 static int __init xm_pd_adapter_init(void)

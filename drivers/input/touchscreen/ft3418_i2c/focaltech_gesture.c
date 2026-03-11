@@ -56,7 +56,6 @@
 #define KEY_GESTURE_Z	KEY_Z
 #define KEY_GESTURE_SINGLECLICK	KEY_GOTO
 
-
 #define GESTURE_LEFT	0x20
 #define GESTURE_RIGHT	0x21
 #define GESTURE_UP	0x22
@@ -235,7 +234,7 @@ static inline ssize_t single_tap_pressed_get(struct device *device,
 static DEVICE_ATTR(fts_gesture_mode, S_IRUGO | S_IWUSR,
 		   fts_gesture_show, fts_gesture_store);
 /*
- *   read example: cat fts_gesture_buf		--- read gesture buf
+ *   read example: cat fts_gesture_buf	--- read gesture buf
  */
 static DEVICE_ATTR(fts_gesture_buf, S_IRUGO | S_IWUSR,
 		   fts_gesture_buf_show, fts_gesture_buf_store);
@@ -272,7 +271,6 @@ static int fts_create_gesture_sysfs(struct device *dev)
 	ret = sysfs_create_group(&dev->kobj, &fts_gesture_group);
 	if (ret) {
 		FTS_ERROR("gesture sys node create fail");
-		sysfs_remove_group(&dev->kobj, &fts_gesture_group);
 		return ret;
 	}
 
@@ -384,7 +382,7 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
 		return 1;
 	}
 
-	FTS_ERROR("start fts_read_reg!");
+	FTS_DEBUG("start fts_read_reg!");
 	ret = fts_read_reg(FTS_REG_GESTURE_EN, &buf[0]);
 	if ((ret < 0) || (buf[0] != ENABLE)) {
 		FTS_DEBUG("gesture not enable in fw, don't process gesture");
@@ -457,9 +455,9 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
 	}
 
 	if (i >= 5)
-		FTS_ERROR("make IC enter into gesture(suspend) fail,state:%x", state);
+		FTS_ERROR("make IC enter into gesture(suspend) fail, state:%x", state);
 	else
-		FTS_INFO("Enter into gesture(suspend) successfully");
+		FTS_INFO("successfully");
 
 	FTS_FUNC_EXIT();
 	return 0;
@@ -484,9 +482,9 @@ int fts_gesture_resume(struct fts_ts_data *ts_data)
 	}
 
 	if (i >= 5)
-		FTS_ERROR("make IC exit gesture(resume) fail,state:%x", state);
+		FTS_ERROR("make IC exit gesture(resume) fail, state:%x", state);
 	else
-		FTS_INFO("resume from gesture successfully");
+		FTS_INFO("successfully");
 
 	FTS_FUNC_EXIT();
 	return 0;
@@ -499,7 +497,7 @@ int fts_gesture_switch(struct input_dev *dev,
 {
 	struct fts_ts_data *ts_data = fts_data;
 
-	FTS_INFO("Enter. type = %u, code = %u, value = %d", type, code, value);
+	FTS_DEBUG("Enter. type = %u, code = %u, value = %d", type, code, value);
 	if (type == EV_SYN && code == SYN_CONFIG) {
 		if (value == WAKEUP_OFF) {
 			ts_data->gesture_mode = DISABLE;
@@ -509,7 +507,7 @@ int fts_gesture_switch(struct input_dev *dev,
 			//lct_fts_tp_gesture_callback(true);
 		}
 	}
-	FTS_INFO("Exit");
+	FTS_DEBUG("Exit");
 	return 0;
 }
 
@@ -571,7 +569,7 @@ int fts_gesture_init(struct fts_ts_data *ts_data)
 	fts_create_gesture_sysfs(ts_data->dev);
 
 #ifdef CONFIG_TP_COMMON
-	tp_common_set_double_tap_ops(&double_tap_ops);
+	tp_common_set_ops(TP_FEATURE_DOUBLE_TAP, &double_tap_ops);
 #endif
 
 	memset(&fts_gesture_data, 0, sizeof(struct fts_gesture_st));
@@ -584,6 +582,9 @@ int fts_gesture_init(struct fts_ts_data *ts_data)
 int fts_gesture_exit(struct fts_ts_data *ts_data)
 {
 	FTS_FUNC_ENTER();
+#ifdef CONFIG_TP_COMMON
+	tp_common_remove_ops(TP_FEATURE_DOUBLE_TAP);
+#endif
 	sysfs_remove_group(&ts_data->dev->kobj, &fts_gesture_group);
 	FTS_FUNC_EXIT();
 	return 0;

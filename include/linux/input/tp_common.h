@@ -1,3 +1,6 @@
+#ifndef _TP_COMMON_H
+#define _TP_COMMON_H
+
 #include <linux/kobject.h>
 
 extern bool capacitive_keys_enabled;
@@ -8,7 +11,15 @@ struct tp_common_ops {
 	ssize_t (*store)(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count);
 };
 
-int tp_common_set_capacitive_keys_ops(struct tp_common_ops *ops);
-int tp_common_set_double_tap_ops(struct tp_common_ops *ops);
-int tp_common_set_reversed_keys_ops(struct tp_common_ops *ops);
+/* Enum identifier type */
+enum tp_feature {
+	TP_FEATURE_CAPACITIVE_KEYS,
+	TP_FEATURE_DOUBLE_TAP,
+	TP_FEATURE_REVERSED_KEYS,
+	TP_FEATURE_MAX,
+};
 
+int tp_common_set_ops(enum tp_feature feature, struct tp_common_ops *ops);
+void tp_common_remove_ops(enum tp_feature feature);
+
+#endif /* _TP_COMMON_H */

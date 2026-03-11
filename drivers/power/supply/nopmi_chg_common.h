@@ -38,5 +38,5 @@ NOPMI_CHARGER_IC_TYPE nopmi_get_charger_ic_type(void);
 int nopmi_set_charge_enable(bool en);
 
 int nopmi_get_quick_charge_type(struct power_supply *psy);
-#endif
 
+#endif

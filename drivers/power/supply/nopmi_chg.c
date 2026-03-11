@@ -25,9 +25,6 @@ struct step_config cc_cv_step1_config[STEP_TABLE_MAX] = {
 	{4440, 3920},
 };
 
-static void start_nopmi_chg_workfunc(void);
-static void stop_nopmi_chg_workfunc(void);
-
 int get_prop_battery_charging_enabled(struct votable *usb_icl_votable,
 		union power_supply_propval *val)
 {
@@ -37,6 +34,7 @@ int get_prop_battery_charging_enabled(struct votable *usb_icl_votable,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(get_prop_battery_charging_enabled);
 
 int set_prop_battery_charging_enabled(struct votable *usb_icl_votable,
 		const union power_supply_propval *val)
@@ -51,7 +49,6 @@ int set_prop_battery_charging_enabled(struct votable *usb_icl_votable,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(get_prop_battery_charging_enabled);
 EXPORT_SYMBOL_GPL(set_prop_battery_charging_enabled);
 
 static int nopmi_set_prop_input_suspend(struct nopmi_chg *nopmi_chg,
@@ -119,8 +116,7 @@ static int nopmi_update_batt_volt(struct nopmi_chg *nopmi_chg)
 			POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
 	if (ret < 0) {
 		pr_err("read fg batt volt property fail, ret=%d\n", ret);
-		if (!READ_ONCE(nopmi_chg->batt_volt))
-			WRITE_ONCE(nopmi_chg->batt_volt, 3800000);
+		WRITE_ONCE(nopmi_chg->batt_volt, 0);
 		return ret;
 	}
 
@@ -252,7 +248,6 @@ static int nopmi_batt_get_prop_internal(struct power_supply *psy,
 	struct nopmi_chg *nopmi_chg = power_supply_get_drvdata(psy);
 	int rc = 0;
 	int batt_volt;
-	static int last_status;
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_HEALTH:
@@ -265,7 +260,7 @@ static int nopmi_batt_get_prop_internal(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
-		rc = power_supply_get_property(nopmi_chg->main_psy,
+		rc = power_supply_get_property(nopmi_chg->bbc_psy,
 				POWER_SUPPLY_PROP_CHARGE_TYPE, pval);
 		//pval->intval = 2;
 		break;
@@ -279,11 +274,9 @@ static int nopmi_batt_get_prop_internal(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_STATUS:
 		batt_volt = READ_ONCE(nopmi_chg->batt_volt) / 1000;
-		rc = power_supply_get_property(nopmi_chg->main_psy,
+		rc = power_supply_get_property(nopmi_chg->bbc_psy,
 				POWER_SUPPLY_PROP_STATUS, pval);
-		if (pval->intval == POWER_SUPPLY_STATUS_FULL)
-			pval->intval = POWER_SUPPLY_STATUS_FULL;
-		else if (nopmi_chg->input_suspend || batt_volt < 3300)
+		if (nopmi_chg->input_suspend || batt_volt < 3300)
 			pval->intval = POWER_SUPPLY_STATUS_DISCHARGING;
 		else if (((pval->intval == POWER_SUPPLY_STATUS_DISCHARGING) ||
 				(pval->intval == POWER_SUPPLY_STATUS_NOT_CHARGING)) &&
@@ -292,9 +285,9 @@ static int nopmi_batt_get_prop_internal(struct power_supply *psy,
 		else if (nopmi_chg->pd_active)
 			pval->intval = POWER_SUPPLY_STATUS_CHARGING;
 
-		if (last_status != pval->intval)
+		if (pval->intval != nopmi_chg->last_batt_status)
 			power_supply_changed(nopmi_chg->batt_psy);
-		last_status = pval->intval;
+		nopmi_chg->last_batt_status = pval->intval;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		rc = nopmi_update_batt_temp(nopmi_chg);
@@ -518,27 +511,6 @@ static int get_real_type(void)
 }
 #endif
 
-static void nopmi_handle_work(struct nopmi_chg *nopmi_chg, int online)
-{
-	if (!nopmi_chg)
-		return;
-
-	if (NOPMI_CHARGER_IC_NONE == nopmi_get_charger_ic_type() || NOPMI_CHARGER_IC_MAX == nopmi_get_charger_ic_type())
-		return;
-
-	if (online && !READ_ONCE(nopmi_chg->is_awake)) {
-		WRITE_ONCE(nopmi_chg->is_awake, 1);
-		start_nopmi_chg_workfunc();
-		power_supply_changed(nopmi_chg->usb_psy);
-		pr_info("USB connected\n");
-	} else if (!online && READ_ONCE(nopmi_chg->is_awake)) {
-		WRITE_ONCE(nopmi_chg->is_awake, 0);
-		stop_nopmi_chg_workfunc();
-		power_supply_changed(nopmi_chg->usb_psy);
-		pr_info("USB disconnected\n");
-	}
-}
-
 /************************
  * USB PSY REGISTRATION *
  ************************/
@@ -598,7 +570,7 @@ static int nopmi_usb_get_prop_internal(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 	case POWER_SUPPLY_PROP_TERM_CURRENT:
-		rc = power_supply_get_property(nopmi_chg->main_psy, psp, val);
+		rc = power_supply_get_property(nopmi_chg->bbc_psy, psp, val);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		break;
@@ -611,11 +583,6 @@ static int nopmi_usb_get_prop_internal(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_POWER_NOW:
 		break;
 	case POWER_SUPPLY_PROP_REAL_TYPE:
-		if (!nopmi_chg) {
-			pr_err("nopmi_chg is null\n");
-			break;
-		}
-
 		if (nopmi_chg->pd_active) {
 			val->intval = POWER_SUPPLY_TYPE_USB_PD;
 		} else {
@@ -681,6 +648,13 @@ static int nopmi_usb_get_prop(struct power_supply *psy,
 			val->intval = 1;
 		else
 			val->intval = 0;
+
+		if (val->intval != nopmi_chg->last_usb_present) {
+			nopmi_chg->last_usb_present = val->intval;
+			WRITE_ONCE(nopmi_chg->is_awake, val->intval);
+			queue_delayed_work(nopmi_chg->usb_present_wq,
+					&nopmi_chg->usb_present_work, msecs_to_jiffies(100));
+		}
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
@@ -744,7 +718,7 @@ static int nopmi_usb_set_prop_internal(struct power_supply *psy,
 		break;
 #endif
 	case POWER_SUPPLY_PROP_TERM_CURRENT:
-		rc = power_supply_set_property(nopmi_chg->main_psy, psp, val);
+		rc = power_supply_set_property(nopmi_chg->bbc_psy, psp, val);
 		break;
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		//rc = smblib_set_prop_sdp_current_max(chg, val->intval);
@@ -817,17 +791,9 @@ static int nopmi_usb_set_prop(struct power_supply *psy,
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_REAL_TYPE: //for maxim solution, use persent use g_nopmi_chg->real_type, we have to set it in global setting.
-	{
-		int online = val->intval > 0 ? 1 : 0;
-
-		if (nopmi_chg->last_real_online != online) {
-			nopmi_handle_work(nopmi_chg, online);
-			nopmi_chg->last_real_online = online;
-		}
 		nopmi_chg->real_type = val->intval;
 		ret = 0;
 		break;
-	}
 	default:
 		break;
 	}
@@ -1186,7 +1152,6 @@ static void nopmi_cv_step_monitor(struct nopmi_chg *nopmi_chg)
 	int rc = 0;
 	int batt_curr = 0, batt_volt = 0, batt_cycle = 0;
 	u32 i = 0, stepdown = 0, finalFCC = 0, votFCC = 0;
-	static u32 step_count[STEP_TABLE_MAX] = {0};
 	struct step_config *pcc_cv_step_config;
 	u32 step_table_max;
 
@@ -1241,21 +1206,21 @@ static void nopmi_cv_step_monitor(struct nopmi_chg *nopmi_chg)
 			nopmi_chg->last_cc_cv_votfcc = 0;
 		}
 		for (i = 0; i < step_table_max; i++)
-			step_count[i] = 0;
+			nopmi_chg->cv_step_count[i] = 0;
 		return;
 	}
 
 	for (i = 0; i < step_table_max; i++) {
 		if (batt_volt >= pcc_cv_step_config[i].volt_lim - CV_BATT_VOLT_HYSTERESIS &&
 				batt_curr > pcc_cv_step_config[i].curr_lim) {
-			if (++step_count[i] >= 2) {
+			if (++nopmi_chg->cv_step_count[i] >= 2) {
 				stepdown = 1;
-				step_count[i] = 0;
+				nopmi_chg->cv_step_count[i] = 0;
 				pr_info("cccv_step check = stepdown at step %u\n", i);
 			}
 			break;
 		} else {
-			step_count[i] = 0;
+			nopmi_chg->cv_step_count[i] = 0;
 		}
 	}
 
@@ -1277,18 +1242,42 @@ static void nopmi_cv_step_monitor(struct nopmi_chg *nopmi_chg)
 			i, votFCC, stepdown, finalFCC);
 }
 
+static void nopmi_chg_handle_workfunc(struct nopmi_chg *nopmi_chg, bool en)
+{
+	pm_stay_awake(nopmi_chg->dev);
+
+	if (en) {
+		schedule_delayed_work(&nopmi_chg->nopmi_chg_work, 0);
+		schedule_delayed_work(&nopmi_chg->cv_step_monitor_work, 0);
+	} else {
+		cancel_delayed_work_sync(&nopmi_chg->nopmi_chg_work);
+		cancel_delayed_work_sync(&nopmi_chg->cv_step_monitor_work);
+		nopmi_cv_step_monitor(nopmi_chg);
+		stop_nopmi_chg_jeita_workfunc();
+	}
+
+	pm_relax(nopmi_chg->dev);
+}
+
+static void nopmi_usb_present_workfunc(struct work_struct *work)
+{
+	struct nopmi_chg *nopmi_chg = container_of(work, struct nopmi_chg, usb_present_work.work);
+	bool en = READ_ONCE(nopmi_chg->is_awake);
+
+	pr_info("USB %s\n", en ? "connected" : "disconnected");
+	power_supply_changed(nopmi_chg->usb_psy);
+	nopmi_chg_handle_workfunc(nopmi_chg, en);
+}
+
 static void nopmi_cv_step_monitor_workfunc(struct work_struct *work)
 {
 	struct nopmi_chg *nopmi_chg = container_of(work, struct nopmi_chg, cv_step_monitor_work.work);
-
-	if (!nopmi_chg)
-		return;
 
 	nopmi_cv_step_monitor(nopmi_chg);
 
 	if (READ_ONCE(nopmi_chg->is_awake)) {
 		schedule_delayed_work(&nopmi_chg->cv_step_monitor_work,
-			msecs_to_jiffies(NOPMI_CHG_CV_STEP_MONITOR_WORKFUNC_GAP));
+				msecs_to_jiffies(NOPMI_CHG_CV_STEP_MONITOR_WORKFUNC_GAP));
 	} else {
 		pr_info("usb offline, stop cvstep monitor\n");
 	}
@@ -1297,68 +1286,18 @@ static void nopmi_cv_step_monitor_workfunc(struct work_struct *work)
 static void nopmi_chg_workfunc(struct work_struct *work)
 {
 	struct nopmi_chg *nopmi_chg = container_of(work, struct nopmi_chg, nopmi_chg_work.work);
-
 	if (READ_ONCE(nopmi_chg->is_awake)) {
-		if (nopmi_chg_is_usb_present(nopmi_chg->usb_psy)) {
-			start_nopmi_chg_jeita_workfunc();
-			schedule_delayed_work(&nopmi_chg->nopmi_chg_work,
-					msecs_to_jiffies(NOPMI_CHG_WORKFUNC_GAP));
-		} else {
-			WRITE_ONCE(nopmi_chg->is_awake, 0);
-			stop_nopmi_chg_workfunc();
-			power_supply_changed(nopmi_chg->usb_psy);
-		}
+		start_nopmi_chg_jeita_workfunc();
+		schedule_delayed_work(&nopmi_chg->nopmi_chg_work,
+				msecs_to_jiffies(NOPMI_CHG_WORKFUNC_GAP));
 	} else {
 		pr_info("usb offline, stop nopmi monitor\n");
 	}
 }
 
-static void nopmi_handle_chg_workfunc(struct nopmi_chg *nopmi_chg, bool en)
-{
-	if (!nopmi_chg)
-		return;
-
-	pm_stay_awake(nopmi_chg->dev);
-
-	if (en) {
-		pr_info("start work (nopmi_chg=%p)\n", nopmi_chg);
-
-		mod_delayed_work(system_wq, &nopmi_chg->nopmi_chg_work, 0);
-		mod_delayed_work(system_wq, &nopmi_chg->cv_step_monitor_work, 0);
-	} else {
-		pr_info("stop work (nopmi_chg=%p)\n", nopmi_chg);
-
-		/*
-		 * no need cancel, workfn not re-scheduling when !is_awake
-		 * execute 1 shot instead for clearing workfn state
-		 */
-		mod_delayed_work(system_wq, &nopmi_chg->nopmi_chg_work, 0);
-		mod_delayed_work(system_wq, &nopmi_chg->cv_step_monitor_work, 0);
-
-		stop_nopmi_chg_jeita_workfunc();
-	}
-
-	pm_relax(nopmi_chg->dev);
-}
-
-static void start_nopmi_chg_workfunc(void)
-{
-	pr_info("g_nopmi_chg=%p\n", g_nopmi_chg);
-	if (g_nopmi_chg)
-		nopmi_handle_chg_workfunc(g_nopmi_chg, true);
-}
-
-static void stop_nopmi_chg_workfunc(void)
-{
-	pr_info("g_nopmi_chg=%p\n", g_nopmi_chg);
-	if (g_nopmi_chg)
-		nopmi_handle_chg_workfunc(g_nopmi_chg, false);
-}
-
 static int nopmi_chg_probe(struct platform_device *pdev)
 {
 	struct nopmi_chg *nopmi_chg;
-	union power_supply_propval pval = {0, };
 	int rc;
 	static int probe_cnt = 0;
 
@@ -1389,8 +1328,8 @@ static int nopmi_chg_probe(struct platform_device *pdev)
 		goto err_clear_drvdata;
 	}
 
-	nopmi_chg->main_psy = power_supply_get_by_name("bbc");
-	if (!nopmi_chg->main_psy) {
+	nopmi_chg->bbc_psy = power_supply_get_by_name("bbc");
+	if (!nopmi_chg->bbc_psy) {
 		pr_err("get bbc psy fail, defer\n");
 		rc = -EPROBE_DEFER;
 		goto err_put_bms;
@@ -1403,27 +1342,35 @@ static int nopmi_chg_probe(struct platform_device *pdev)
 	}
 
 	nopmi_chg->last_cc_cv_votfcc = -1;
-	nopmi_chg->system_temp_level = -1;
 	nopmi_chg->last_thermal_icl_valid = false;
 	nopmi_chg->last_thermal_icl_disabled = false;
-	WRITE_ONCE(nopmi_chg->batt_temp, 0);
-	WRITE_ONCE(nopmi_chg->batt_volt, 0);
+	nopmi_chg->last_usb_present = 0;
+	WRITE_ONCE(nopmi_chg->batt_temp, 250);
+	WRITE_ONCE(nopmi_chg->batt_volt, 3800000);
 	WRITE_ONCE(nopmi_chg->is_awake, 0);
+
+	nopmi_chg->usb_present_wq = create_singlethread_workqueue("nopmi_usb_present_wq");
+	if (!nopmi_chg->usb_present_wq) {
+		pr_err("Failed to create usb_present_wq\n");
+		rc = -ENOMEM;
+		goto err_put_main;
+	}
+
+	INIT_DELAYED_WORK(&nopmi_chg->usb_present_work, nopmi_usb_present_workfunc);
+	INIT_DELAYED_WORK(&nopmi_chg->nopmi_chg_work, nopmi_chg_workfunc);
+	INIT_DELAYED_WORK(&nopmi_chg->cv_step_monitor_work, nopmi_cv_step_monitor_workfunc);
 
 	rc = nopmi_init_batt_psy(nopmi_chg);
 	if (rc < 0) {
 		pr_err("Couldn't initialize batt psy, rc=%d\n", rc);
-		goto err_put_main;
+		goto err_destroy_wq;
 	}
 
 	rc = nopmi_init_usb_psy(nopmi_chg);
 	if (rc < 0) {
 		pr_err("Couldn't initialize usb psy, rc=%d\n", rc);
-		goto err_put_main;
+		goto err_destroy_wq;
 	}
-
-	INIT_DELAYED_WORK(&nopmi_chg->nopmi_chg_work, nopmi_chg_workfunc);
-	INIT_DELAYED_WORK(&nopmi_chg->cv_step_monitor_work, nopmi_cv_step_monitor_workfunc);
 
 	nopmi_chg->fcc_votable = find_votable("FCC");
 	nopmi_chg->fv_votable = find_votable("FV");
@@ -1433,32 +1380,25 @@ static int nopmi_chg_probe(struct platform_device *pdev)
 
 	nopmi_chg_jeita_init(&nopmi_chg->jeita_ctl);
 
-	if (NOPMI_CHARGER_IC_NONE != nopmi_get_charger_ic_type() && NOPMI_CHARGER_IC_MAX != nopmi_get_charger_ic_type())
-		device_init_wakeup(nopmi_chg->dev, true);
-
-	if (nopmi_chg->system_temp_level < 0) {
-		// First init
-		pval.intval = 0;
-		rc = nopmi_set_prop_system_temp_level(nopmi_chg, &pval);
-		if (rc < 0)
-			pr_err("set system temp level failed: %d\n", rc);
-		else
-			pr_info("system temp level set to %d\n", pval.intval);
-	} else {
-		pr_info("system temp level is valid, no need manual set\n");
+	if (NOPMI_CHARGER_IC_NONE != nopmi_get_charger_ic_type() &&
+		NOPMI_CHARGER_IC_MAX != nopmi_get_charger_ic_type()) {
+		rc = device_init_wakeup(nopmi_chg->dev, true);
+		if (rc) {
+			pr_err("device_init_wakeup failed, rc=%d\n", rc);
+			goto err_wake;
+		}
 	}
-
-	schedule_delayed_work(&nopmi_chg->nopmi_chg_work,
-			msecs_to_jiffies(NOPMI_CHG_WORKFUNC_FIRST_GAP));
-	schedule_delayed_work(&nopmi_chg->cv_step_monitor_work,
-			msecs_to_jiffies(NOPMI_CHG_WORKFUNC_FIRST_GAP));
 
 	pr_info("probe success\n");
 	return 0;
 
+err_wake:
+	nopmi_chg_jeita_deinit(&nopmi_chg->jeita_ctl);
+err_destroy_wq:
+	destroy_workqueue(nopmi_chg->usb_present_wq);
 err_put_main:
-	if (nopmi_chg->main_psy)
-		power_supply_put(nopmi_chg->main_psy);
+	if (nopmi_chg->bbc_psy)
+		power_supply_put(nopmi_chg->bbc_psy);
 err_put_bms:
 	if (nopmi_chg->bms_psy)
 		power_supply_put(nopmi_chg->bms_psy);
@@ -1477,16 +1417,22 @@ static int nopmi_chg_remove(struct platform_device *pdev)
 	if (!nopmi_chg)
 		return 0;
 
-	if (NOPMI_CHARGER_IC_NONE != nopmi_get_charger_ic_type() && NOPMI_CHARGER_IC_MAX != nopmi_get_charger_ic_type())
-		device_init_wakeup(nopmi_chg->dev, false);
+	cancel_delayed_work_sync(&nopmi_chg->usb_present_work);
+	destroy_workqueue(nopmi_chg->usb_present_wq);
 
-	cancel_delayed_work_sync(&nopmi_chg->nopmi_chg_work);
 	cancel_delayed_work_sync(&nopmi_chg->cv_step_monitor_work);
+	cancel_delayed_work_sync(&nopmi_chg->nopmi_chg_work);
+	nopmi_cv_step_monitor(nopmi_chg);
+	stop_nopmi_chg_jeita_workfunc();
+
+	if (NOPMI_CHARGER_IC_NONE != nopmi_get_charger_ic_type() &&
+		NOPMI_CHARGER_IC_MAX != nopmi_get_charger_ic_type())
+		device_init_wakeup(nopmi_chg->dev, false);
 
 	nopmi_chg_jeita_deinit(&nopmi_chg->jeita_ctl);
 
-	if (nopmi_chg->main_psy)
-		power_supply_put(nopmi_chg->main_psy);
+	if (nopmi_chg->bbc_psy)
+		power_supply_put(nopmi_chg->bbc_psy);
 	if (nopmi_chg->bms_psy)
 		power_supply_put(nopmi_chg->bms_psy);
 
@@ -1497,18 +1443,19 @@ static int nopmi_chg_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id nopmi_chg_dt_match[] = {
-	{.compatible = "qcom,nopmi-chg"},
-	{},
+	{ .compatible = "qcom,nopmi-chg", },
+	{ },
 };
+MODULE_DEVICE_TABLE(of, nopmi_chg_dt_match);
 
 static struct platform_driver nopmi_chg_driver = {
 	.driver = {
-		.owner = THIS_MODULE,
-		.name = "qcom,nopmi-chg",
-		.of_match_table = nopmi_chg_dt_match,
+		.owner		= THIS_MODULE,
+		.name		= "qcom,nopmi-chg",
+		.of_match_table	= of_match_ptr(nopmi_chg_dt_match),
 	},
-	.probe = nopmi_chg_probe,
-	.remove = nopmi_chg_remove,
+	.probe		= nopmi_chg_probe,
+	.remove	= nopmi_chg_remove,
 };
 
 static int __init nopmi_chg_init(void)

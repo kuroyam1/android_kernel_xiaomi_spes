@@ -28,8 +28,7 @@ struct tcp_notify_work {
 
 static void tcp_notify_func(struct work_struct *work)
 {
-	struct tcp_notify_work *tn_work =
-		container_of(work, struct tcp_notify_work, work);
+	struct tcp_notify_work *tn_work = container_of(work, struct tcp_notify_work, work);
 	struct tcpc_device *tcpc = tn_work->tcpc;
 	struct tcp_notify *tcp_noti = &tn_work->tcp_noti;
 	uint8_t type = tn_work->type;
@@ -41,7 +40,7 @@ static void tcp_notify_func(struct work_struct *work)
 	do_gettimeofday(&begin);
 	srcu_notifier_call_chain(&tcpc->evt_nh[type], state, tcp_noti);
 	do_gettimeofday(&end);
-	timeval = (timeval_to_ns(end) - timeval_to_ns(begin))/1000/1000;
+	timeval = (timeval_to_ns(end) - timeval_to_ns(begin)) / 1000 / 1000;
 	PD_BUG_ON(timeval > TCPC_NOTIFY_OVERTIME);
 #else
 	srcu_notifier_call_chain(&tcpc->evt_nh[type], state, tcp_noti);
@@ -112,16 +111,14 @@ bool tcpci_check_vsafe0v(struct tcpc_device *tcpc)
 #endif
 }
 
-int tcpci_alert_status_clear(
-	struct tcpc_device *tcpc, uint32_t mask)
+int tcpci_alert_status_clear(struct tcpc_device *tcpc, uint32_t mask)
 {
 	PD_BUG_ON(tcpc->ops->alert_status_clear == NULL);
 
 	return tcpc->ops->alert_status_clear(tcpc, mask);
 }
 
-int tcpci_fault_status_clear(
-	struct tcpc_device *tcpc, uint8_t status)
+int tcpci_fault_status_clear(struct tcpc_device *tcpc, uint8_t status)
 {
 	PD_BUG_ON(tcpc->ops->fault_status_clear == NULL);
 
@@ -138,24 +135,21 @@ int tcpci_set_alert_mask(struct tcpc_device *tcpc, uint32_t mask)
 	return rv;
 }
 
-int tcpci_get_alert_mask(
-	struct tcpc_device *tcpc, uint32_t *mask)
+int tcpci_get_alert_mask(struct tcpc_device *tcpc, uint32_t *mask)
 {
 	PD_BUG_ON(tcpc->ops->get_alert_mask == NULL);
 
 	return tcpc->ops->get_alert_mask(tcpc, mask);
 }
 
-int tcpci_get_alert_status(
-	struct tcpc_device *tcpc, uint32_t *alert)
+int tcpci_get_alert_status(struct tcpc_device *tcpc, uint32_t *alert)
 {
 	PD_BUG_ON(tcpc->ops->get_alert_status == NULL);
 
 	return tcpc->ops->get_alert_status(tcpc, alert);
 }
 
-int tcpci_get_fault_status(
-	struct tcpc_device *tcpc, uint8_t *fault)
+int tcpci_get_fault_status(struct tcpc_device *tcpc, uint8_t *fault)
 {
 	if (tcpc->ops->get_fault_status)
 		return tcpc->ops->get_fault_status(tcpc, fault);
@@ -164,8 +158,7 @@ int tcpci_get_fault_status(
 	return 0;
 }
 
-int tcpci_get_power_status(
-	struct tcpc_device *tcpc, uint16_t *pw_status)
+int tcpci_get_power_status(struct tcpc_device *tcpc, uint16_t *pw_status)
 {
 	int ret;
 
@@ -211,8 +204,7 @@ int tcpci_get_cc(struct tcpc_device *tcpc)
 	if (ret < 0)
 		return ret;
 
-	if ((cc1 == tcpc->typec_remote_cc[0]) &&
-			(cc2 == tcpc->typec_remote_cc[1])) {
+	if ((cc1 == tcpc->typec_remote_cc[0]) && (cc2 == tcpc->typec_remote_cc[1])) {
 		return 0;
 	}
 
@@ -246,9 +238,7 @@ int tcpci_set_cc(struct tcpc_device *tcpc, int pull)
 #endif /* CONFIG_TYPEC_CHECK_LEGACY_CABLE */
 
 	if (pull & TYPEC_CC_DRP) {
-		tcpc->typec_remote_cc[0] =
-		tcpc->typec_remote_cc[1] =
-			TYPEC_CC_DRP_TOGGLING;
+		tcpc->typec_remote_cc[0] = tcpc->typec_remote_cc[1] = TYPEC_CC_DRP_TOGGLING;
 	}
 
 	tcpc->typec_local_cc = pull;
@@ -308,8 +298,7 @@ int tcpci_is_low_power_mode(struct tcpc_device *tcpc)
 	return rv;
 }
 
-int tcpci_set_low_power_mode(
-	struct tcpc_device *tcpc, bool en, int pull)
+int tcpci_set_low_power_mode(struct tcpc_device *tcpc, bool en, int pull)
 {
 	int rv = 0;
 
@@ -381,8 +370,7 @@ int tcpci_notify_wd_status(struct tcpc_device *tcpc, bool water_detected)
 	struct tcp_notify tcp_noti;
 
 	tcp_noti.wd_status.water_detected = water_detected;
-	return tcpc_check_notify_time(tcpc, &tcp_noti, TCP_NOTIFY_IDX_MISC,
-				      TCP_NOTIFY_WD_STATUS);
+	return tcpc_check_notify_time(tcpc, &tcp_noti, TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_WD_STATUS);
 }
 #endif /* CONFIG_WATER_DETECTION */
 
@@ -392,15 +380,13 @@ int tcpci_notify_cable_type(struct tcpc_device *tcpc)
 	struct tcp_notify tcp_noti;
 
 	tcp_noti.cable_type.type = tcpc->typec_cable_type;
-	return tcpc_check_notify_time(tcpc, &tcp_noti, TCP_NOTIFY_IDX_MISC,
-				      TCP_NOTIFY_CABLE_TYPE);
+	return tcpc_check_notify_time(tcpc, &tcp_noti, TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_CABLE_TYPE);
 }
 #endif /* CONFIG_CABLE_TYPE_DETECTION */
 
 #ifdef CONFIG_USB_POWER_DELIVERY
 
-int tcpci_set_msg_header(struct tcpc_device *tcpc,
-	uint8_t power_role, uint8_t data_role)
+int tcpci_set_msg_header(struct tcpc_device *tcpc, uint8_t power_role, uint8_t data_role)
 {
 	PD_BUG_ON(tcpc->ops->set_msg_header == NULL);
 
@@ -478,19 +464,19 @@ int tcpci_notify_typec_state(struct tcpc_device *tcpc)
 	tcp_noti.typec_state.local_rp_level = tcpc->typec_local_rp_level;
 
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_USB, TCP_NOTIFY_TYPEC_STATE);
+			TCP_NOTIFY_IDX_USB, TCP_NOTIFY_TYPEC_STATE);
 	return ret;
 }
 
-int tcpci_notify_role_swap(
-	struct tcpc_device *tcpc, uint8_t event, uint8_t role)
+int tcpci_notify_role_swap(struct tcpc_device *tcpc,
+	uint8_t event, uint8_t role)
 {
 	struct tcp_notify tcp_noti;
 	int ret;
 
 	tcp_noti.swap_state.new_role = role;
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MISC, event);
+			TCP_NOTIFY_IDX_MISC, event);
 	return ret;
 }
 
@@ -501,7 +487,7 @@ int tcpci_notify_pd_state(struct tcpc_device *tcpc, uint8_t connect)
 
 	tcp_noti.pd_state.connected = connect;
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_USB, TCP_NOTIFY_PD_STATE);
+			TCP_NOTIFY_IDX_USB, TCP_NOTIFY_PD_STATE);
 	return ret;
 }
 
@@ -541,15 +527,14 @@ int tcpci_enable_watchdog(struct tcpc_device *tcpc, bool en)
 	return 0;
 }
 
-int tcpci_source_vbus(
-	struct tcpc_device *tcpc, uint8_t type, int mv, int ma)
+int tcpci_source_vbus(struct tcpc_device *tcpc,
+	uint8_t type, int mv, int ma)
 {
 	struct tcp_notify tcp_noti;
 	int ret;
 
 #ifdef CONFIG_USB_POWER_DELIVERY
-	if (type >= TCP_VBUS_CTRL_PD &&
-			tcpc->pd_port.pe_data.pd_prev_connected)
+	if (type >= TCP_VBUS_CTRL_PD && tcpc->pd_port.pe_data.pd_prev_connected)
 		type |= TCP_VBUS_CTRL_PD_DETECT;
 #endif	/* CONFIG_USB_POWER_DELIVERY */
 
@@ -578,19 +563,18 @@ int tcpci_source_vbus(
 	tcpci_enable_watchdog(tcpc, mv != 0);
 	TCPC_DBG("source_vbus: %d mV, %d mA\n", mv, ma);
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_SOURCE_VBUS);
+			TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_SOURCE_VBUS);
 	return ret;
 }
 
-int tcpci_sink_vbus(
-	struct tcpc_device *tcpc, uint8_t type, int mv, int ma)
+int tcpci_sink_vbus(struct tcpc_device *tcpc,
+	uint8_t type, int mv, int ma)
 {
 	struct tcp_notify tcp_noti;
 	int ret;
 
 #ifdef CONFIG_USB_POWER_DELIVERY
-	if (type >= TCP_VBUS_CTRL_PD &&
-			tcpc->pd_port.pe_data.pd_prev_connected)
+	if (type >= TCP_VBUS_CTRL_PD && tcpc->pd_port.pe_data.pd_prev_connected)
 		type |= TCP_VBUS_CTRL_PD_DETECT;
 #endif	/* CONFIG_USB_POWER_DELIVERY */
 
@@ -622,7 +606,7 @@ int tcpci_sink_vbus(
 
 	TCPC_DBG("sink_vbus: %d mV, %d mA\n", mv, ma);
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_SINK_VBUS);
+			TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_SINK_VBUS);
 	return ret;
 }
 
@@ -636,7 +620,7 @@ int tcpci_disable_vbus_control(struct tcpc_device *tcpc)
 	tcpci_enable_watchdog(tcpc, false);
 
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_DIS_VBUS_CTRL);
+			TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_DIS_VBUS_CTRL);
 	return ret;
 #else
 	tcpci_sink_vbus(tcpc, TCP_VBUS_CTRL_REMOVE, TCPC_VBUS_SINK_0V, 0);
@@ -666,12 +650,11 @@ int tcpci_notify_attachwait_state(struct tcpc_device *tcpc, bool as_sink)
 		return 0;
 
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_VBUS, notify);
+			TCP_NOTIFY_IDX_VBUS, notify);
 	return ret;
 #else
 	return 0;
 #endif	/* CONFIG_TYPEC_NOTIFY_ATTACHWAIT */
-
 }
 
 int tcpci_enable_auto_discharge(struct tcpc_device *tcpc, bool en)
@@ -691,8 +674,7 @@ int tcpci_enable_auto_discharge(struct tcpc_device *tcpc, bool en)
 	return ret;
 }
 
-static int __tcpci_enable_force_discharge(
-	struct tcpc_device *tcpc, bool en, int mv)
+static int __tcpci_enable_force_discharge(struct tcpc_device *tcpc, bool en, int mv)
 {
 	int ret = 0;
 
@@ -721,7 +703,7 @@ static int __tcpci_enable_ext_discharge(struct tcpc_device *tcpc, bool en)
 		tcp_noti.en_state.en = en;
 		TCPC_DBG("EXT-Discharge: %d\n", en);
 		ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-			TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_EXT_DISCHARGE);
+				TCP_NOTIFY_IDX_VBUS, TCP_NOTIFY_EXT_DISCHARGE);
 	}
 #endif	/* CONFIG_TCPC_EXT_DISCHARGE */
 
@@ -759,7 +741,7 @@ int tcpci_notify_hard_reset_state(struct tcpc_device *tcpc, uint8_t state)
 		return 0;
 
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_HARD_RESET_STATE);
+			TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_HARD_RESET_STATE);
 	return ret;
 }
 
@@ -774,7 +756,7 @@ int tcpci_enter_mode(struct tcpc_device *tcpc,
 	tcp_noti.mode_ctrl.mode = mode;
 
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_ENTER_MODE);
+			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_ENTER_MODE);
 	return ret;
 }
 
@@ -785,7 +767,7 @@ int tcpci_exit_mode(struct tcpc_device *tcpc, uint16_t svid)
 
 	tcp_noti.mode_ctrl.svid = svid;
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_EXIT_MODE);
+			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_EXIT_MODE);
 	return ret;
 
 }
@@ -801,10 +783,9 @@ int tcpci_report_hpd_state(struct tcpc_device *tcpc, uint32_t dp_status)
 
 	if (PD_DP_CFG_DFP_D(dp_data->local_config)) {
 		tcp_noti.ama_dp_hpd_state.irq = PD_VDO_DPSTS_HPD_IRQ(dp_status);
-		tcp_noti.ama_dp_hpd_state.state =
-					PD_VDO_DPSTS_HPD_LVL(dp_status);
+		tcp_noti.ama_dp_hpd_state.state = PD_VDO_DPSTS_HPD_LVL(dp_status);
 		tcpc_check_notify_time(tcpc, &tcp_noti,
-			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_HPD_STATE);
+				TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_HPD_STATE);
 	}
 
 	return 0;
@@ -840,13 +821,12 @@ int tcpci_dp_configure(struct tcpc_device *tcpc, uint32_t dp_config)
 	if (tcp_noti.ama_dp_state.pin_assignment == 0)
 		tcp_noti.ama_dp_state.pin_assignment = (dp_config >> 16) & 0xff;
 
-	DP_INFO("pin assignment: 0x%x\n",
-		tcp_noti.ama_dp_state.pin_assignment);
+	DP_INFO("pin assignment: 0x%x\n", tcp_noti.ama_dp_state.pin_assignment);
 	tcp_noti.ama_dp_state.signal = (dp_config >> 2) & 0x0f;
 	tcp_noti.ama_dp_state.polarity = tcpc->typec_polarity;
 	tcp_noti.ama_dp_state.active = 1;
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_STATE);
+			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_STATE);
 	return ret;
 }
 
@@ -858,12 +838,11 @@ int tcpci_dp_attention(struct tcpc_device *tcpc, uint32_t dp_status)
 	DP_INFO("Attention: 0x%x\n", dp_status);
 	tcp_noti.ama_dp_attention.state = (uint8_t) dp_status;
 	tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_ATTENTION);
+			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_ATTENTION);
 	return tcpci_report_hpd_state(tcpc, dp_status);
 }
 
-int tcpci_dp_notify_status_update_done(
-	struct tcpc_device *tcpc, uint32_t dp_status, bool ack)
+int tcpci_dp_notify_status_update_done(struct tcpc_device *tcpc, uint32_t dp_status, bool ack)
 {
 	/* DFP_U : Not call this function during internal flow */
 	DP_INFO("Status1: 0x%x, ack=%d\n", dp_status, ack);
@@ -879,7 +858,7 @@ int tcpci_dp_notify_config_start(struct tcpc_device *tcpc)
 	tcp_noti.ama_dp_state.sel_config = SW_USB;
 	tcp_noti.ama_dp_state.active = 0;
 	tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_STATE);
+			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_AMA_DP_STATE);
 	return 0;
 }
 
@@ -907,7 +886,6 @@ int tcpci_notify_uvdm(struct tcpc_device *tcpc, bool ack)
 	struct pd_port *pd_port = &tcpc->pd_port;
 
 	tcp_noti.uvdm_msg.ack = ack;
-
 	if (ack) {
 		tcp_noti.uvdm_msg.uvdm_cnt = pd_port->uvdm_cnt;
 		tcp_noti.uvdm_msg.uvdm_svid = pd_port->uvdm_svid;
@@ -915,7 +893,7 @@ int tcpci_notify_uvdm(struct tcpc_device *tcpc, bool ack)
 	}
 
 	tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_UVDM);
+			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_UVDM);
 	return 0;
 }
 #endif	/* CONFIG_USB_PD_CUSTOM_VDM */
@@ -928,7 +906,7 @@ int tcpci_dc_notify_en_unlock(struct tcpc_device *tcpc)
 
 	DC_INFO("DirectCharge en_unlock\n");
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_DC_EN_UNLOCK);
+			TCP_NOTIFY_IDX_MODE, TCP_NOTIFY_DC_EN_UNLOCK);
 	return ret;
 }
 #endif	/* CONFIG_USB_PD_ALT_MODE_RTDC */
@@ -945,7 +923,7 @@ int tcpci_notify_alert(struct tcpc_device *tcpc, uint32_t ado)
 
 	tcp_noti.alert_msg.ado = ado;
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_ALERT);
+			TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_ALERT);
 	return ret;
 }
 #endif	/* CONFIG_USB_PD_REV30_ALERT_REMOTE */
@@ -958,7 +936,7 @@ int tcpci_notify_status(struct tcpc_device *tcpc, struct pd_status *sdb)
 
 	tcp_noti.status_msg.sdb = sdb;
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_STATUS);
+			TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_STATUS);
 	return ret;
 }
 #endif	/* CONFIG_USB_PD_REV30_STATUS_REMOTE */
@@ -972,7 +950,7 @@ int tcpci_notify_request_bat_info(
 
 	tcp_noti.request_bat.ref = ref;
 	ret = tcpc_check_notify_time(tcpc, &tcp_noti,
-		TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_REQUEST_BAT_INFO);
+			TCP_NOTIFY_IDX_MISC, TCP_NOTIFY_REQUEST_BAT_INFO);
 	return ret;
 }
 #endif	/* CONFIG_USB_PD_REV30_BAT_INFO */

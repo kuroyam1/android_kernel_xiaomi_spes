@@ -61,39 +61,39 @@ struct max77729_opcode {
 };
 
 typedef struct max77729_usbc_command_data {
-	u8	opcode;
-	u8  prev_opcode;
-	u8	response;
-	u8	read_data[OPCODE_DATA_LENGTH];
-	u8	write_data[OPCODE_DATA_LENGTH];
+	u8 opcode;
+	u8 prev_opcode;
+	u8 response;
+	u8 read_data[OPCODE_DATA_LENGTH];
+	u8 write_data[OPCODE_DATA_LENGTH];
 	int read_length;
 	int write_length;
-	u8	reg;
-	u8	val;
-	u8	mask;
-	u8  seq;
+	u8 reg;
+	u8 val;
+	u8 mask;
+	u8 seq;
 	int noti_cmd;
-	u8	is_uvdm;
+	u8 is_uvdm;
 } usbc_cmd_data;
 
 typedef struct max77729_usbc_command_node {
-	usbc_cmd_data				cmd_data;
-	struct max77729_usbc_command_node	*next;
+	usbc_cmd_data cmd_data;
+	struct max77729_usbc_command_node *next;
 } usbc_cmd_node;
 
 typedef struct max77729_usbc_command_node	*usbc_cmd_node_p;
 
 typedef struct max77729_usbc_command_queue {
-	struct mutex			command_mutex;
-	usbc_cmd_node			*front;
-	usbc_cmd_node			*rear;
-	usbc_cmd_node			tmp_cmd_node;
+	struct mutex command_mutex;
+	usbc_cmd_node *front;
+	usbc_cmd_node *rear;
+	usbc_cmd_node tmp_cmd_node;
 } usbc_cmd_queue_t;
 
 #if defined(CONFIG_SEC_FACTORY)
-#define FAC_ABNORMAL_REPEAT_STATE			12
-#define FAC_ABNORMAL_REPEAT_RID				5
-#define FAC_ABNORMAL_REPEAT_RID0			3
+#define FAC_ABNORMAL_REPEAT_STATE	12
+#define FAC_ABNORMAL_REPEAT_RID	5
+#define FAC_ABNORMAL_REPEAT_RID0	3
 struct AP_REQ_GET_STATUS_Type {
 	uint32_t FAC_Abnormal_Repeat_State;
 	uint32_t FAC_Abnormal_Repeat_RID;
@@ -106,9 +106,9 @@ struct AP_REQ_GET_STATUS_Type {
 #define VCONN_ROLE_SWAP 3
 #define TRY_ROLE_SWAP_WAIT_MS 5000
 #define TYPEC_HOST 1
-#define TYPEC_DEVICE  0x0
+#define TYPEC_DEVICE 0x0
 
-#define USB_PD_MI_SVID			0x2717
+#define USB_PD_MI_SVID	0x2717
 
 // typedef enum {
 	// TRY_ROLE_SWAP_NONE = 0,
@@ -132,8 +132,7 @@ enum uvdm_state {
 
 #define UVDM_HDR_CMD(hdr)	((hdr) & 0xFF)
 
-
-#define USBPD_UVDM_SS_LEN		4
+#define USBPD_UVDM_SS_LEN	4
 
 struct usbpd_vdm_data {
 	int ta_version;
@@ -171,10 +170,10 @@ struct max77729_usbc_platform_data {
 	struct i2c_client *muic; /*0x4A */
 	struct i2c_client *charger; /*0x2A; Charger */
 
- 	struct votable          *icl_votable;
-	struct votable          *fv_votable;
-	struct votable          *chgen_votable;
-	struct extcon_dev		*extcon;
+	struct votable *icl_votable;
+	struct votable *fv_votable;
+	struct votable *chgen_votable;
+	struct extcon_dev *extcon;
 
 	int irq_base;
 
@@ -225,7 +224,7 @@ struct max77729_usbc_platform_data {
 	u8 FW_Minor_Revision;
 	u8 plug_attach_done;
 	int op_code_done;
-    /* F/W opcode Thread */
+	/* F/W opcode Thread */
 
 	struct work_struct op_wait_work;
 	struct work_struct op_send_work;
@@ -233,8 +232,8 @@ struct max77729_usbc_platform_data {
 #ifdef MAX77729_SYS_FW_UPDATE
 	struct work_struct fw_update_work;
 #endif
-	struct workqueue_struct	*op_wait_queue;
-	struct workqueue_struct	*op_send_queue;
+	struct workqueue_struct *op_wait_queue;
+	struct workqueue_struct *op_send_queue;
 	struct completion op_completion;
 	int op_code;
 	int is_first_booting;
@@ -282,9 +281,9 @@ struct max77729_usbc_platform_data {
 	int fac_water_enable;
 	int cur_rid;
 	int pd_state;
-	u8  vconn_test;
-	u8  vconn_en;
-	u8  fw_update;
+	u8 vconn_test;
+	u8 vconn_en;
+	u8 fw_update;
 	int is_host;
 	int is_client;
 	bool auto_vbus_en;
@@ -318,10 +317,10 @@ struct max77729_usbc_platform_data {
 	int ram_test_retry;
 	int ram_test_result;
 
-    struct completion typec_reverse_completion;
-    struct usbpd_vdm_data   vdm_data;
-    int			uvdm_state;
-    struct completion uvdm_longpacket_out_wait;
+	struct completion typec_reverse_completion;
+	struct usbpd_vdm_data vdm_data;
+	int uvdm_state;
+	struct completion uvdm_longpacket_out_wait;
 	struct completion pps_in_wait;
 	int is_in_first_sec_uvdm_req;
 	int is_in_sec_uvdm_out;
@@ -341,10 +340,10 @@ struct max77729_usbc_platform_data {
 
 	int ovp_gpio;
 	struct mutex hmd_power_lock;
-	struct max77729_hmd_power_dev  *hmd_list;
+	struct max77729_hmd_power_dev *hmd_list;
 
 	/* xiaomi add start */
-	struct power_supply	*usb_psy;
+	struct power_supply *usb_psy;
 	int pd_active;
 	bool verify_process;
 	bool verifed;
@@ -357,7 +356,7 @@ struct max77729_usbc_platform_data {
 
 /* Function Status from s2mm005 definition */
 typedef enum {
-	max77729_State_PE_Initial_detach	= 0,
+	max77729_State_PE_Initial_detach = 0,
 	max77729_State_PE_SRC_Send_Capabilities = 3,
 	max77729_State_PE_SNK_Wait_for_Capabilities = 17,
 } max77729_pd_state_t;
@@ -371,9 +370,9 @@ typedef enum {
 #define POWER_ROLE_SWAP 2
 #define VCONN_ROLE_SWAP 3
 #define MANUAL_ROLE_SWAP 4
-#define ROLE_ACCEPT			0x1
-#define ROLE_REJECT			0x2
-#define ROLE_BUSY			0x3
+#define ROLE_ACCEPT 0x1
+#define ROLE_REJECT 0x2
+#define ROLE_BUSY 0x3
 
 int max77729_pd_init(struct max77729_usbc_platform_data *usbc_data);
 int max77729_cc_init(struct max77729_usbc_platform_data *usbc_data);
@@ -423,6 +422,6 @@ extern const uint8_t BOOT_FLASH_FW_PASS2[];
 #ifdef DEBUG_MAX77729
 #define msg_maxim(fmt, ...) pr_info("[max77729]: %s: " fmt "\n", __func__, ##__VA_ARGS__)
 #else
-#define msg_maxim(fmt, ...) do { } while (0)
+#define msg_maxim(fmt, ...) ((void)0)
 #endif /* __DEBUG_MAX77729__ */
 #endif

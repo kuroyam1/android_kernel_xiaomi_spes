@@ -20,16 +20,16 @@
 
 #ifdef CONFIG_USB_PD_RICHTEK_UVDM
 
-bool richtek_dfp_notify_pe_startup(
-		struct pd_port *pd_port, struct svdm_svid_data *svid_data)
+bool richtek_dfp_notify_pe_startup(struct pd_port *pd_port,
+		struct svdm_svid_data *svid_data)
 {
 	UVDM_INFO("entry\n");
 	pd_port->richtek_init_done = false;
 	return true;
 }
 
-int richtek_dfp_notify_pe_ready(
-	struct pd_port *pd_port, struct svdm_svid_data *svid_data)
+int richtek_dfp_notify_pe_ready(struct pd_port *pd_port,
+		struct svdm_svid_data *svid_data)
 {
 	if (pd_port->data_role != PD_ROLE_DFP)
 		return 0;
@@ -55,7 +55,7 @@ int richtek_dfp_notify_pe_ready(
 }
 
 bool richtek_dfp_notify_uvdm(struct pd_port *pd_port,
-				struct svdm_svid_data *svid_data, bool ack)
+		struct svdm_svid_data *svid_data, bool ack)
 {
 	uint32_t resp_cmd = 0;
 
@@ -71,7 +71,7 @@ bool richtek_dfp_notify_uvdm(struct pd_port *pd_port,
 }
 
 bool richtek_ufp_notify_uvdm(struct pd_port *pd_port,
-				struct svdm_svid_data *svid_data)
+		struct svdm_svid_data *svid_data)
 {
 	uint8_t i;
 	uint32_t reply_cmd[VDO_MAX_NR];
@@ -90,8 +90,7 @@ bool richtek_ufp_notify_uvdm(struct pd_port *pd_port,
 	for (i = 1; i < pd_port->uvdm_cnt; i++)
 		reply_cmd[i] = ~pd_port->uvdm_data[i];
 
-	pd_reply_custom_vdm(pd_port, TCPC_TX_SOP,
-		pd_port->uvdm_cnt, reply_cmd);
+	pd_reply_custom_vdm(pd_port, TCPC_TX_SOP, pd_port->uvdm_cnt, reply_cmd);
 	VDM_STATE_NORESP_CMD(pd_port);
 	return true;
 }

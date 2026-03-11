@@ -1,4 +1,3 @@
-
 #ifndef LINUX_POWER_ADAPTER_CLASS_H
 #define LINUX_POWER_ADAPTER_CLASS_H
 
@@ -47,14 +46,14 @@ enum adapter_cap_type {
 	XM_CAP_TYPE_UNKNOWN,
 };
 
-#define USB_PD_MI_SVID			0x2717
+#define USB_PD_MI_SVID		0x2717
 #define USBPD_UVDM_SS_LEN		4
 #define USBPD_UVDM_VERIFIED_LEN		1
 #define USBPD_VDM_REQUEST		0x1
 
-#define VDM_HDR(svid, cmd0, cmd1) \
-       (((svid) << 16) | (0 << 15) | ((cmd0) << 8) \
-       | (cmd1))
+#define VDM_HDR(svid, cmd0, cmd1)	\
+	(((svid) << 16) | (0 << 15) | \
+	((cmd0) << 8) | (cmd1))
 #define UVDM_HDR_CMD(hdr)	((hdr) & 0xFF)
 
 struct usbpd_vdm_data {
@@ -66,7 +65,7 @@ struct usbpd_vdm_data {
 	unsigned long digest[USBPD_UVDM_SS_LEN];
 };
 
-#define PD_ROLE_SINK_FOR_ADAPTER   0
+#define PD_ROLE_SINK_FOR_ADAPTER 0
 #define PD_ROLE_SOURCE_FOR_ADAPTER 1
 
 struct adapter_device {
@@ -75,13 +74,13 @@ struct adapter_device {
 	struct mutex ops_lock;
 	struct device dev;
 	struct srcu_notifier_head evt_nh;
-	void	*driver_data;
+	void *driver_data;
 	uint32_t adapter_svid;
 	uint32_t adapter_id;
 	uint32_t adapter_fw_ver;
 	uint32_t adapter_hw_ver;
-	struct   usbpd_vdm_data   vdm_data;
-	int  uvdm_state;
+	struct usbpd_vdm_data vdm_data;
+	int uvdm_state;
 	bool verify_process;
 	bool verifed;
 	uint8_t role;
@@ -103,22 +102,19 @@ struct adapter_ops {
 	int (*set_pd_verify_process)(struct adapter_device *dev, int verify_in_process);
 };
 
-static inline void *adapter_dev_get_drvdata(
-	const struct adapter_device *adapter_dev)
+static inline void *adapter_dev_get_drvdata(const struct adapter_device *adapter_dev)
 {
 	return adapter_dev->driver_data;
 }
 
-static inline void adapter_dev_set_drvdata(
-	struct adapter_device *adapter_dev, void *data)
+static inline void adapter_dev_set_drvdata(struct adapter_device *adapter_dev, void *data)
 {
 	adapter_dev->driver_data = data;
 }
 
 #define to_adapter_device(obj) container_of(obj, struct adapter_device, dev)
-extern struct adapter_device *adapter_device_register(
-	const char *name, struct device *parent, void *devdata, const struct adapter_ops *ops,
-	const struct adapter_properties *props);
+extern struct adapter_device *adapter_device_register(const char *name, struct device *parent,
+	void *devdata, const struct adapter_ops *ops, const struct adapter_properties *props);
 extern void adapter_device_unregister(struct adapter_device *adapter_dev);
 extern struct adapter_device *get_adapter_by_name(const char *name);
 extern int adapter_dev_get_cap(struct adapter_device *adapter_dev,
@@ -131,4 +127,3 @@ extern int adapter_class_init(void);
 extern void adapter_class_exit(void);
 
 #endif /*LINUX_POWER_ADAPTER_CLASS_H*/
-

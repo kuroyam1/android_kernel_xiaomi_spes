@@ -24,8 +24,7 @@ struct dpm_select_info_t {
 	uint8_t policy;
 };
 
-static inline void dpm_extract_apdo_info(
-		uint32_t pdo, struct dpm_pdo_info_t *info)
+static inline void dpm_extract_apdo_info(uint32_t pdo, struct dpm_pdo_info_t *info)
 {
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
 	switch (APDO_TYPE(pdo)) {
@@ -47,8 +46,7 @@ static inline void dpm_extract_apdo_info(
 	info->type = TCPM_POWER_CAP_VAL_TYPE_UNKNOWN;
 }
 
-void dpm_extract_pdo_info(
-			uint32_t pdo, struct dpm_pdo_info_t *info)
+void dpm_extract_pdo_info(uint32_t pdo, struct dpm_pdo_info_t *info)
 {
 	memset(info, 0, sizeof(struct dpm_pdo_info_t));
 
@@ -66,14 +64,12 @@ void dpm_extract_pdo_info(
 		info->vmax = PDO_VAR_EXTRACT_MAX_VOLT(pdo);
 		info->uw = info->ma * info->vmax;
 		break;
-
 	case PDO_TYPE_BATTERY:
 		info->uw = PDO_BATT_EXTRACT_OP_POWER(pdo) * 1000;
 		info->vmin = PDO_BATT_EXTRACT_MIN_VOLT(pdo);
 		info->vmax = PDO_BATT_EXTRACT_MAX_VOLT(pdo);
 		info->ma = info->uw / info->vmin;
 		break;
-
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
 	case PDO_TYPE_APDO:
 		dpm_extract_apdo_info(pdo, info);
@@ -86,8 +82,7 @@ void dpm_extract_pdo_info(
 #define MIN(a, b)	((a < b) ? (a) : (b))
 #endif
 
-static inline int dpm_calc_src_cap_power_uw(
-	struct dpm_pdo_info_t *source, struct dpm_pdo_info_t *sink)
+static inline int dpm_calc_src_cap_power_uw(struct dpm_pdo_info_t *source, struct dpm_pdo_info_t *sink)
 {
 	int uw, ma;
 
@@ -112,8 +107,7 @@ static inline int dpm_calc_src_cap_power_uw(
  * Select PDO from VSafe5V
  */
 
-static bool dpm_select_pdo_from_vsafe5v(
-	struct dpm_select_info_t *select_info,
+static bool dpm_select_pdo_from_vsafe5v(struct dpm_select_info_t *select_info,
 	struct dpm_pdo_info_t *sink, struct dpm_pdo_info_t *source)
 {
 	int uw;
@@ -139,8 +133,7 @@ static bool dpm_select_pdo_from_vsafe5v(
  */
 
 #ifdef CONFIG_USB_PD_ALT_MODE_RTDC
-static bool dpm_select_pdo_from_direct_charge(
-	struct dpm_select_info_t *select_info,
+static bool dpm_select_pdo_from_direct_charge(struct dpm_select_info_t *select_info,
 	struct dpm_pdo_info_t *sink, struct dpm_pdo_info_t *source)
 {
 	int uw;
@@ -173,8 +166,7 @@ static bool dpm_select_pdo_from_direct_charge(
  * Select PDO from Custom
  */
 
-static bool dpm_select_pdo_from_custom(
-	struct dpm_select_info_t *select_info,
+static bool dpm_select_pdo_from_custom(struct dpm_select_info_t *select_info,
 	struct dpm_pdo_info_t *sink, struct dpm_pdo_info_t *source)
 {
 	/* TODO */
@@ -200,8 +192,7 @@ static inline bool dpm_is_valid_pdo_pair(struct dpm_pdo_info_t *sink,
 	return sink->ma <= source->ma;
 }
 
-static bool dpm_select_pdo_from_max_power(
-	struct dpm_select_info_t *select_info,
+static bool dpm_select_pdo_from_max_power(struct dpm_select_info_t *select_info,
 	struct dpm_pdo_info_t *sink, struct dpm_pdo_info_t *source)
 {
 	bool overload;
@@ -226,11 +217,9 @@ static bool dpm_select_pdo_from_max_power(
 	overload = uw > select_info->max_uw;
 
 	if ((!overload) && (uw == select_info->max_uw)) {
-		if (select_info->policy &
-			DPM_CHARGING_POLICY_PREFER_LOW_VOLTAGE)
+		if (select_info->policy & DPM_CHARGING_POLICY_PREFER_LOW_VOLTAGE)
 			overload = (source->vmax < select_info->cur_mv);
-		else if (select_info->policy &
-			DPM_CHARGING_POLICY_PREFER_HIGH_VOLTAGE)
+		else if (select_info->policy & DPM_CHARGING_POLICY_PREFER_HIGH_VOLTAGE)
 			overload = (source->vmax > select_info->cur_mv);
 	}
 
@@ -248,8 +237,7 @@ static bool dpm_select_pdo_from_max_power(
  */
 
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
-static bool dpm_select_pdo_from_pps(
-		struct dpm_select_info_t *select_info,
+static bool dpm_select_pdo_from_pps(struct dpm_select_info_t *select_info,
 		struct dpm_pdo_info_t *sink, struct dpm_pdo_info_t *source)
 {
 	bool overload;
@@ -302,8 +290,7 @@ static bool dpm_select_pdo_from_pps(
  * Select PDO from defined rule ...
  */
 
-typedef bool (*dpm_select_pdo_fun)(
-	struct dpm_select_info_t *select_info,
+typedef bool (*dpm_select_pdo_fun)(struct dpm_select_info_t *select_info,
 	struct dpm_pdo_info_t *sink, struct dpm_pdo_info_t *source);
 
 bool dpm_find_match_req_info(struct dpm_rdo_info_t *req_info,
@@ -324,23 +311,19 @@ bool dpm_find_match_req_info(struct dpm_rdo_info_t *req_info,
 	case DPM_CHARGING_POLICY_MAX_POWER:
 		select_pdo_fun = dpm_select_pdo_from_max_power;
 		break;
-
 	case DPM_CHARGING_POLICY_CUSTOM:
 		select_pdo_fun = dpm_select_pdo_from_custom;
 		break;
-
 #ifdef CONFIG_USB_PD_ALT_MODE_RTDC
 	case DPM_CHARGING_POLICY_DIRECT_CHARGE:
 		select_pdo_fun = dpm_select_pdo_from_direct_charge;
 		break;
 #endif	/* CONFIG_USB_PD_ALT_MODE_RTDC */
-
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
 	case DPM_CHARGING_POLICY_PPS:
 		select_pdo_fun = dpm_select_pdo_from_pps;
 		break;
 #endif	/* CONFIG_USB_PD_REV30_PPS_SINK */
-
 	default: /* DPM_CHARGING_POLICY_VSAFE5V */
 		select_pdo_fun = dpm_select_pdo_from_vsafe5v;
 		break;
@@ -348,14 +331,12 @@ bool dpm_find_match_req_info(struct dpm_rdo_info_t *req_info,
 
 	for (i = 0; i < cnt; i++) {
 		dpm_extract_pdo_info(src_pdos[i], &source);
-
 		if (select_pdo_fun(&select, sink, &source))
 			select.pos = i+1;
 	}
 
 	if (select.pos > 0) {
 		dpm_extract_pdo_info(src_pdos[select.pos-1], &source);
-
 		req_info->pos = select.pos;
 		req_info->type = source.type;
 		req_info->vmin = source.vmin;

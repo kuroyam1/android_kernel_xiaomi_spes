@@ -60,8 +60,7 @@ void pe_snk_discovery_entry(struct pd_port *pd_port)
 	pd_enable_vbus_valid_detection(pd_port, wait_valid);
 }
 
-void pe_snk_wait_for_capabilities_entry(
-				struct pd_port *pd_port)
+void pe_snk_wait_for_capabilities_entry(struct pd_port *pd_port)
 {
 	/* Default current draw after HardReset */
 	if (pd_check_pe_during_hard_reset(pd_port))
@@ -115,8 +114,7 @@ void pe_snk_select_capability_exit(struct pd_port *pd_port)
 #endif /* CONFIG_USB_PD_RENEGOTIATION_COUNTER */
 
 	if (pd_check_ctrl_msg_event(pd_port, PD_CTRL_ACCEPT)) {
-		pd_port->pe_data.remote_selected_cap =
-					RDO_POS(pd_port->last_rdo);
+		pd_port->pe_data.remote_selected_cap = RDO_POS(pd_port->last_rdo);
 		pd_port->cap_miss_match = 0;
 	} else if (pd_check_ctrl_msg_event(pd_port, PD_CTRL_REJECT)) {
 #ifdef CONFIG_USB_PD_RENEGOTIATION_COUNTER

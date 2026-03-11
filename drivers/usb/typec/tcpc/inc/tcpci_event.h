@@ -17,7 +17,6 @@
 #include "tcpci_timer.h"
 #include "tcpm.h"
 
-
 #define PD_MSG_BUF_SIZE		(4*2)
 #define PD_EVENT_BUF_SIZE	(8*2)
 #define TCP_EVENT_BUF_SIZE	(2*2)
@@ -47,14 +46,14 @@ void pd_free_event(struct tcpc_device *tcpc, struct pd_event *pd_event);
 
 bool pd_get_vdm_event(struct tcpc_device *tcpc, struct pd_event *pd_event);
 bool pd_put_vdm_event(struct tcpc_device *tcpc,
-			struct pd_event *pd_event, bool from_port_partner);
+	struct pd_event *pd_event, bool from_port_partner);
 
 bool pd_put_last_vdm_event(struct tcpc_device *tcpc);
 
-bool pd_get_deferred_tcp_event(
-	struct tcpc_device *tcpc, struct tcp_dpm_event *tcp_event);
-bool pd_put_deferred_tcp_event(
-	struct tcpc_device *tcpc, const struct tcp_dpm_event *tcp_event);
+bool pd_get_deferred_tcp_event(struct tcpc_device *tcpc,
+	struct tcp_dpm_event *tcp_event);
+bool pd_put_deferred_tcp_event(struct tcpc_device *tcpc,
+	const struct tcp_dpm_event *tcp_event);
 
 extern int tcpci_event_init(struct tcpc_device *tcpc);
 extern int tcpci_event_deinit(struct tcpc_device *tcpc);
@@ -213,8 +212,7 @@ enum pd_tx_transmit_state {
 	PD_TX_STATE_WAIT_HARD_RESET,
 };
 
-static inline bool pd_event_msg_match(struct pd_event *pd_event,
-					uint8_t type, uint8_t msg)
+static inline bool pd_event_msg_match(struct pd_event *pd_event, uint8_t type, uint8_t msg)
 {
 	if (pd_event->event_type != type)
 		return false;
@@ -222,14 +220,12 @@ static inline bool pd_event_msg_match(struct pd_event *pd_event,
 	return pd_event->msg == msg;
 }
 
-static inline bool pd_event_ctrl_msg_match(
-		struct pd_event *pd_event, uint8_t msg)
+static inline bool pd_event_ctrl_msg_match(struct pd_event *pd_event, uint8_t msg)
 {
 	return pd_event_msg_match(pd_event, PD_EVT_CTRL_MSG, msg);
 }
 
-static inline bool pd_event_data_msg_match(
-		struct pd_event *pd_event, uint8_t msg)
+static inline bool pd_event_data_msg_match(struct pd_event *pd_event, uint8_t msg)
 {
 	return pd_event_msg_match(pd_event, PD_EVT_DATA_MSG, msg);
 }
@@ -244,16 +240,14 @@ static inline bool pd_event_pe_msg_match(struct pd_event *pd_event, uint8_t msg)
 	return pd_event_msg_match(pd_event, PD_EVT_PE_MSG, msg);
 }
 
-static inline bool pd_event_timer_msg_match(
-			struct pd_event *pd_event, uint8_t msg)
+static inline bool pd_event_timer_msg_match(struct pd_event *pd_event, uint8_t msg)
 {
 	return pd_event_msg_match(pd_event, PD_EVT_TIMER_MSG, msg);
 }
 
 #ifdef CONFIG_USB_PD_REV30
 
-static inline bool pd_event_ext_msg_match(
-	struct pd_event *pd_event, uint8_t msg)
+static inline bool pd_event_ext_msg_match(struct pd_event *pd_event, uint8_t msg)
 {
 	return pd_event_msg_match(pd_event, PD_EVT_EXT_MSG, msg);
 }

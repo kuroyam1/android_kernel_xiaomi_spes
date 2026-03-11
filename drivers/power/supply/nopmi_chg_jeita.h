@@ -17,17 +17,17 @@
 #define TEMP_T4_THRES_MINUS_X_DEGREE	47
 #define TEMP_T3_THRES	45
 #define TEMP_T3_THRES_MINUS_X_DEGREE	39
-#define TEMP_T2_THRES	10
+#define TEMP_T2_THRES	12
 #define TEMP_T2_THRES_PLUS_X_DEGREE	16
-#define TEMP_T1P5_THRES	5
-#define TEMP_T1P5_THRES_PLUS_X_DEGREE	10
-#define TEMP_T1_THRES	0
-#define TEMP_T1_THRES_PLUS_X_DEGREE	6
+#define TEMP_T1P5_THRES	6
+#define TEMP_T1P5_THRES_PLUS_X_DEGREE	11
+#define TEMP_T1_THRES	3
+#define TEMP_T1_THRES_PLUS_X_DEGREE	5
 #define TEMP_T0_THRES	0
-#define TEMP_T0_THRES_PLUS_X_DEGREE	0
-#define TEMP_TN1_THRES	-10
-#define TEMP_TN1_THRES_PLUS_X_DEGREE	-10
-#define TEMP_NEG_10_THRES	0
+#define TEMP_T0_THRES_PLUS_X_DEGREE	2
+#define TEMP_TN1_THRES	-5
+#define TEMP_TN1_THRES_PLUS_X_DEGREE	-3
+#define TEMP_NEG_10_THRES	-10
 #define TEMP_TN1_TO_T0_FCC		442
 #define TEMP_T0_TO_T1_FCC		884
 #define TEMP_T1_TO_T1P5_FCC	2210
@@ -51,11 +51,13 @@ struct sw_jeita_data {
 };
 /*
  * Software JEITA
- * T0: -10 degree Celsius
- * T1: 0 degree Celsius
- * T2: 10 degree Celsius
- * T3: 45 degree Celsius
- * T4: 50 degree Celsius
+ * TN1: -10 degree Celsius
+ * T0:  0 degree Celsius (same threshold as T1, TEMP_T0_TO_T1 range unused)
+ * T1:  0 degree Celsius
+ * T1P5: 5 degree Celsius
+ * T2:  10 degree Celsius
+ * T3:  45 degree Celsius
+ * T4:  50 degree Celsius
  */
 enum sw_jeita_state_enum {
 	TEMP_BELOW_T0 = 0,
@@ -121,6 +123,10 @@ struct nopmi_chg_jeita_st {
 	struct votable *fv_votable;
 	struct votable *usb_icl_votable;
 	struct votable *chgctrl_votable;
+
+	/* jeita runtime state */
+	int jeita_current_limit;
+	int fast_charge_mode;
 };
 
 enum charge_mode {

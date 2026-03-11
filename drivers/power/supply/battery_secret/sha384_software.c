@@ -74,7 +74,7 @@ int sha3_256_hmac(unsigned char *key, int key_len, unsigned char *message, int m
 	memset(opad, 0x5C, blocksize);
 	memset(ipad, 0x36, blocksize);
 
-	//  Check to see if key is larger then blocksize
+	// Check to see if key is larger then blocksize
 	if (key_len > blocksize)
 		return 0;  // Not supported
 
