@@ -592,7 +592,8 @@ static int64_t ir_drop_uv(int curr_mA, int rtrace_uOhm)
 
 static int get_scale_x1000(int curr_mA)
 {
-	for (int i = SCALE_TABLE_LEN - 1; i >= 0; --i) {
+	int i;
+	for (i = SCALE_TABLE_LEN - 1; i >= 0; --i) {
 		if (curr_mA >= scale_thresholds_mA[i])
 			return scale_x1000_table[i];
 	}
