@@ -24,7 +24,7 @@
 #if PE_DBG_ENABLE | PE_STATE_INFO_ENABLE
 #if PE_STATE_FULL_NAME
 
-static const char *const pe_state_name[] = {
+static const char *const __maybe_unused pe_state_name[] = {
 
 /******************* Source *******************/
 #ifdef CONFIG_USB_PD_PE_SOURCE
@@ -282,7 +282,7 @@ static const char *const pe_state_name[] = {
 
 #else
 
-static const char *const pe_state_name[] = {
+static const char *const __maybe_unused pe_state_name[] = {
 /******************* Source *******************/
 #ifdef CONFIG_USB_PD_PE_SOURCE
 	"SRC_START",

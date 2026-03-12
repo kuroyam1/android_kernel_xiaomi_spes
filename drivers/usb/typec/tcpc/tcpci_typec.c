@@ -56,7 +56,7 @@ enum TYPEC_ROLE_SWAP_STATE {
 };
 
 #if TYPEC_INFO2_ENABLE
-static const char *const typec_wait_ps_name[] = {
+static const char *const __maybe_unused typec_wait_ps_name[] = {
 	"Disable",
 	"SNK_VSafe5V",
 	"SRC_VSafe0V",
@@ -224,7 +224,7 @@ enum TYPEC_CONNECTION_STATE {
 };
 
 #if TYPEC_INFO_ENABLE || TCPC_INFO_ENABLE
-static const char *const typec_state_name[] = {
+static const char *const __maybe_unused typec_state_name[] = {
 	"Disabled",
 	"ErrorRecovery",
 
@@ -297,7 +297,7 @@ static inline void typec_transfer_state(struct tcpc_device *tcpc,
  */
 
 #if TYPEC_INFO_ENABLE || TYPEC_DBG_ENABLE
-static const char *const typec_attach_name[] = {
+static const char *const __maybe_unused typec_attach_name[] = {
 	"NULL",
 	"SINK",
 	"SOURCE",
@@ -2570,7 +2570,7 @@ int tcpc_typec_handle_vsafe0v(struct tcpc_device *tcpc)
  */
 
 #if TYPEC_INFO_ENABLE
-static const char *const typec_role_name[] = {
+static const char *const __maybe_unused typec_role_name[] = {
 	"UNKNOWN",
 	"SNK",
 	"SRC",

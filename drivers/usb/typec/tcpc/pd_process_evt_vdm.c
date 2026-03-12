@@ -482,7 +482,7 @@ static const char * const pe_vdm_cmd_name[] = {
 };
 
 #if PE_INFO_ENABLE
-static const char * const pe_vdm_cmd_type_name[] = {
+static const char * const __maybe_unused pe_vdm_cmd_type_name[] = {
 	"INIT",
 	"ACK",
 	"NACK",

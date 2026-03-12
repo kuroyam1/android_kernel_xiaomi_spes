@@ -1331,7 +1331,7 @@ void pd_dpm_dfp_inform_modes(struct pd_port *pd_port, bool ack)
 {
 	uint8_t count;
 	uint16_t svid = 0;
-	uint32_t *payload;
+	uint32_t * __maybe_unused payload;
 	uint16_t expected_svid = pd_port->mode_svid;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
@@ -1751,7 +1751,7 @@ void pd_dpm_vcs_enable_vconn(struct pd_port *pd_port, uint8_t role)
 #ifdef CONFIG_USB_PD_REV30_SRC_CAP_EXT_REMOTE
 void pd_dpm_inform_source_cap_ext(struct pd_port *pd_port)
 {
-	struct pd_source_cap_ext *scedb;
+	struct pd_source_cap_ext * __maybe_unused scedb;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_SOURCE_CAP_EXT)) {
@@ -1783,7 +1783,7 @@ static const struct pd_battery_capabilities c_invalid_bcdb = {
 int pd_dpm_send_battery_cap(struct pd_port *pd_port)
 {
 	struct pd_battery_info *bat_info;
-	const struct pd_battery_capabilities *bcdb;
+	const struct pd_battery_capabilities * __maybe_unused bcdb;
 	struct pd_get_battery_capabilities *gbcdb = pd_get_msg_data_payload(pd_port);
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
@@ -1805,7 +1805,7 @@ int pd_dpm_send_battery_cap(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_BAT_CAP_REMOTE
 void pd_dpm_inform_battery_cap(struct pd_port *pd_port)
 {
-	struct pd_battery_capabilities *bcdb;
+	struct pd_battery_capabilities * __maybe_unused bcdb;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_BAT_CAP)) {
@@ -1845,7 +1845,7 @@ int pd_dpm_send_battery_status(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_BAT_STATUS_REMOTE
 void pd_dpm_inform_battery_status(struct pd_port *pd_port)
 {
-	uint32_t *payload;
+	uint32_t * __maybe_unused payload;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (dpm_check_data_msg_event(pd_port, PD_DATA_BAT_STATUS)) {
@@ -1890,7 +1890,7 @@ int pd_dpm_send_mfrs_info(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_MFRS_INFO_REMOTE
 void pd_dpm_inform_mfrs_info(struct pd_port *pd_port)
 {
-	struct pd_manufacturer_info *midb;
+	struct pd_manufacturer_info * __maybe_unused midb;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_MFR_INFO)) {
@@ -1903,7 +1903,7 @@ void pd_dpm_inform_mfrs_info(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_CODE_REMOTE
 void pd_dpm_inform_country_codes(struct pd_port *pd_port)
 {
-	struct pd_country_codes *ccdb;
+	struct pd_country_codes * __maybe_unused ccdb;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_COUNTRY_CODES)) {
@@ -1934,7 +1934,7 @@ int pd_dpm_send_country_codes(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_COUNTRY_INFO_REMOTE
 void pd_dpm_inform_country_info(struct pd_port *pd_port)
 {
-	struct pd_country_info *cidb;
+	struct pd_country_info * __maybe_unused cidb;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_COUNTRY_INFO)) {
@@ -2060,7 +2060,7 @@ int pd_dpm_send_status(struct pd_port *pd_port)
 #ifdef CONFIG_USB_PD_REV30_PPS_SINK
 void pd_dpm_inform_pps_status(struct pd_port *pd_port)
 {
-	struct pd_pps_status_raw *ppssdb;
+	struct pd_pps_status_raw * __maybe_unused ppssdb;
 	struct tcpc_device __maybe_unused *tcpc = pd_port->tcpc;
 
 	if (dpm_check_ext_msg_event(pd_port, PD_EXT_PPS_STATUS)) {
