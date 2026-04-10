@@ -235,7 +235,7 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 static inline unsigned long apply_dvfs_headroom(unsigned long util, int cpu)
 {
 	unsigned long capacity = capacity_orig_of(cpu);
-	unsigned long headroom;
+	unsigned long headroom, future, burst, delta;
 
 	/*
 	 * Skip boosting for very low utilization (< 6.25%)
@@ -252,13 +252,25 @@ static inline unsigned long apply_dvfs_headroom(unsigned long util, int cpu)
 		headroom = util >> 2;
 
 	/*
+	 * If util is rising, add a small extra headroom to get ahead of it.
+	 * Look 1ms into the future; if util is still climbing, boost headroom
+	 * slightly (by 12.5%) but cap the addition at 1/8th of remaining
+	 * capacity so we don't over‑react near the top end.
+	 */
+	future = approximate_util_avg(util, 1000); /* 1 ms lookahead */
+
+	if (future > util) {
+		burst = future - util;
+		burst += burst >> 3;
+		delta = capacity - util;
+		headroom += min(burst, delta >> 3);
+	}
+
+	/*
 	 * Ensure the total boosted utilization does not exceed the CPU's
 	 * maximum capacity
 	 */
-	if (util + headroom > capacity)
-		return capacity;
-
-	return util + headroom;
+	return min(util + headroom, capacity);
 }
 
 unsigned long sugov_effective_cpu_perf(int cpu, unsigned long actual,
