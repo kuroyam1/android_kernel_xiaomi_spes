@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
 
 env:
-  KERNEL_URL: https://github.com/divinezmuz/android_kernel_xiaomi_spes.git
+  KERNEL_URL: https://github.com/kuroyam1/android_kernel_xiaomi_spes.git
   KERNEL_BRANCH: asano-spes
-  ANYKERNEL3_URL: https://github.com/divinezmuz/AnyKernel3
+  ANYKERNEL3_URL: https://github.com/knyplaygrnd/AnyKernel3.git
   CONFIGS: vendor/bengal-perf_defconfig asano.config vendor/xiaomi/spes.config
   CLANG_VERSION: r596125
   ARCH: arm64
@@ -24,11 +24,9 @@ jobs:
 
       - name: Download Toolchains
         run: |
-          mkdir -p toolchains/clang toolchains/gcc-64 toolchains/gcc-32
+          mkdir -p toolchains/clang
 
           curl -sSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/clang-${{ env.CLANG_VERSION }}.tar.gz" | tar -xz -C toolchains/clang
-          curl -sSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz" | tar -xz -C toolchains/gcc-64
-          curl -sSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz" | tar -xz -C toolchains/gcc-32
 
           for tc in gcc-64 gcc-32; do
             NESTED_BIN=$(find toolchains/$tc -type d -name "bin" | head -n 1)
@@ -42,25 +40,17 @@ jobs:
         run: |
           git clone --depth=1 -b ${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_URL }} kernel
 
-      - name: Setup KernelSU & NoMount
-        run: |
-          cd kernel
-          curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" | bash -
-          curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh" | bash -
 
       - name: Build Kernel
         run: |
           cd kernel
-          export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc-64/bin:$GITHUB_WORKSPACE/toolchains/gcc-32/bin:$PATH"
+          export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$PATH"
 
           make -j$(nproc --all) \
             O=out \
             ARCH=${{ env.ARCH }} \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-android- \
-            CROSS_COMPILE_ARM32=arm-linux-androideabi- \
             ${{ env.CONFIGS }} \
+            LLVM=1 \
             all \
             KCFLAGS="-Wno-error -Wno-error=implicit-function-declaration" \
             CONFIG_CC_WERROR=n
